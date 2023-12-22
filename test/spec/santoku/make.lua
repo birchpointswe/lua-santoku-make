@@ -6,7 +6,7 @@ local make = require("santoku.make")
 
 test("make", function ()
 
-  print(err.pwrap(function (check)
+  err.check(err.pwrap(function (check)
 
     fs.walk("res", {
       recurse = true,
