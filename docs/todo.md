@@ -20,6 +20,7 @@
     - config file env.type is set to either "web" or "lib"
 
 - Install make/* as as actual files (not embedded) to lua confdir
+- Support install
 - Support release
 
 # Next
