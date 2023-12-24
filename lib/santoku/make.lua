@@ -26,26 +26,39 @@ M.target = function (o, ts, ds, fn)
   end)
 end
 
-M.make = function (o, ts)
+M.make = function (o, ts, verbosity, seen)
+  verbosity = verbosity or 1
+  seen = seen or {}
   return err.pwrap(function (check)
     vec.wrap(ts)
     return gen.ivals(ts):map(function (t)
+      if seen[t] then
+        return seen[t]
+      end
       local ttime = check(fs.exists(t)) and check(posix.time(t))
-      local dtimes = check(o:make(o.deps[t] or {}))
+      local dtimes = check(o:make(o.deps[t] or {}, verbosity, seen))
       if ttime and not dtimes:find(function (dt) return dt > ttime end) then
-        str.printf("[ok]    \t%s\n", t)
+        if verbosity > 1 then
+          str.printf("[ok]    \t%s\n", t)
+        end
+        seen[t] = ttime
         return ttime
       end
       if not ttime and not o.fns[t] then
         check(false, t .. ": target doesn't exist and no corresponding function registered")
       end
       if o.fns[t] == true then
-        str.printf("[phony] \t%s\n", t)
+        if verbosity > 0 then
+          str.printf("[phony] \t%s\n", t)
+        end
         return check(posix.now())
       else
-        str.printf("[make]  \t%s\n", t)
+        if verbosity > 0 then
+          str.printf("[make]  \t%s\n", t)
+        end
         check(o.fns[t](o.targets[t], o.deps[t]))
-        return check(posix.time(t))
+        seen[t] = check(posix.time(t))
+        return seen[t]
       end
     end):vec()
   end)

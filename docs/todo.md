@@ -1,21 +1,30 @@
 # Now
 
-- Basic bins
-- Basic deps
 - Basic WASM
 
-- Support .d files and generally adding dependencies to targets incrementally
+- Cli args or config properties: test, profile, sanitize, wasm, env, template file
+  overrides, TEST=xxx, TEST_CMD=xxx
+  - toku make test
+  - toku make release
+  - toku make test --iterate --wasm --profile
+  - toku make --dir .workdir --config config.beta.lua --env beta test --iterate (for client/server)
+  - toku make --dir build --env beta test --iterate (for client/server)
+  - Default config is make.lua
+    - If --env is specified, config is make.[env].lua
+  - Default build dir is build/default/xxx
+    - --dir changes "build"
+    - --env changes "default"
+    - --config changes config file, and requires --env be specified
+  - toku make init [ --web | --lib ]
+    - create directories, boilerplate files, etc.
+    - config file env.type is set to either "web" or "lib"
 
-- Cli args or config properties: profile, sanitize, wasm, env,
-
-- Package top-level makefile as santoku.make.project and expose via santoku-cli:
-    - toku make [ ...args ]
-    - toku make init (creates project structure and config file)
-    - toku make test
-    - toku make release (uses )
+- Install make/* as as actual files (not embedded) to lua confdir
+- Support release
 
 # Next
 
+- Generate and load .d files with renderfile
 - Web
 
 # Later
@@ -24,6 +33,7 @@
 
 # Eventually
 
+- inotifywait shouldn't listen to access events
 - Better error messages: no targets specified, nothing to do, etc.
 - Returning nil should not mean failure (and it shouldn't fail silently anyway)
 - Verbose/default mode

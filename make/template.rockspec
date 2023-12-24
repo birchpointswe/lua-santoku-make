@@ -1,5 +1,8 @@
-<% vec = require("santoku.vector") %>
-<% str = require("santoku.string") %>
+<%
+  gen = require("santoku.gen")
+  str = require("santoku.string")
+  tbl = require("santoku.table")
+%>
 
 package = "<% return name %>"
 version = "<% return version %>"
@@ -15,10 +18,10 @@ description = {
 }
 
 dependencies = {
-  <% return vec.wrap(dependencies or {}):map(str.quote):concat(",\n") .. ",\n" %>
+  <% return gen.ivals(dependencies or {}):map(str.quote):concat(",\n") .. ",\n" %>
   <% template:push(build.istest) %>
   <% if template:showing() then
-      return vec.wrap(test_dependencies or {}):map(str.quote):concat(",\n")
+      return gen.ivals(tbl.get(test, "dependencies") or {}):map(str.quote):concat(",\n")
      end %>
   <% template:pop() %>
 }
