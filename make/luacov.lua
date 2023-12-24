@@ -24,5 +24,5 @@ include = {
   end):concat(",\n") %>
 }
 
-statsfile = "<% return build.test_luacov_report_file %>"
-reportfile = "<% return build.test_luacov_stats_file %>"
+statsfile = "<% return build.test_luacov_stats_file %>"
+reportfile = "<% return build.test_luacov_report_file %>"

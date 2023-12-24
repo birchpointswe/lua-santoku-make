@@ -1,17 +1,18 @@
-# TODO: Support deps, bins
+DEPS_DIRS = $(shell find deps/* -maxdepth 0 -type d 2>/dev/null)
+DEPS_RESULTS = $(addsuffix /results.mk, $(DEPS_DIRS))
 
-# DEPS_DIRS = $(shell find deps/* -maxdepth 0 -type d 2>/dev/null)
-# DEPS_RESULTS = $(addsuffix /results.mk, $(DEPS_DIRS))
+include $(DEPS_RESULTS)
 
-# include $(DEPS_RESULTS)
-
-all: #$(DEPS_RESULTS) $(TEST_RUN_SH)
+all: $(DEPS_RESULTS) $(TEST_RUN_SH)
 	@if [ -d lib ]; then $(MAKE) -C lib PARENT_DEPS_RESULTS="$(DEPS_RESULTS)"; fi
-	# @if [ -d bin ]; then $(MAKE) -C bin PARENT_DEPS_RESULTS="$(DEPS_RESULTS)"; fi
+	@if [ -d bin ]; then $(MAKE) -C bin PARENT_DEPS_RESULTS="$(DEPS_RESULTS)"; fi
 
 install: all
 	@if [ -d lib ]; then $(MAKE) -C lib install; fi
-	# @if [ -d bin ]; then $(MAKE) -C bin install; fi
+	@if [ -d bin ]; then $(MAKE) -C bin install; fi
+
+deps/%/results.mk: deps/%/Makefile
+	@$(MAKE) -C "$(dir $@)"
 
 # <% template:push(build.istest) %>
 
@@ -63,8 +64,5 @@ install: all
 # .PHONY: test
 
 # <% template:pop() %>
-
-# deps/%/results.mk: deps/%/Makefile
-# 	@$(MAKE) -C "$(dir $@)"
 
 .PHONY: all install

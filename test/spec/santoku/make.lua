@@ -58,7 +58,7 @@ test("make", function ()
 
     build:target({ "all" }, { "all-deps" }, true)
 
-    check(build:make({ "all" }))
+    check(build:make({ "all" }, 2))
     assert("Header: Header content!\n" == check(fs.readfile("res/header.txt")))
     assert("Body\n" == check(fs.readfile("res/body.txt")))
     assert("Footer\n" == check(fs.readfile("res/footer.txt")))
