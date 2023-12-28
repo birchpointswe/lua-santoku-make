@@ -297,6 +297,7 @@ M.init = function (opts)
           if chk(fs.exists(release_tarball)) then
             chk(fs.rm(release_tarball))
           end
+          chk(sys.execute("git", "push"))
           chk(sys.execute("tar",
             "--dereference",
             "--transform", str.interp("s#^#%s#(1)/#", { release_tarball_dir }),
