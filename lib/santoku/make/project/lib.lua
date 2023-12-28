@@ -301,6 +301,8 @@ M.init = function (opts)
             "--dereference",
             "--transform", str.interp("s#^#%s#(1)#", { release_tarball_dir }),
             "-czvf", release_tarball, release_tarball_contents:unpack()))
+          chk(sys.execute("gh", "release", "create", "--generate-notes", opts.config.env.version, release_tarball, base_rockspec))
+          chk(sys.execute("luarocks", "upload", "--skip-pack", "--api-key", api_key, base_rockspec))
         end)
         check_target(fs.cd(cwd))
         check_target(ok, e, cd)
