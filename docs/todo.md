@@ -1,39 +1,41 @@
 # Now
 
-- Basic WASM
+- Implement install
+- Implement release
+- Save init flags in a file that config.lua depends on, causing cascading
+  re-build
+- Implement test --single=spec/santoku/gen.lua
+- Implement test --command=true
+- Integrate with CLI
 
-- Cli args or config properties: test, profile, sanitize, wasm, env, template file
-  overrides, TEST=xxx, TEST_CMD=xxx
+- Split make.project into separate repo
+
+- Check if profile, sanitize work
+
+- CLI:
   - toku make test
   - toku make release
   - toku make test --iterate --wasm --profile
-  - toku make --dir .workdir --config config.beta.lua --env beta test --iterate (for client/server)
-  - toku make --dir build --env beta test --iterate (for client/server)
-  - Default config is make.lua
-    - If --env is specified, config is make.[env].lua
-  - Default build dir is build/default/xxx
-    - --dir changes "build"
-    - --env changes "default"
-    - --config changes config file, and requires --env be specified
+  - toku make test --dir .workdir --config config.beta.lua --iterate
+  - toku make test --dir build --env beta --iterate (reads make.beta.lua)
   - toku make init [ --web | --lib ]
-    - create directories, boilerplate files, etc.
-    - config file env.type is set to either "web" or "lib"
-
-- Install make/* as as actual files (not embedded) to lua confdir
-- Support install
-- Support release
 
 # Next
 
+- Lib WASM
 - Generate and load .d files with renderfile
 - Web
 
 # Later
 
+- Implement init
 - In non-wasm, test all lua versions sequentially
 
 # Eventually
 
+- Remove basexx dependency
+- Template file overrides, store default template files in actual files under
+  the luarocks package conf dir instead of embedding
 - inotifywait shouldn't listen to access events
 - Better error messages: no targets specified, nothing to do, etc.
 - Returning nil should not mean failure (and it shouldn't fail silently anyway)

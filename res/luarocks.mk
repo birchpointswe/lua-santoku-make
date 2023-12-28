@@ -4,17 +4,19 @@ DEPS_RESULTS = $(addsuffix /results.mk, $(DEPS_DIRS))
 include $(DEPS_RESULTS)
 
 all: $(DEPS_RESULTS) $(TEST_RUN_SH)
+	@if [ -d conf ]; then $(MAKE) -C conf PARENT_DEPS_RESULTS="$(DEPS_RESULTS)"; fi
 	@if [ -d lib ]; then $(MAKE) -C lib PARENT_DEPS_RESULTS="$(DEPS_RESULTS)"; fi
 	@if [ -d bin ]; then $(MAKE) -C bin PARENT_DEPS_RESULTS="$(DEPS_RESULTS)"; fi
 
 install: all
+	@if [ -d conf ]; then $(MAKE) -C conf install; fi
 	@if [ -d lib ]; then $(MAKE) -C lib install; fi
 	@if [ -d bin ]; then $(MAKE) -C bin install; fi
 
 deps/%/results.mk: deps/%/Makefile
 	@$(MAKE) -C "$(dir $@)"
 
-# <% template:push(build.istest) %>
+# <% template:push(environment == "test") %>
 
 # TEST_RUN_SH = run.sh
 

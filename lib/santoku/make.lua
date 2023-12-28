@@ -1,4 +1,5 @@
 local compat = require("santoku.compat")
+local tup = require("santoku.tuple")
 local err = require("santoku.err")
 local str = require("santoku.string")
 local gen = require("santoku.gen")
@@ -26,41 +27,47 @@ M.target = function (o, ts, ds, fn)
   end)
 end
 
-M.make = function (o, ts, verbosity, seen)
-  verbosity = verbosity or 1
-  seen = seen or {}
+local function make (check, o, opts, targets, args)
+  vec.wrap(targets)
+  return gen.ivals(targets):map(function (t)
+    if opts.seen[t] then
+      return opts.seen[t]
+    end
+    local ttime = check(fs.exists(t)) and check(posix.time(t))
+    local dtimes = make(check, o, opts, o.deps[t] or {}, args)
+    if ttime and not dtimes:find(function (dt) return dt > ttime end) then
+      if opts.verbosity > 1 then
+        str.printf("[ok]    \t%s\n", t)
+      end
+      opts.seen[t] = ttime
+      return ttime
+    end
+    if not ttime and not o.fns[t] then
+      check(false, t .. ": target doesn't exist and no corresponding function registered")
+    end
+    if o.fns[t] == true then
+      if opts.verbosity > 0 then
+        str.printf("[phony] \t%s\n", t)
+      end
+      return check(posix.now())
+    else
+      if opts.verbosity > 0 then
+        str.printf("[make]  \t%s\n", t)
+      end
+      check(o.fns[t](o.targets[t], o.deps[t], args()))
+      opts.seen[t] = check(fs.exists(t)) and check(posix.time(t)) or nil
+      return opts.seen[t]
+    end
+  end):vec()
+end
+
+M.make = function (o, opts, ...)
+  local args = tup(...)
+  local targets = gen.ivals(opts):vec()
+  opts.verbosity = opts.verbosity or 1
+  opts.seen = opts.seen or {}
   return err.pwrap(function (check)
-    vec.wrap(ts)
-    return gen.ivals(ts):map(function (t)
-      if seen[t] then
-        return seen[t]
-      end
-      local ttime = check(fs.exists(t)) and check(posix.time(t))
-      local dtimes = check(o:make(o.deps[t] or {}, verbosity, seen))
-      if ttime and not dtimes:find(function (dt) return dt > ttime end) then
-        if verbosity > 1 then
-          str.printf("[ok]    \t%s\n", t)
-        end
-        seen[t] = ttime
-        return ttime
-      end
-      if not ttime and not o.fns[t] then
-        check(false, t .. ": target doesn't exist and no corresponding function registered")
-      end
-      if o.fns[t] == true then
-        if verbosity > 0 then
-          str.printf("[phony] \t%s\n", t)
-        end
-        return check(posix.now())
-      else
-        if verbosity > 0 then
-          str.printf("[make]  \t%s\n", t)
-        end
-        check(o.fns[t](o.targets[t], o.deps[t]))
-        seen[t] = check(posix.time(t))
-        return seen[t]
-      end
-    end):vec()
+    return make(check, o, opts, targets, args)
   end)
 end
 
