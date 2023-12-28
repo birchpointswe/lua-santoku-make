@@ -5,9 +5,9 @@
   tbl = require("santoku.table")
 %>
 
-export LUA='<% return build.test_lua %>'
-export LUA_PATH='<% return build.test_lua_path %>'
-export LUA_CPATH='<% return build.test_lua_cpath %>'
+export LUA='<% return lua %>'
+export LUA_PATH='<% return lua_path %>'
+export LUA_CPATH='<% return lua_cpath %>'
 
 <% return gen.ivals(tbl.get(test, "envs") or {}):map(function (env)
   return ". " .. env
@@ -46,8 +46,8 @@ else
       TEST="${TEST#test/}"
       toku test -s -i "$LUA $MODS" "$TEST"
       status=$?
-    elif [ -d spec ]; then
-      toku test -s -i "$LUA $MODS" --match "^.*%.lua$" spec
+    elif [ -d test/spec ]; then
+      toku test -s -i "$LUA $MODS" --match "^.*%.lua$" test/spec
       status=$?
     fi
 

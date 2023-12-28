@@ -1,9 +1,9 @@
 rocks_trees = {
   { name = "system",
-    root = "<% return build.test_modules %>"
+    root = "<% return lua_modules %>"
   } }
 
-<% template:push(build.iswasm) %>
+<% template:push(wasm) %>
 
 -- NOTE: Not specifying the interpreter, version, LUA, LUA_BINDIR, and LUA_DIR
 -- so that the host lua is used install rocks. The other variables affect how
@@ -15,12 +15,12 @@ rocks_trees = {
 variables = {
 
   LUALIB = "liblua.a",
-  LUA_INCDIR = "<% return build.client_lua_dir %>/include",
-  LUA_LIBDIR = "<% return build.client_lua_dir %>/lib",
+  LUA_INCDIR = "<% return client_lua_dir %>/include",
+  LUA_LIBDIR = "<% return client_lua_dir %>/lib",
   LUA_LIBDIR_FILE = "liblua.a",
 
-  CFLAGS = "-I <% return build.client_lua_dir %>/include",
-  LDFLAGS = "-L <% return build.client_lua_dir %>/lib",
+  CFLAGS = "-I <% return client_lua_dir %>/include",
+  LDFLAGS = "-L <% return client_lua_dir %>/lib",
   LIBFLAG = "-shared",
 
   CC = "emcc",

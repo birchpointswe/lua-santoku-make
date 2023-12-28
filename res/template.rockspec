@@ -19,7 +19,7 @@ description = {
 
 dependencies = {
   <% return gen.ivals(dependencies or {}):map(str.quote):concat(",\n") .. ",\n" %>
-  <% template:push(build.istest) %>
+  <% template:push(environment == "test") %>
   <% if template:showing() then
       return gen.ivals(tbl.get(test, "dependencies") or {}):map(str.quote):concat(",\n")
      end %>
@@ -38,6 +38,7 @@ build = {
     LIBFLAG = "$(LIBFLAG)",
     LUA_BINDIR = "$(LUA_BINDIR)",
     LUA_INCDIR = "$(LUA_INCDIR)",
+    LUA_LIBDIR = "$(LUA_LIBDIR)",
     LUA_LIBDIR = "$(LUA_LIBDIR)",
     LUA = "$(LUA)",
   },

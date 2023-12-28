@@ -15,7 +15,7 @@ LIB_CFLAGS += -Wall $(addprefix -I, $(LUA_INCDIR)) $(<% return var("CFLAGS") %>)
 LIB_CXXFLAGS += -Wall $(addprefix -I, $(LUA_INCDIR)) $(<% return var("CXXFLAGS") %>) <% return cxxflags %>
 LIB_LDFLAGS += -Wall $(addprefix -L, $(LUA_LIBDIR)) $(<% return var("LDFLAGS") %>) <% return ldflags %>
 
-<% template:push(build.istest) %>
+<% template:push(environment == "test") %>
 
 ifeq ($(<% return var("SANITIZE") %>),1)
 LIB_CFLAGS := -fsanitize=address -fsanitize=leak $(LIB_CFLAGS)
