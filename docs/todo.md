@@ -1,8 +1,6 @@
 # Now
 
-- Allow template excludes to be passed to renderfile
-- Save init flags in a file that config.lua depends on, causing cascading
-  re-build
+- Save init flags in a file that make.lua depends on, causing cascading re-build
 - Implement test --single=spec/santoku/gen.lua
 - Implement test --command=true
 - Integrate with CLI
@@ -32,6 +30,7 @@
 
 # Eventually
 
+- Clean up handling of toku template configs, specifically excludes
 - Remove basexx dependency
 - Template file overrides, store default template files in actual files under
   the luarocks package conf dir instead of embedding

@@ -344,6 +344,8 @@ M.init = function (opts)
 
     local N = {}
 
+    N.config = opts.config
+
     N.test = function (_, opts)
       opts = opts or {}
       return err.pwrap(function (check_target)
