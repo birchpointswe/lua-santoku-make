@@ -207,7 +207,7 @@ M.init = function (opts)
       add_templated_target(fs.join(build_dir, "build", fp), fp, build_env)
     end)
 
-    gen.pack(base_libs, base_bins, base_test_specs):map(gen.ivals):flatten():each(function (fp)
+    gen.pack(base_libs, base_bins, base_test_specs, base_test_deps):map(gen.ivals):flatten():each(function (fp)
       add_templated_target(fs.join(build_dir, "test", fp), fp, test_env)
     end)
 
@@ -338,7 +338,7 @@ M.init = function (opts)
       end
       while true do
         check_target(make:make({ "test" }, check_target))
-        check_target(sys.execute("inotifywait", "-qqr", test_all_base:unpack()))
+        check_target(sys.execute("inotifywait", "-qqr", opts.config_file, test_all_base:unpack()))
       end
     end)
 
