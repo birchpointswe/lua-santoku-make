@@ -316,7 +316,7 @@ M.init = function (opts)
           if chk(fs.exists(release_tarball)) then
             chk(fs.rm(release_tarball))
           end
-          chk(sys.execute("git", "tag", opts.cnfig.env.version))
+          chk(sys.execute("git", "tag", opts.config.env.version))
           chk(sys.execute("git", "push", "--tags"))
           chk(sys.execute("git", "push"))
           chk(sys.execute("tar",
