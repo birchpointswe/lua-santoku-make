@@ -1,7 +1,6 @@
 # Now
 
-- Implement install
-- Implement release
+- Allow template excludes to be passed to renderfile
 - Save init flags in a file that config.lua depends on, causing cascading
   re-build
 - Implement test --single=spec/santoku/gen.lua
