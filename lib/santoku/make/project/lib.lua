@@ -78,7 +78,7 @@ M.init = function (opts)
     local function add_templated_target_base64 (dest, data, env)
       make:target(
         vec(dest),
-        vec(),
+        vec(opts.config_file),
         function (_, _, check_target)
           check_target(fs.mkdirp(fs.dirname(dest)))
           local t = check_target(tpl.compile(basexx.from_base64(data), { env = env }))
