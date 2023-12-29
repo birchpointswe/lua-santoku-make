@@ -58,12 +58,19 @@ M.init = function (opts)
     end
 
     local function add_templated_target (dest, src, env)
+      -- TODO: This is a hack and a half. Excludes should be handled in a
+      -- clearer way. In fact, make.lua should probably not be the config
+      -- argument to template, but some subset/superset of it that is passed
+      -- down explicitly
+      if gen.ivals(opts.config.excludes or {}):co():includes(src) then
+        return add_copied_target(dest, src, env)
+      end
       make:target(
         vec(dest),
         vec(src, opts.config_file),
         function (_, _, check_target)
           check_target(fs.mkdirp(fs.dirname(dest)))
-          check_target(fs.writefile(dest, check_target(tpl.renderfile(src, { env = env, excludes = opts.config.excludes }))))
+          check_target(fs.writefile(dest, check_target(tpl.renderfile(src, { env = env }))))
           return true
         end)
     end
@@ -74,7 +81,7 @@ M.init = function (opts)
         vec(),
         function (_, _, check_target)
           check_target(fs.mkdirp(fs.dirname(dest)))
-          local t = check_target(tpl.compile(basexx.from_base64(data), { env = env, excludes = opts.config.excludes }))
+          local t = check_target(tpl.compile(basexx.from_base64(data), { env = env }))
           check_target(fs.writefile(dest, check_target(t:render(opts.config))))
           return true
         end)
