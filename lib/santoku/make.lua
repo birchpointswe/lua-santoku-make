@@ -27,6 +27,13 @@ M.target = function (o, ts, ds, fn)
   end)
 end
 
+M.add_deps = function (o, ts, ds)
+  gen.ivals(ts):each(function (t)
+    o.deps[t] = o.deps[t] or vec()
+    o.deps[t]:append(compat.unpack(ds))
+  end)
+end
+
 local function make (check, o, opts, targets, args)
   vec.wrap(targets)
   return gen.ivals(targets):map(function (t)

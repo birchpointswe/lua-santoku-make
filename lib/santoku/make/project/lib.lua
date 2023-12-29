@@ -59,9 +59,9 @@ M.init = function (opts)
 
     local function add_templated_target (dest, src, env)
       -- TODO: This is a hack and a half. Excludes should be handled in a
-      -- clearer way. In fact, make.lua should probably not be the config
-      -- argument to template, but some subset/superset of it that is passed
-      -- down explicitly
+      -- clearer way. In fact, fs.loadfile(make.lua) should probably not be used
+      -- directly as config argument to template, but some subset/superset of it
+      -- that is passed down explicitly
       if gen.ivals(opts.config.excludes or {}):co():includes(src) then
         return add_copied_target(dest, src, env)
       end
@@ -70,7 +70,9 @@ M.init = function (opts)
         vec(src, opts.config_file),
         function (_, _, check_target)
           check_target(fs.mkdirp(fs.dirname(dest)))
-          check_target(fs.writefile(dest, check_target(tpl.renderfile(src, { env = env }))))
+          local t = check_target(tpl.compilefile(src, { env = env }))
+          check_target(fs.writefile(dest, check_target(t:render())))
+          check_target(t:write_deps(dest, dest .. ".d"))
           return true
         end)
     end
@@ -82,7 +84,8 @@ M.init = function (opts)
         function (_, _, check_target)
           check_target(fs.mkdirp(fs.dirname(dest)))
           local t = check_target(tpl.compile(basexx.from_base64(data), { env = env }))
-          check_target(fs.writefile(dest, check_target(t:render(opts.config))))
+          check_target(fs.writefile(dest, check_target(t:render())))
+          check_target(t:write_deps(dest, dest .. ".d", { opts.config_file }))
           return true
         end)
     end
@@ -161,6 +164,10 @@ M.init = function (opts)
         base_lua_modules_ok)
       :map(fun.bindl(fs.join, build_dir, "test"))
 
+    local test_srcs = vec()
+      :extend(base_bins, base_libs, base_deps, base_test_deps)
+      :map(fun.bindl(fs.join, build_dir, "test"))
+
     local build_all = vec()
       :extend(base_bins, base_libs, base_deps)
       :append(
@@ -203,13 +210,15 @@ M.init = function (opts)
     inherit.pushindex(build_env, base_env)
     inherit.pushindex(build_env, opts.config.env)
 
-    gen.pack(base_libs, base_bins):map(gen.ivals):flatten():each(function (fp)
-      add_templated_target(fs.join(build_dir, "build", fp), fp, build_env)
-    end)
+    gen.pack(base_libs, base_bins, base_deps)
+      :map(gen.ivals):flatten():each(function (fp)
+        add_templated_target(fs.join(build_dir, "build", fp), fp, build_env)
+      end)
 
-    gen.pack(base_libs, base_bins, base_test_specs, base_test_deps):map(gen.ivals):flatten():each(function (fp)
-      add_templated_target(fs.join(build_dir, "test", fp), fp, test_env)
-    end)
+    gen.pack(base_libs, base_bins, base_deps, base_test_specs, base_test_deps)
+      :map(gen.ivals):flatten():each(function (fp)
+        add_templated_target(fs.join(build_dir, "test", fp), fp, test_env)
+      end)
 
     gen.pack(base_test_res):map(gen.ivals):flatten():each(function (fp)
       add_copied_target(fs.join(build_dir, "test", fp), fp, test_env)
@@ -252,8 +261,10 @@ M.init = function (opts)
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/test-run.sh")))) %>, test_env) -- luacheck: ignore
 
     make:target(
-      { fs.join(build_dir, "test", base_lua_modules_ok) },
-      { fs.join(build_dir, "test", base_luarocks_cfg) },
+      vec(fs.join(build_dir, "test", base_lua_modules_ok)),
+      vec()
+        :extend(test_srcs)
+        :append(fs.join(build_dir, "test", base_luarocks_cfg)),
       function (_, _, check_target)
         local cwd = check_target(fs.cwd())
         -- TODO: simplify with fs.pushd + callback
@@ -267,10 +278,10 @@ M.init = function (opts)
         return true
       end)
 
-    make:target({ "build-deps" }, build_all, true)
-    make:target({ "test-deps" }, test_all, true)
+    make:target(vec("build-deps"), build_all, true)
+    make:target(vec("test-deps"), test_all, true)
 
-    make:target({ "install" }, { "build-deps" }, function (_, _, check_target)
+    make:target(vec("install"), vec("build-deps"), function (_, _, check_target)
       local cwd = check_target(fs.cwd())
       -- TODO: simplify with fs.pushd + callback
       check_target(fs.cd(fs.join(build_dir, "build")))
@@ -291,7 +302,7 @@ M.init = function (opts)
           base_bin_makefile,
           base_lib_makefile)
 
-      make:target({ "release" }, { "test", "build-deps" }, function (_, _, check_target)
+      make:target(vec("release"), vec("test", "build-deps"), function (_, _, check_target)
         local cwd = check_target(fs.cwd())
         -- TODO: simplify with fs.pushd + callback
         check_target(fs.cd(fs.join(build_dir, "build")))
@@ -300,7 +311,8 @@ M.init = function (opts)
           if not ok then
             chk(false, "Commit your changes first", err)
           end
-          local api_key = chk:exists(opts.luarocks_api_key or os.getenv("LUAROCKS_API_KEY"), "Missing luarocks API key")
+          local api_key = chk:exists(opts.luarocks_api_key or os.getenv("LUAROCKS_API_KEY"),
+            "Missing luarocks API key")
           if chk(fs.exists(release_tarball)) then
             chk(fs.rm(release_tarball))
           end
@@ -309,7 +321,8 @@ M.init = function (opts)
             "--dereference",
             "--transform", str.interp("s#^#%s#(1)/#", { release_tarball_dir }),
             "-czvf", release_tarball, release_tarball_contents:unpack()))
-          chk(sys.execute("gh", "release", "create", "--generate-notes", opts.config.env.version, release_tarball, base_rockspec))
+          chk(sys.execute("gh", "release", "create", "--generate-notes",
+            opts.config.env.version, release_tarball, base_rockspec))
           chk(sys.execute("luarocks", "upload", "--skip-pack", "--api-key", api_key, base_rockspec))
         end)
         check_target(fs.cd(cwd))
@@ -319,7 +332,7 @@ M.init = function (opts)
 
     end
 
-    make:target({ "test" }, { "test-deps" }, function (_, _, check_target)
+    make:target(vec("test"), vec("test-deps"), function (_, _, check_target)
       local cwd = check_target(fs.cwd())
       -- TODO: simplify with fs.pushd + callback
       check_target(fs.cd(fs.join(build_dir, "test")))
@@ -331,14 +344,28 @@ M.init = function (opts)
       return true
     end)
 
-    make:target({ "iterate" }, {}, function (_, _, check_target)
+    make:target(vec("iterate"), vec(), function (_, _, check_target)
       local ok = sys.execute("sh", "-c", "type inotifywait >/dev/null 2>/dev/null")
       if not ok then
         return false
       end
       while true do
-        check_target(make:make({ "test" }, check_target))
+        check_target(make:make(vec("test"), check_target))
         check_target(sys.execute("inotifywait", "-qqr", opts.config_file, test_all_base:unpack()))
+      end
+    end)
+
+    gen.keys(make.targets):each(function (fp)
+      local dfile = fp .. ".d"
+      if check_init(fs.exists(dfile)) then
+        check_init(fs.lines(dfile)):each(function (line)
+          local chunks = str.split(line, ":")
+          local target = chunks[1]
+          local deps = gen.ivals(chunks):co():slice(2):map(str.split):flatten():filter(function (fp)
+            return not str.isempty(fp)
+          end):vec()
+          make:add_deps({ target }, deps)
+        end)
       end
     end)
 
