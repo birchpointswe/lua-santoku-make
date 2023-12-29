@@ -63,7 +63,7 @@ M.init = function (opts)
         vec(src, opts.config_file),
         function (_, _, check_target)
           check_target(fs.mkdirp(fs.dirname(dest)))
-          check_target(fs.writefile(dest, check_target(tpl.renderfile(src, { env = env }))))
+          check_target(fs.writefile(dest, check_target(tpl.renderfile(src, { env = env, excludes = opts.config.excludes }))))
           return true
         end)
     end
@@ -74,7 +74,7 @@ M.init = function (opts)
         vec(),
         function (_, _, check_target)
           check_target(fs.mkdirp(fs.dirname(dest)))
-          local t = check_target(tpl.compile(basexx.from_base64(data), { env = env }))
+          local t = check_target(tpl.compile(basexx.from_base64(data), { env = env, excludes = opts.config.excludes }))
           check_target(fs.writefile(dest, check_target(t:render(opts.config))))
           return true
         end)
