@@ -138,7 +138,7 @@ M.init = function (opts)
     local base_luacov_cfg = "luacov.lua"
     local base_run_sh = "run.sh"
     local base_luacov_stats_out = "luacov.stats.out"
-    local base_luacov_report_out = "luacov.stats.out"
+    local base_luacov_report_out = "luacov.report.out"
 
     local base_test_specs = get_files("test/spec")
     local base_test_deps = get_files("test/deps")
