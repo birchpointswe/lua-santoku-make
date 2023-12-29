@@ -1,5 +1,7 @@
 # Now
 
+- inotifywait shouldn't listen to access events
+- Don't add lib/Makefile if only bin/ exists
 - Save init flags in a file that make.lua depends on, causing cascading re-build
 - Implement test --single=spec/santoku/gen.lua
 - Implement test --command=true
@@ -20,7 +22,6 @@
 # Next
 
 - Lib WASM
-- Generate and load .d files with renderfile
 - Web
 
 # Later
@@ -34,7 +35,6 @@
 - Remove basexx dependency
 - Template file overrides, store default template files in actual files under
   the luarocks package conf dir instead of embedding
-- inotifywait shouldn't listen to access events
 - Better error messages: no targets specified, nothing to do, etc.
 - Returning nil should not mean failure (and it shouldn't fail silently anyway)
 - Verbose/default mode
