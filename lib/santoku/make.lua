@@ -54,7 +54,7 @@ local function make (check, o, opts, targets, args)
       check(false, t .. ": target doesn't exist and no corresponding function registered")
     end
     if o.fns[t] == true then
-      if opts.verbosity > 0 then
+      if opts.verbosity > 1 then
         str.printf("[phony] \t%s\n", t)
       end
       return check(posix.now())
