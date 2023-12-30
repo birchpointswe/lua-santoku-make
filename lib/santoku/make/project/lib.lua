@@ -340,7 +340,9 @@ M.init = function (opts)
       local cwd = check_target(fs.cwd())
       -- TODO: simplify with fs.pushd + callback
       check_target(fs.cd(build_dir()))
-      local ok, e, cd = sys.execute("luarocks", "make", base_rockspec)
+      local ok, e, cd = sys.execute({
+        env = { MAKEFLAGS = "-s" }
+      }, "luarocks", "make", base_rockspec)
       check_target(fs.cd(cwd))
       check_target(ok, e, cd)
       return true
