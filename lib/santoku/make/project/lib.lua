@@ -352,10 +352,15 @@ M.init = function (opts)
       local release_tarball = release_tarball_dir .. ".tar.gz"
       local release_tarball_contents = vec()
         :extend(base_bins, base_libs, base_deps)
-        :append(
-          base_makefile,
-          base_bin_makefile,
-          base_lib_makefile)
+        :append(base_makefile)
+
+      if base_libs.n > 0 then
+        release_tarball_contents:append(base_lib_makefile)
+      end
+
+      if base_bins.n > 0 then
+        release_tarball_contents:append(base_bin_makefile)
+      end
 
       make:target(vec("release"), vec("test", "build-deps"), function (_, _, check_target)
         local cwd = check_target(fs.cwd())
