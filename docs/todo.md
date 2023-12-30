@@ -18,6 +18,8 @@
 
 # Eventually
 
+- Support github dependencies
+
 - Clean up handling of toku template configs, specifically excludes
 - Remove basexx dependency
 - Template file overrides, store default template files in actual files under
@@ -35,6 +37,7 @@
   targeted and thus all of them are re-made)
 - Use system cp instead of read/write
 - Implement test --command or similar
+- luacov summary sometimes shows 0%
 
 - Support luarocks' built in external dependencies functionality
 
