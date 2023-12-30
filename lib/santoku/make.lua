@@ -19,10 +19,11 @@ M.target = function (o, ts, ds, fn)
   vec.wrap(ds)
   ts:each(function (t)
     assert(compat.istype.string(t))
-    assert(o.targets[t] == nil and o.deps[t] == nil and o.fns[t] == nil,
-      "target already registered: " .. (t or "(nil)"))
-    o.targets[t] = ts
-    o.deps[t] = ds
+    o.targets[t] = o.targets[t] or vec()
+    o.targets[t]:extend(ts)
+    o.deps[t] = o.deps[t] or vec()
+    o.deps[t]:extend(ds)
+    assert(o.fns[t] == nil, "target already has a function registered: " .. t)
     o.fns[t] = fn
   end)
 end

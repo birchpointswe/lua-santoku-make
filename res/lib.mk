@@ -15,14 +15,10 @@ LIB_CFLAGS += -Wall $(addprefix -I, $(LUA_INCDIR)) $(<% return var("CFLAGS") %>)
 LIB_CXXFLAGS += -Wall $(addprefix -I, $(LUA_INCDIR)) $(<% return var("CXXFLAGS") %>) <% return cxxflags %>
 LIB_LDFLAGS += -Wall $(addprefix -L, $(LUA_LIBDIR)) $(<% return var("LDFLAGS") %>) <% return ldflags %>
 
-<% template:push(environment == "test") %>
-
-ifeq ($(<% return var("SANITIZE") %>),1)
+<% template:push(environment == "test" and sanitize) %>
 LIB_CFLAGS := -fsanitize=address -fsanitize=leak $(LIB_CFLAGS)
 LIB_CXXFLAGS := -fsanitize=address -fsanitize=leak $(LIB_CXXFLAGS)
 LIB_LDFLAGS := -fsanitize=address -fsanitize=leak $(LIB_LDFLAGS)
-endif
-
 <% template:pop() %>
 
 all: $(LIB_O) $(LIB_SO)
