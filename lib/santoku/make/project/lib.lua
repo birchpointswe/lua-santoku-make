@@ -34,15 +34,27 @@ M.init = function (opts)
 
   return err.pwrap(function (check_init)
 
-    opts.wasm = opts.wasm or false -- TODO
-    opts.profile = opts.profile or false -- TODO
+    opts.wasm = opts.wasm or false
+    opts.sanitize = opts.sanitize or false
+    opts.profile = opts.profile or false
+    opts.single = opts.single or false
     opts.iterate = opts.iterate or false
     opts.target = opts.target or "test"
 
-    local build_dir = fs.join(opts.dir, opts.env)
+    local function work_dir (...)
+      if opts.wasm then
+        return fs.join(opts.dir, opts.env .. "-wasm", ...)
+      else
+        return fs.join(opts.dir, opts.env, ...)
+      end
+    end
 
-    if opts.wasm then
-      build_dir = build_dir .. "-wasm"
+    local function build_dir (...)
+      return work_dir("build", ...)
+    end
+
+    local function test_dir (...)
+      return work_dir("test", ...)
     end
 
     -- TODO: use fs.copy
@@ -144,6 +156,13 @@ M.init = function (opts)
     local base_luacov_report_out = "luacov.report.out"
 
     local base_test_specs = get_files("test/spec")
+
+    if opts.single then
+      base_test_specs:filter(function (fp)
+        return fp == opts.single
+      end)
+    end
+
     local base_test_deps = get_files("test/deps")
     local base_test_res = get_files("test/res")
 
@@ -160,26 +179,41 @@ M.init = function (opts)
         base_luarocks_cfg,
         base_luacheck_cfg,
         base_luacov_cfg,
-        base_run_sh,
-        base_lua_modules_ok)
-      :map(fun.bindl(fs.join, build_dir, "test"))
+        base_run_sh)
+      :map(test_dir)
 
     local test_srcs = vec()
       :extend(base_bins, base_libs, base_deps, base_test_deps)
-      :map(fun.bindl(fs.join, build_dir, "test"))
+      :map(test_dir)
 
     local build_all = vec()
       :extend(base_bins, base_libs, base_deps)
       :append(
         base_rockspec,
-        base_makefile,
-        base_lib_makefile,
-        base_bin_makefile)
-      :map(fun.bindl(fs.join, build_dir, "build"))
+        base_makefile)
+      :map(build_dir)
+
+    if base_libs.n > 0 then
+      test_all:append(test_dir(base_lib_makefile))
+      build_all:append(build_dir(base_lib_makefile))
+    end
+
+    if base_bins.n > 0 then
+      test_all:append(test_dir(base_bin_makefile))
+      build_all:append(build_dir(base_bin_makefile))
+    end
+
+    test_all:append(test_dir(base_lua_modules_ok))
+
+    opts.config.env.variable_prefix =
+      opts.config.env.variable_prefix or
+      string.upper((opts.config.env.name:gsub("%W+", "_")))
 
     local base_env = {
       wasm = opts.wasm,
+      sanitize = opts.sanitize,
       profile = opts.profile,
+      single = opts.single,
       bins = base_bins,
       libs = base_libs,
       var = function (n)
@@ -191,11 +225,11 @@ M.init = function (opts)
     local test_env = {
       environment = "test",
       lua = env.interpreter()[1],
-      lua_path = get_lua_path(fs.join(build_dir, "test")),
-      lua_cpath = get_lua_cpath(fs.join(build_dir, "test")),
-      lua_modules = check_init(fs.absolute(fs.join(build_dir, "test", base_lua_modules))),
-      luacov_stats_file = check_init(fs.absolute(fs.join(build_dir, "test", base_luacov_stats_out))),
-      luacov_report_file = check_init(fs.absolute(fs.join(build_dir, "test", base_luacov_report_out))),
+      lua_path = get_lua_path(test_dir()),
+      lua_cpath = get_lua_cpath(test_dir()),
+      lua_modules = check_init(fs.absolute(test_dir(base_lua_modules))),
+      luacov_stats_file = check_init(fs.absolute(test_dir(base_luacov_stats_out))),
+      luacov_report_file = check_init(fs.absolute(test_dir(base_luacov_report_out))),
     }
 
     local build_env = {
@@ -212,69 +246,92 @@ M.init = function (opts)
 
     gen.pack(base_libs, base_bins, base_deps)
       :map(gen.ivals):flatten():each(function (fp)
-        add_templated_target(fs.join(build_dir, "build", fp), fp, build_env)
+        add_templated_target(build_dir(fp), fp, build_env)
       end)
 
     gen.pack(base_libs, base_bins, base_deps, base_test_specs, base_test_deps)
       :map(gen.ivals):flatten():each(function (fp)
-        add_templated_target(fs.join(build_dir, "test", fp), fp, test_env)
+        add_templated_target(test_dir(fp), fp, test_env)
       end)
 
     gen.pack(base_test_res):map(gen.ivals):flatten():each(function (fp)
-      add_copied_target(fs.join(build_dir, "test", fp), fp, test_env)
+      add_copied_target(test_dir(fp), fp, test_env)
     end)
 
-    add_templated_target_base64(fs.join(build_dir, "build", base_rockspec),
+    add_templated_target_base64(build_dir(base_rockspec),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/template.rockspec")))) %>, build_env) -- luacheck: ignore
 
-    add_templated_target_base64(fs.join(build_dir, "build", base_makefile),
+    add_templated_target_base64(build_dir(base_makefile),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/luarocks.mk")))) %>, build_env) -- luacheck: ignore
 
-    add_templated_target_base64(fs.join(build_dir, "build", base_lib_makefile),
+    add_templated_target_base64(build_dir(base_lib_makefile),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/lib.mk")))) %>, build_env) -- luacheck: ignore
 
-    add_templated_target_base64(fs.join(build_dir, "build", base_bin_makefile),
+    add_templated_target_base64(build_dir(base_bin_makefile),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/bin.mk")))) %>, build_env) -- luacheck: ignore
 
-    add_templated_target_base64(fs.join(build_dir, "test", base_rockspec),
+    add_templated_target_base64(test_dir(base_rockspec),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/template.rockspec")))) %>, test_env) -- luacheck: ignore
 
-    add_templated_target_base64(fs.join(build_dir, "test", base_makefile),
+    add_templated_target_base64(test_dir(base_makefile),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/luarocks.mk")))) %>, test_env) -- luacheck: ignore
 
-    add_templated_target_base64(fs.join(build_dir, "test", base_lib_makefile),
+    add_templated_target_base64(test_dir(base_lib_makefile),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/lib.mk")))) %>, test_env) -- luacheck: ignore
 
-    add_templated_target_base64(fs.join(build_dir, "test", base_bin_makefile),
+    add_templated_target_base64(test_dir(base_bin_makefile),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/bin.mk")))) %>, test_env) -- luacheck: ignore
 
-    add_templated_target_base64(fs.join(build_dir, "test", base_luarocks_cfg),
+    add_templated_target_base64(test_dir(base_luarocks_cfg),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/luarocks.lua")))) %>, test_env) -- luacheck: ignore
 
-    add_templated_target_base64(fs.join(build_dir, "test", base_luacheck_cfg),
+    add_templated_target_base64(test_dir(base_luacheck_cfg),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/luacheck.lua")))) %>, test_env) -- luacheck: ignore
 
-    add_templated_target_base64(fs.join(build_dir, "test", base_luacov_cfg),
+    add_templated_target_base64(test_dir(base_luacov_cfg),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/luacov.lua")))) %>, test_env) -- luacheck: ignore
 
-    add_templated_target_base64(fs.join(build_dir, "test", base_run_sh),
+    add_templated_target_base64(test_dir(base_run_sh),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/test-run.sh")))) %>, test_env) -- luacheck: ignore
 
+    gen.pack("sanitize", "profile", "single")
+      :each(function (flag)
+        local fp = work_dir(flag .. ".flag")
+        check_init(fs.mkdirp(fs.dirname(fp)))
+        local strval = tostring(opts[flag])
+        if not check_init(fs.exists(fp)) then
+          check_init(fs.writefile(fp, strval))
+          return
+        end
+        local val = check_init(fs.readfile(fp))
+        if val ~= strval then
+          check_init(fs.writefile(fp, strval))
+        end
+      end)
+
+    make:add_deps(
+      vec(base_run_sh):map(test_dir),
+      vec("single.flag", "profile.flag"):map(work_dir))
+
+    make:add_deps(
+      vec(base_lib_makefile):extend(base_libs):map(test_dir),
+      vec("sanitize.flag"):map(work_dir))
+
     make:target(
-      vec(fs.join(build_dir, "test", base_lua_modules_ok)),
+      vec(base_lua_modules_ok):map(test_dir),
       vec()
         :extend(test_srcs)
-        :append(fs.join(build_dir, "test", base_luarocks_cfg)),
+        :append(test_dir(base_luarocks_cfg)),
       function (_, _, check_target)
         local cwd = check_target(fs.cwd())
         -- TODO: simplify with fs.pushd + callback
-        check_target(fs.cd(fs.join(build_dir, "test")))
+        check_target(fs.cd(test_dir()))
         local ok, e, cd = sys.execute(
-          { env = { LUAROCKS_CONFIG = base_luarocks_cfg } },
+          { env = { MAKEFLAGS = "-s", LUAROCKS_CONFIG = base_luarocks_cfg } },
           "luarocks", "make", fs.basename(base_rockspec))
         check_target(fs.cd(cwd))
         check_target(ok, e, cd)
-        check_target(fs.touch(fs.join(build_dir, "test", base_lua_modules_ok)))
+        check_target(fs.touch(test_dir(base_lua_modules_ok)))
         return true
       end)
 
@@ -284,7 +341,7 @@ M.init = function (opts)
     make:target(vec("install"), vec("build-deps"), function (_, _, check_target)
       local cwd = check_target(fs.cwd())
       -- TODO: simplify with fs.pushd + callback
-      check_target(fs.cd(fs.join(build_dir, "build")))
+      check_target(fs.cd(build_dir()))
       local ok, e, cd = sys.execute("luarocks", "make", base_rockspec)
       check_target(fs.cd(cwd))
       check_target(ok, e, cd)
@@ -305,7 +362,7 @@ M.init = function (opts)
       make:target(vec("release"), vec("test", "build-deps"), function (_, _, check_target)
         local cwd = check_target(fs.cwd())
         -- TODO: simplify with fs.pushd + callback
-        check_target(fs.cd(fs.join(build_dir, "build")))
+        check_target(fs.cd(build_dir()))
         local ok, e, cd = err.pwrap(function (chk)
           local ok, err = sys.execute("git", "diff", "--quiet")
           if not ok then
@@ -337,10 +394,8 @@ M.init = function (opts)
     make:target(vec("test"), vec("test-deps"), function (_, _, check_target)
       local cwd = check_target(fs.cwd())
       -- TODO: simplify with fs.pushd + callback
-      check_target(fs.cd(fs.join(build_dir, "test")))
-      local ok, e, cd = sys.execute({
-        env = { [base_env.var("PROFILE")] = opts.profile and "1" or nil }
-      }, "sh", "run.sh")
+      check_target(fs.cd(test_dir()))
+      local ok, e, cd = sys.execute("sh", "run.sh")
       check_target(fs.cd(cwd))
       check_target(ok, e, cd)
       return true
@@ -349,11 +404,20 @@ M.init = function (opts)
     make:target(vec("iterate"), vec(), function (_, _, check_target)
       local ok = sys.execute("sh", "-c", "type inotifywait >/dev/null 2>/dev/null")
       if not ok then
-        return false
+        check_target(false, "inotifywait not found")
       end
       while true do
         check_target(make:make(vec("test"), check_target))
-        check_target(sys.execute("inotifywait", "-qqr", opts.config_file, test_all_base:unpack()))
+        while true do
+          local ev = check_target(sys.sh("inotifywait", "-qr", opts.config_file, test_all_base:unpack()))
+            :map(check_target)
+            :map(str.split)
+            :map(fun.bindr(tbl.get, 2))
+            :co():head()
+          if not vec("OPEN", "ACCESS"):includes(ev) then
+            break
+          end
+        end
       end
     end)
 

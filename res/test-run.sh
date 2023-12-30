@@ -23,7 +23,7 @@ else
 
   rm -f luacov.stats.out luacov.report.out || true
 
-  <% template:push(os.getenv(var("WASM")) == "1") %>
+  <% template:push(wasm) %>
 
     # if [ -n "$TEST" ]; then
     #   TEST="spec-bundled/${TEST#test/spec/}"
@@ -35,21 +35,21 @@ else
     #   status=$?
     # fi
 
-  <% template:pop():push(os.getenv(var("WASM")) ~= "1") %>
+  <% template:pop():push(not wasm) %>
 
+  <% template:push(profile) %>
+    MODS="-l luacov -l santoku.profile"
+  <% template:pop():push(not profile) %>
     MODS="-l luacov"
-    if [ "$<% return var("PROFILE") %>" = "1" ]; then
-      MODS="$MODS -l santoku.profile"
-    fi
+  <% template:pop() %>
 
-    if [ -n "$TEST" ]; then
-      TEST="${TEST#test/}"
-      toku test -s -i "$LUA $MODS" "$TEST"
-      status=$?
-    elif [ -d test/spec ]; then
-      toku test -s -i "$LUA $MODS" --match "^.*%.lua$" test/spec
-      status=$?
-    fi
+  <% template:push(single) %>
+    toku test -s -i "$LUA $MODS" "<% return single %>"
+    status=$?
+  <% template:pop():push(not single) %>
+    toku test -s -i "$LUA $MODS" --match "^.*%.lua$" test/spec
+    status=$?
+  <% template:pop() %>
 
   <% template:pop() %>
 

@@ -1,33 +1,20 @@
 # Now
 
-- inotifywait shouldn't listen to access events
-- Don't add lib/Makefile if only bin/ exists
-- Save init flags in a file that make.lua depends on, causing cascading re-build
-- Implement test --single=spec/santoku/gen.lua
-- Implement test --command=true
-- Integrate with CLI
-
-- Split make.project into separate repo
-
-- Check if profile, sanitize work
-
-- CLI:
-  - toku make test
-  - toku make release
-  - toku make test --iterate --wasm --profile
-  - toku make test --dir .workdir --config config.beta.lua --iterate
-  - toku make test --dir build --env beta --iterate (reads make.beta.lua)
-  - toku make init [ --web | --lib ]
+- WASM
+    - Ignore bins (for now)
+    - Changing --sanitize should rebuild lib.mk, libs, and tests
+    - Changing --profile should rebuild tests
 
 # Next
 
-- Lib WASM
 - Web
 
 # Later
 
 - Implement init
 - In non-wasm, test all lua versions sequentially
+- Split make.project into separate repo
+- WASM bins
 
 # Eventually
 
@@ -39,11 +26,15 @@
 - Returning nil should not mean failure (and it shouldn't fail silently anyway)
 - Verbose/default mode
 - Add indentation to output in verbose
+- Some dependencies are order-dependent when they should not be, like
+  base_lua_modules_ok, which must come after base_lib_makefile and
+  base_bin_makefile
 
 - Add a time cache so that a file that is a dependency of many others is not
   checked repeatedly (make sure sibling times are cached when one of them is
   targeted and thus all of them are re-made)
 - Use system cp instead of read/write
+- Implement test --command or similar
 
 - Support luarocks' built in external dependencies functionality
 
