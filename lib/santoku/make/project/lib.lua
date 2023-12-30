@@ -174,8 +174,6 @@ M.init = function (opts)
       :append(
         base_rockspec,
         base_makefile,
-        base_lib_makefile,
-        base_bin_makefile,
         base_luarocks_cfg,
         base_luacheck_cfg,
         base_luacov_cfg,
