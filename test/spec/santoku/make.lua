@@ -61,7 +61,7 @@ test("make", function ()
 
     build:target({ "all" }, { "all-deps" }, true)
 
-    check_init(build:make({ "all", verbosity = 3 }))
+    check_init(build:make({ "all", verbosity = 3 }, check_init))
     assert("Header: Header content!\n" == check_init(fs.readfile("test/res/header.txt")))
     assert("Body\n" == check_init(fs.readfile("test/res/body.txt")))
     assert("Footer\n" == check_init(fs.readfile("test/res/footer.txt")))
