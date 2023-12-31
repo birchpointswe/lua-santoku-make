@@ -41,11 +41,7 @@ local function make (check, o, opts, targets, args)
     if opts.seen[t] then
       return opts.seen[t]
     end
-    print("test 1", t)
-    print("test 2", fs.exists(t))
-    print("test 3", posix.time(t))
     local ttime = check(fs.exists(t)) and check(posix.time(t))
-    print("test 4")
     local dtimes = make(check, o, opts, o.deps[t] or {}, args)
     if ttime and not dtimes:find(function (dt) return dt > ttime end) then
       if opts.verbosity > 1 then

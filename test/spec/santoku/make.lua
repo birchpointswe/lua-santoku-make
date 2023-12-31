@@ -6,7 +6,7 @@ local make = require("santoku.make")
 
 test("make", function ()
 
-  print("outer", err.pwrap(function (check_init)
+  err.check(err.pwrap(function (check_init)
 
     fs.walk("test/res", {
       recurse = true,
@@ -61,7 +61,7 @@ test("make", function ()
 
     build:target({ "all" }, { "all-deps" }, true)
 
-    print("inner", build:make({ "all", verbosity = 3 }))
+    check_init(build:make({ "all", verbosity = 3 }))
     assert("Header: Header content!\n" == check_init(fs.readfile("test/res/header.txt")))
     assert("Body\n" == check_init(fs.readfile("test/res/body.txt")))
     assert("Footer\n" == check_init(fs.readfile("test/res/footer.txt")))
