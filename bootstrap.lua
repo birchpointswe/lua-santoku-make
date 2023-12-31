@@ -18,7 +18,16 @@ err.check(err.pwrap(function (check)
 
   package.path = ".bootstrap/lib/?.lua;" .. package.path
 
-  local prj = check(require("santoku.make.project").init())
-  check(prj[arg[1]](prj, { verbosity = 3 }))
+
+  if arg[1] == "test-wasm" then
+    local prj = check(require("santoku.make.project").init({ wasm = true }))
+    check(prj["test"](prj, { verbosity = 3 }))
+  elseif arg[1] == "iterate-wasm" then
+    local prj = check(require("santoku.make.project").init({ wasm = true }))
+    check(prj["iterate"](prj, { verbosity = 3 }))
+  else
+    local prj = check(require("santoku.make.project").init())
+    check(prj[arg[1]](prj, { verbosity = 3 }))
+  end
 
 end))

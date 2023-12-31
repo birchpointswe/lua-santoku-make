@@ -25,15 +25,14 @@ else
 
   <% template:push(wasm) %>
 
-    # if [ -n "$TEST" ]; then
-    #   TEST="spec-bundled/${TEST#test/spec/}"
-    #   TEST="${TEST%.lua}"
-    #   toku test -s -i "node --expose-gc" "$TEST"
-    #   status=$?
-    # elif [ -d spec-bundled ]; then
-    #   toku test -s -i "node --expose-gc" spec-bundled
-    #   status=$?
-    # fi
+  <% template:push(single) %>
+    TEST="<% return single %>"
+    toku test -s -i "node --expose-gc" "${TEST%.lua}"
+    status=$?
+  <% template:pop():push(not single) %>
+    toku test -s -i "node --expose-gc" test/spec
+    status=$?
+  <% template:pop() %>
 
   <% template:pop():push(not wasm) %>
 

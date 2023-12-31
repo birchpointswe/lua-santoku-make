@@ -23,12 +23,20 @@
 - Implement init
 - Re-initialize on iteration loop so that new files are picked up automatically
 
+- Clean up make.lua: differentiate between parameters for the build system and
+  parameters for userland templates (e.g. for custom delimiters)
+
 - In non-wasm, test all lua versions sequentially
 - Split make.project into separate repo
 - Support github dependencies
 - WASM bins
 
 # Eventually
+
+- toku make bundle to produce bundled executables
+    - with --wasm, produce js, use the -wasm directory
+    - without --wasm, re-compile with static linking to produce static
+      executable, use a new -bundle directory
 
 - Consider removing multi-target concept so that only one target is passed to
   make:target(...)
@@ -40,7 +48,6 @@
 - Remove basexx dependency
 - Template file overrides
 
-- Clean up handling of toku template configs, specifically excludes
 - Returning nil should not mean failure (and it shouldn't fail silently anyway)
 - Better error messages: no targets specified, nothing to do, etc.
 
