@@ -23,6 +23,8 @@
 - Implement init
 - Re-initialize on iteration loop so that new files are picked up automatically
 
+- Fix WASM luacov and profile
+
 - Clean up make.lua: differentiate between parameters for the build system and
   parameters for userland templates (e.g. for custom delimiters)
 
