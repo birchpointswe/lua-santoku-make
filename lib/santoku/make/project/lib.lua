@@ -16,6 +16,7 @@ local sys = require("santoku.system")
 local tbl = require("santoku.table")
 local tpl = require("santoku.template")
 local vec = require("santoku.vector")
+local bundle = require("santoku.bundle")
 
 local basexx = require("basexx")
 
@@ -167,7 +168,13 @@ M.init = function (opts)
     local base_test_res = get_files("test/res")
 
     local test_all_base = vec()
-      :extend(base_bins, base_libs, base_deps, base_test_specs, base_test_deps, base_test_res)
+      :extend(base_bins, base_libs, base_deps, base_test_deps, base_test_res)
+
+    if opts.wasm then
+      test_all_base:extend(gen.ivals(base_test_specs):map(fs.stripextension):vec())
+    else
+      test_all_base:extend(base_test_specs)
+    end
 
     local test_all = vec()
       :extend(test_all_base)
@@ -184,6 +191,11 @@ M.init = function (opts)
       :extend(base_bins, base_libs, base_deps, base_test_deps)
       :map(test_dir)
 
+    local test_cfgs = vec()
+      :append(base_rockspec, base_makefile)
+      :append(base_luarocks_cfg, base_luacheck_cfg, base_luacov_cfg, base_run_sh)
+      :map(test_dir)
+
     local build_all = vec()
       :extend(base_bins, base_libs, base_deps)
       :append(
@@ -193,19 +205,17 @@ M.init = function (opts)
 
     if base_libs.n > 0 then
       test_all:append(test_dir(base_lib_makefile))
+      test_cfgs:append(test_dir(base_lib_makefile))
       build_all:append(build_dir(base_lib_makefile))
     end
 
     if base_bins.n > 0 then
       test_all:append(test_dir(base_bin_makefile))
+      test_cfgs:append(test_dir(base_bin_makefile))
       build_all:append(build_dir(base_bin_makefile))
     end
 
     test_all:append(test_dir(base_lua_modules_ok))
-
-    opts.config.env.variable_prefix =
-      opts.config.env.variable_prefix or
-      string.upper((opts.config.env.name:gsub("%W+", "_")))
 
     local base_env = {
       wasm = opts.wasm,
@@ -242,15 +252,109 @@ M.init = function (opts)
     inherit.pushindex(build_env, base_env)
     inherit.pushindex(build_env, opts.config.env)
 
+    if opts.wasm then
+
+      local test_client_lua_dir = check_init(fs.absolute(test_dir("lua-5.1.5")))
+      local test_client_lua_ok = test_client_lua_dir .. ".ok"
+
+      base_env.client_lua_dir = test_client_lua_dir
+
+      test_all:insert(1, test_client_lua_ok)
+
+      make:target(vec(test_client_lua_ok), vec(), function (_, _, check_target)
+        check_target(fs.mkdirp(test_dir()))
+        local cwd = check_target(fs.cwd())
+        check_target(fs.cd(test_dir()))
+        local ok, e, cd = err.pwrap(function (chk)
+          if not chk(fs.exists("lua-5.1.5.tar.gz")) then
+            chk(sys.execute("wget", "https://www.lua.org/ftp/lua-5.1.5.tar.gz"))
+          end
+          if chk(fs.exists("lua-5.1.5")) then
+            chk(sys.execute("rm", "-rf", "lua-5.1.5")) -- TODO: use fs.rm(x, { recurse = true })
+          end
+          chk(sys.execute("tar", "xf", "lua-5.1.5.tar.gz"))
+          chk(fs.cd("lua-5.1.5"))
+          chk(sys.execute("emmake", "sh", "-c",
+            "make generic CC=\"$CC\" LD=\"$LD\" AR=\"$AR rcu\"" ..
+            "  RANLIB=\"$RANLIB\" MYLDFLAGS=\"-sSINGLE_FILE -sEXIT_RUNTIME=1 -lnodefs.js -lnoderawfs.js\""))
+          chk(sys.execute("make", "local"))
+          chk(fs.cd("bin"))
+          chk(sys.execute("mv", "lua", "lua.js"))
+          chk(sys.execute("mv", "luac", "luac.js"))
+          chk(fs.writefile("lua", "#!/bin/sh\nnode \"$(dirname $0)/lua.js\" \"$@\"\n"))
+          chk(fs.writefile("luac", "#!/bin/sh\nnode \"$(dirname $0)/luac.js\" \"$@\"\n"))
+          chk(sys.execute("chmod", "+x", "lua"))
+          chk(sys.execute("chmod", "+x", "luac"))
+        end)
+        check_target(fs.cd(cwd))
+        check_target(ok, e, cd)
+        check_target(fs.touch(test_client_lua_ok))
+        return true
+      end)
+
+    end
+
+    opts.config.env.variable_prefix =
+      opts.config.env.variable_prefix or
+      string.upper((opts.config.env.name:gsub("%W+", "_")))
+
     gen.pack(base_libs, base_bins, base_deps)
       :map(gen.ivals):flatten():each(function (fp)
         add_templated_target(build_dir(fp), fp, build_env)
       end)
 
-    gen.pack(base_libs, base_bins, base_deps, base_test_specs, base_test_deps)
+    gen.pack(base_libs, base_bins, base_deps, base_test_deps)
       :map(gen.ivals):flatten():each(function (fp)
         add_templated_target(test_dir(fp), fp, test_env)
       end)
+
+    if not opts.wasm then
+
+      base_test_specs:each(function (fp)
+        add_templated_target(test_dir(fp), fp, test_env)
+      end)
+
+    else
+
+      base_test_specs:each(function (fp)
+        add_templated_target(test_dir("bundler-pre", fp), fp, test_env)
+      end)
+
+      base_test_specs:each(function (fp)
+        make:target(
+          vec(test_dir("bundler-post", fs.stripextension(fp))),
+          vec(test_dir("bundler-pre", fp)):extend(test_cfgs):append(test_dir(base_lua_modules_ok)),
+          function (_, _, check_target)
+            check_target(bundle.bundle(
+              test_dir("bundler-pre", fp),
+              test_dir("bundler-post", fs.dirname(fp)), {
+                cc = "emcc",
+                mods = { "luacov", "luacov.hook", "luacov.tick", opts.profile and "santoku.profile" or nil },
+                ignores = { "debug" },
+                env = {
+                  { base_env.var("WASM"), "1" },
+                  { base_env.var("PROFILE"), opts.profile and "1" or "" },
+                  { base_env.var("SANITIZE"), opts.sanitize and "1" or "" },
+                  { "LUACOV_CONFIG", check_target(fs.absolute(test_dir(base_luacov_cfg))) }
+                },
+                path = get_lua_path(test_dir()),
+                cpath = get_lua_cpath(test_dir()),
+                flags = {
+                  "-sASSERTIONS", "-sSINGLE_FILE", "-sALLOW_MEMORY_GROWTH",
+                  "-I" .. fs.join(base_env.client_lua_dir, "include"),
+                  "-L" .. fs.join(base_env.client_lua_dir, "lib"),
+                  "-lnodefs.js", "-lnoderawfs.js", "-llua", "-lm"
+                }
+              }))
+            return true
+          end)
+        end)
+
+      base_test_specs:each(function (fp)
+        add_copied_target(test_dir(fs.stripextension(fp)), test_dir("bundler-post", fs.stripextension(fp)), test_env)
+      end)
+
+    end
 
     gen.pack(base_test_res):map(gen.ivals):flatten():each(function (fp)
       add_copied_target(test_dir(fp), fp, test_env)
@@ -318,7 +422,7 @@ M.init = function (opts)
     make:target(
       vec(base_lua_modules_ok):map(test_dir),
       vec()
-        :extend(test_srcs)
+        :extend(test_srcs, test_cfgs)
         :append(test_dir(base_luarocks_cfg)),
       function (_, _, check_target)
         local cwd = check_target(fs.cwd())
@@ -336,19 +440,25 @@ M.init = function (opts)
     make:target(vec("build-deps"), build_all, true)
     make:target(vec("test-deps"), test_all, true)
 
-    make:target(vec("install"), vec("build-deps"), function (_, _, check_target)
-      local cwd = check_target(fs.cwd())
-      -- TODO: simplify with fs.pushd + callback
-      check_target(fs.cd(build_dir()))
-      local ok, e, cd = sys.execute({
-        env = { MAKEFLAGS = "-s" }
-      }, "luarocks", "make", base_rockspec)
-      check_target(fs.cd(cwd))
-      check_target(ok, e, cd)
-      return true
-    end)
+    -- NOTE: install not supported in wasm mode
+    if not opts.wasm then
 
-    if opts.config.env.public then
+      make:target(vec("install"), vec("build-deps"), function (_, _, check_target)
+        local cwd = check_target(fs.cwd())
+        -- TODO: simplify with fs.pushd + callback
+        check_target(fs.cd(build_dir()))
+        local ok, e, cd = sys.execute({
+            env = { MAKEFLAGS = "-s" }
+          }, "luarocks", "make", base_rockspec)
+        check_target(fs.cd(cwd))
+        check_target(ok, e, cd)
+        return true
+      end)
+
+    end
+
+    -- NOTE: release not supported in wasm mode
+    if not opts.wasm and opts.config.env.public then
 
       local release_tarball_dir = str.interp("%s#(name)-%s#(version)", opts.config.env)
       local release_tarball = release_tarball_dir .. ".tar.gz"
@@ -414,12 +524,18 @@ M.init = function (opts)
       while true do
         check_target(make:make(vec("test"), check_target))
         while true do
-          local ev = check_target(sys.sh("inotifywait", "-qr", opts.config_file, test_all_base:unpack()))
+          local watched_files = fs.files(".")
+            :map(check_target)
+            :map(fun.nret(1))
+            :vec()
+            :append("lib", "bin", "test", "res")
+            :filter(fun.compose(check_target, fs.exists))
+          local ev = check_target(sys.sh("inotifywait", "-qr", watched_files:unpack()))
             :map(check_target)
             :map(str.split)
             :map(fun.bindr(tbl.get, 2))
             :co():head()
-          if not vec("OPEN", "ACCESS"):includes(ev) then
+          if not vec("OPEN", "ACCESS"):find(fun.bindl(str.startswith, ev)) then
             break
           end
         end
@@ -458,18 +574,23 @@ M.init = function (opts)
       end)
     end
 
-    N.install = function (_, opts)
-      opts = opts or {}
-      return err.pwrap(function (check_target)
-        check_target(make:make(tbl.assign({ "install" }, opts), check_target))
-      end)
-    end
+    -- NOTE: install and release not supported in wasm mode
+    if not opts.wasm then
 
-    N.release = function (_, opts)
-      opts = opts or {}
-      return err.pwrap(function (check_target)
-        check_target(make:make(tbl.assign({ "release" }, opts), check_target))
-      end)
+      N.install = function (_, opts)
+        opts = opts or {}
+        return err.pwrap(function (check_target)
+          check_target(make:make(tbl.assign({ "install" }, opts), check_target))
+        end)
+      end
+
+      N.release = function (_, opts)
+        opts = opts or {}
+        return err.pwrap(function (check_target)
+          check_target(make:make(tbl.assign({ "release" }, opts), check_target))
+        end)
+      end
+
     end
 
     return N
