@@ -9,7 +9,7 @@ export LUA='<% return lua %>'
 export LUA_PATH='<% return lua_path %>'
 export LUA_CPATH='<% return lua_cpath %>'
 
-<% return gen.ivals(tbl.get(test, "envs") or {}):map(function (env)
+<% return gen.ivals(tbl.get(test or {}, "envs") or {}):map(function (env)
   return ". " .. env
 end):concat("\n") %>
 

@@ -1,13 +1,8 @@
 # Now
 
-- WASM
-    - Ignore bins (for now)
-    - Changing --sanitize should rebuild lib.mk, libs, and tests
-    - Changing --profile should rebuild tests
+- Web
 
 # Next
-
-- Web
 
 - Profile and coverage for server
 - Don't restart server when only client code changes (cli flag to force restart)
@@ -20,10 +15,13 @@
 
 # Later
 
+- res/* arent tracked as dependencies for this project (changing
+  template.rockspec doesn't re-build project/lib.lua)
+
 - Implement init
 - Re-initialize on iteration loop so that new files are picked up automatically
 
-- Fix WASM luacov and profile
+- Fix WASM luacheck, sanitize, luacov, profile (lua_close on atexit?)
 
 - Clean up make.lua: differentiate between parameters for the build system and
   parameters for userland templates (e.g. for custom delimiters)
@@ -34,6 +32,11 @@
 - WASM bins
 
 # Eventually
+
+- Allow toku make release --wasm with an optional distinct library name. This
+  would allow build.wasm flags to be used in a release tarball
+
+- Allow library to set default --wasm with --native to revert
 
 - toku make bundle to produce bundled executables
     - with --wasm, produce js, use the -wasm directory

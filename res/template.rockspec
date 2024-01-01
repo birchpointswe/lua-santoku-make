@@ -21,7 +21,7 @@ dependencies = {
   <% return gen.ivals(dependencies or {}):map(str.quote):concat(",\n") .. ",\n" %>
   <% template:push(environment == "test") %>
   <% if template:showing() then
-      return gen.ivals(tbl.get(test, "dependencies") or {}):map(str.quote):concat(",\n")
+      return gen.ivals(tbl.get(test or {}, "dependencies") or {}):map(str.quote):concat(",\n")
      end %>
   <% template:pop() %>
 }
@@ -34,6 +34,12 @@ build = {
   },
   build_variables = {
     CC = "$(CC)",
+    CXX = "$(CXX)",
+    AR = "$(AR)",
+    LD = "$(LD)",
+    NM = "$(NM)",
+    LDSHARED = "$(LDSHARED)",
+    RANLIB = "$(RANLIB)",
     CFLAGS = "$(CFLAGS)",
     LIBFLAG = "$(LIBFLAG)",
     LUA_BINDIR = "$(LUA_BINDIR)",
