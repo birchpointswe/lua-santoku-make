@@ -1,5 +1,7 @@
 <%
   gen = require("santoku.gen")
+  fun = require("santoku.fun")
+  op = require("santoku.op")
   str = require("santoku.string")
   tbl = require("santoku.table")
 %>
@@ -18,12 +20,18 @@ description = {
 }
 
 dependencies = {
-  <% return gen.ivals(dependencies or {}):map(str.quote):concat(",\n") .. ",\n" %>
-  <% template:push(environment == "test") %>
-  <% if template:showing() then
-      return gen.ivals(tbl.get(test or {}, "dependencies") or {}):map(str.quote):concat(",\n")
-     end %>
-  <% template:pop() %>
+  <%
+    return gen.pack(
+        dependencies,
+        environment == "test" and tbl.get(test or {}, "dependencies"),
+        environment == "test" and wasm and tbl.get(test or {}, "wasm", "dependencies"),
+        environment == "test" and not wasm and tbl.get(test or {}, "native", "dependencies"))
+      :map(fun.bindr(op["or"], {}))
+      :map(gen.ivals)
+      :flatten()
+      :map(str.quote)
+      :concat(",\n")
+  %>
 }
 
 build = {

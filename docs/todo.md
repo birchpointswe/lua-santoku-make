@@ -33,6 +33,8 @@
 
 # Eventually
 
+- Hide or otherwise prevent NM/LDSHARED/CXX missing warnings from appearing
+
 - Allow toku make release --wasm with an optional distinct library name. This
   would allow build.wasm flags to be used in a release tarball
 
