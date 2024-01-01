@@ -343,7 +343,13 @@ M.init = function (opts)
                   "-sASSERTIONS", "-sSINGLE_FILE", "-sALLOW_MEMORY_GROWTH",
                   "-I" .. fs.join(base_env.client_lua_dir, "include"),
                   "-L" .. fs.join(base_env.client_lua_dir, "lib"),
-                  "-lnodefs.js", "-lnoderawfs.js", "-llua", "-lm"
+                  "-lnodefs.js", "-lnoderawfs.js", "-llua", "-lm",
+                  tbl.get(test_env, "test", "cflags") or "",
+                  tbl.get(test_env, "test", "ldflags") or "",
+                  tbl.get(test_env, "test", "wasm", "cflags") or "",
+                  tbl.get(test_env, "test", "wasm", "ldflags") or "",
+                  tbl.get(test_env, "test", "sanitize", "wasm", "cflags") or "",
+                  tbl.get(test_env, "test", "sanitize", "wasm", "ldflags") or "",
                 }
               }))
             return true
@@ -474,7 +480,11 @@ M.init = function (opts)
         release_tarball_contents:append(base_bin_makefile)
       end
 
-      make:target(vec("release"), vec("test", "build-deps"), function (_, _, check_target)
+      local release_deps = opts.skip_tests
+        and vec("build-deps")
+        or vec("test", "build-deps")
+
+      make:target(vec("release"), release_deps, function (_, _, check_target)
         local cwd = check_target(fs.cwd())
         -- TODO: simplify with fs.pushd + callback
         check_target(fs.cd(build_dir()))
