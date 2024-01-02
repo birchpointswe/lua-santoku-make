@@ -63,7 +63,11 @@ else
   echo
 
   if type luacheck >/dev/null 2>/dev/null && [ -f luacheck.lua ]; then
-    luacheck --config luacheck.lua $(find lib bin spec -maxdepth 0 2>/dev/null)
+  <% template:push(wasm) %>
+    luacheck --config luacheck.lua $(find lib bin bundler-pre/test/spec -maxdepth 0 2>/dev/null)
+  <% template:pop():push(not wasm) %>
+    luacheck --config luacheck.lua $(find lib bin test/spec -maxdepth 0 2>/dev/null)
+  <% template:pop() %>
   fi
 
   echo
