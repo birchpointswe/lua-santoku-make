@@ -21,32 +21,42 @@ test("make", function ()
 
     local build = make()
 
-    build:target({ "test/res/main.txt" }, { "test/res/header.txt", "test/res/body.txt", "test/res/footer.txt" }, function (ts, ds, check_target)
-      gen.ivals(ts):map(fs.dirname):map(fs.mkdirp):each(check_target)
-      check_target(fs.writefile(ts[1], gen.ivals(ds):map(fs.readfile):map(check_target):concat()))
-      return true
-    end)
+    build:target(
+      { "test/res/main.txt" },
+      { "test/res/header.txt", "test/res/body.txt", "test/res/footer.txt" },
+      function (ts, ds, check_target)
+        gen.ivals(ts):map(fs.dirname):map(fs.mkdirp):each(check_target)
+        check_target(fs.writefile(ts[1], gen.ivals(ds):map(fs.readfile):map(check_target):concat()))
+        return true
+      end)
 
-    build:target({ "test/res/header.txt" }, { "test/res/partials/header-content.txt", }, function (ts, ds, check_target)
-      gen.ivals(ts):map(fs.dirname):map(fs.mkdirp):each(check_target)
-      check_target(fs.writefile(ts[1], "Header: " .. check_target(fs.readfile(ds[1]))))
-      return true
-    end)
+    build:target(
+      { "test/res/header.txt" },
+      { "test/res/partials/header-content.txt", },
+      function (ts, ds, check_target)
+        gen.ivals(ts):map(fs.dirname):map(fs.mkdirp):each(check_target)
+        check_target(fs.writefile(ts[1], "Header: " .. check_target(fs.readfile(ds[1]))))
+        return true
+      end)
 
-    build:target({ "test/res/body.txt", "test/res/footer.txt" }, {}, function (ts, _, check_target)
-      gen.ivals(ts):map(fs.dirname):map(fs.mkdirp):each(check_target)
-      check_target(fs.writefile(ts[1], "Body\n"))
-      check_target(fs.writefile(ts[2], "Footer\n"))
-      return true
-    end)
+    build:target(
+      { "test/res/body.txt", "test/res/footer.txt" }, {},
+      function (ts, _, check_target)
+        gen.ivals(ts):map(fs.dirname):map(fs.mkdirp):each(check_target)
+        check_target(fs.writefile(ts[1], "Body\n"))
+        check_target(fs.writefile(ts[2], "Footer\n"))
+        return true
+      end)
 
-    build:target({ "test/res/a.txt", "test/res/b.txt", "test/res/c.txt" }, {}, function (ts, _, check_target)
-      gen.ivals(ts):map(fs.dirname):map(fs.mkdirp):each(check_target)
-      check_target(fs.writefile(ts[1], "a\n"))
-      check_target(fs.writefile(ts[2], "b\n"))
-      check_target(fs.writefile(ts[3], "c\n"))
-      return true
-    end)
+    build:target(
+      { "test/res/a.txt", "test/res/b.txt", "test/res/c.txt" }, {},
+      function (ts, _, check_target)
+        gen.ivals(ts):map(fs.dirname):map(fs.mkdirp):each(check_target)
+        check_target(fs.writefile(ts[1], "a\n"))
+        check_target(fs.writefile(ts[2], "b\n"))
+        check_target(fs.writefile(ts[3], "c\n"))
+        return true
+      end)
 
     build:target(
       { "test/res/test.txt" },
