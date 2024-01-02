@@ -21,7 +21,7 @@
 - Implement init
 - Re-initialize on iteration loop so that new files are picked up automatically
 
-- Fix WASM sanitize, luacov, profile (lua_close on atexit?)
+- Fix WASM sanitize
 
 - Clean up make.lua: differentiate between parameters for the build system and
   parameters for userland templates (e.g. for custom delimiters)
@@ -39,6 +39,8 @@
   would allow build.wasm flags to be used in a release tarball
 
 - Allow library to set default --wasm with --native to revert
+
+- Luacov in WASM doens't work due to bundling as a single chunk in a string
 
 - toku make bundle to produce bundled executables
     - with --wasm, produce js, use the -wasm directory
