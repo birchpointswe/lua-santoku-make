@@ -21,7 +21,7 @@
 - Implement init
 - Re-initialize on iteration loop so that new files are picked up automatically
 
-- Fix WASM luacheck, sanitize, luacov, profile (lua_close on atexit?)
+- Fix WASM sanitize, luacov, profile (lua_close on atexit?)
 
 - Clean up make.lua: differentiate between parameters for the build system and
   parameters for userland templates (e.g. for custom delimiters)
