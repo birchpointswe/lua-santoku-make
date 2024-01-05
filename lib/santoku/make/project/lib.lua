@@ -224,6 +224,7 @@ M.init = function (opts)
       single = opts.single,
       bins = base_bins,
       libs = base_libs,
+      root_dir = check_init(fs.cwd()),
       var = function (n)
         assert(compat.istype.string(n))
         return opts.config.env.variable_prefix .. "_" .. n
@@ -261,36 +262,39 @@ M.init = function (opts)
 
       test_all:insert(1, test_client_lua_ok)
 
-      make:target(vec(test_client_lua_ok), vec(), function (_, _, check_target)
-        check_target(fs.mkdirp(test_dir()))
-        local cwd = check_target(fs.cwd())
-        check_target(fs.cd(test_dir()))
-        local ok, e, cd = err.pwrap(function (chk)
-          if not chk(fs.exists("lua-5.1.5.tar.gz")) then
-            chk(sys.execute("wget", "https://www.lua.org/ftp/lua-5.1.5.tar.gz"))
-          end
-          if chk(fs.exists("lua-5.1.5")) then
-            chk(sys.execute("rm", "-rf", "lua-5.1.5")) -- TODO: use fs.rm(x, { recurse = true })
-          end
-          chk(sys.execute("tar", "xf", "lua-5.1.5.tar.gz"))
-          chk(fs.cd("lua-5.1.5"))
-          chk(sys.execute("emmake", "sh", "-c",
-            "make generic CC=\"$CC\" LD=\"$LD\" AR=\"$AR rcu\"" ..
-            "  RANLIB=\"$RANLIB\" MYLDFLAGS=\"-sSINGLE_FILE -sEXIT_RUNTIME=1 -lnodefs.js -lnoderawfs.js\""))
-          chk(sys.execute("make", "local"))
-          chk(fs.cd("bin"))
-          chk(sys.execute("mv", "lua", "lua.js"))
-          chk(sys.execute("mv", "luac", "luac.js"))
-          chk(fs.writefile("lua", "#!/bin/sh\nnode \"$(dirname $0)/lua.js\" \"$@\"\n"))
-          chk(fs.writefile("luac", "#!/bin/sh\nnode \"$(dirname $0)/luac.js\" \"$@\"\n"))
-          chk(sys.execute("chmod", "+x", "lua"))
-          chk(sys.execute("chmod", "+x", "luac"))
+      make:target(
+        vec(test_client_lua_ok),
+        vec(),
+        function (_, _, check_target)
+          check_target(fs.mkdirp(test_dir()))
+          local cwd = check_target(fs.cwd())
+          check_target(fs.cd(test_dir()))
+          local ok, e, cd = err.pwrap(function (chk)
+            if not chk(fs.exists("lua-5.1.5.tar.gz")) then
+              chk(sys.execute("wget", "https://www.lua.org/ftp/lua-5.1.5.tar.gz"))
+            end
+            if chk(fs.exists("lua-5.1.5")) then
+              chk(sys.execute("rm", "-rf", "lua-5.1.5")) -- TODO: use fs.rm(x, { recurse = true })
+            end
+            chk(sys.execute("tar", "xf", "lua-5.1.5.tar.gz"))
+            chk(fs.cd("lua-5.1.5"))
+            chk(sys.execute("emmake", "sh", "-c",
+              "make generic CC=\"$CC\" LD=\"$LD\" AR=\"$AR rcu\"" ..
+              "  RANLIB=\"$RANLIB\" MYLDFLAGS=\"-sSINGLE_FILE -sEXIT_RUNTIME=1 -lnodefs.js -lnoderawfs.js\""))
+            chk(sys.execute("make", "local"))
+            chk(fs.cd("bin"))
+            chk(sys.execute("mv", "lua", "lua.js"))
+            chk(sys.execute("mv", "luac", "luac.js"))
+            chk(fs.writefile("lua", "#!/bin/sh\nnode \"$(dirname $0)/lua.js\" \"$@\"\n"))
+            chk(fs.writefile("luac", "#!/bin/sh\nnode \"$(dirname $0)/luac.js\" \"$@\"\n"))
+            chk(sys.execute("chmod", "+x", "lua"))
+            chk(sys.execute("chmod", "+x", "luac"))
+          end)
+          check_target(fs.cd(cwd))
+          check_target(ok, e, cd)
+          check_target(fs.touch(test_client_lua_ok))
+          return true
         end)
-        check_target(fs.cd(cwd))
-        check_target(ok, e, cd)
-        check_target(fs.touch(test_client_lua_ok))
-        return true
-      end)
 
     end
 
@@ -367,40 +371,40 @@ M.init = function (opts)
     end)
 
     add_templated_target_base64(build_dir(base_rockspec),
-      <% return str.quote(basexx.to_base64(check(fs.readfile("res/template.rockspec")))) %>, build_env) -- luacheck: ignore
+      <% return str.quote(basexx.to_base64(check(fs.readfile("res/lib/template.rockspec")))) %>, build_env) -- luacheck: ignore
 
     add_templated_target_base64(build_dir(base_makefile),
-      <% return str.quote(basexx.to_base64(check(fs.readfile("res/luarocks.mk")))) %>, build_env) -- luacheck: ignore
+      <% return str.quote(basexx.to_base64(check(fs.readfile("res/lib/luarocks.mk")))) %>, build_env) -- luacheck: ignore
 
     add_templated_target_base64(build_dir(base_lib_makefile),
-      <% return str.quote(basexx.to_base64(check(fs.readfile("res/lib.mk")))) %>, build_env) -- luacheck: ignore
+      <% return str.quote(basexx.to_base64(check(fs.readfile("res/lib/lib.mk")))) %>, build_env) -- luacheck: ignore
 
     add_templated_target_base64(build_dir(base_bin_makefile),
-      <% return str.quote(basexx.to_base64(check(fs.readfile("res/bin.mk")))) %>, build_env) -- luacheck: ignore
+      <% return str.quote(basexx.to_base64(check(fs.readfile("res/lib/bin.mk")))) %>, build_env) -- luacheck: ignore
 
     add_templated_target_base64(test_dir(base_rockspec),
-      <% return str.quote(basexx.to_base64(check(fs.readfile("res/template.rockspec")))) %>, test_env) -- luacheck: ignore
+      <% return str.quote(basexx.to_base64(check(fs.readfile("res/lib/template.rockspec")))) %>, test_env) -- luacheck: ignore
 
     add_templated_target_base64(test_dir(base_makefile),
-      <% return str.quote(basexx.to_base64(check(fs.readfile("res/luarocks.mk")))) %>, test_env) -- luacheck: ignore
+      <% return str.quote(basexx.to_base64(check(fs.readfile("res/lib/luarocks.mk")))) %>, test_env) -- luacheck: ignore
 
     add_templated_target_base64(test_dir(base_lib_makefile),
-      <% return str.quote(basexx.to_base64(check(fs.readfile("res/lib.mk")))) %>, test_env) -- luacheck: ignore
+      <% return str.quote(basexx.to_base64(check(fs.readfile("res/lib/lib.mk")))) %>, test_env) -- luacheck: ignore
 
     add_templated_target_base64(test_dir(base_bin_makefile),
-      <% return str.quote(basexx.to_base64(check(fs.readfile("res/bin.mk")))) %>, test_env) -- luacheck: ignore
+      <% return str.quote(basexx.to_base64(check(fs.readfile("res/lib/bin.mk")))) %>, test_env) -- luacheck: ignore
 
     add_templated_target_base64(test_dir(base_luarocks_cfg),
-      <% return str.quote(basexx.to_base64(check(fs.readfile("res/luarocks.lua")))) %>, test_env) -- luacheck: ignore
+      <% return str.quote(basexx.to_base64(check(fs.readfile("res/lib/luarocks.lua")))) %>, test_env) -- luacheck: ignore
 
     add_templated_target_base64(test_dir(base_luacheck_cfg),
-      <% return str.quote(basexx.to_base64(check(fs.readfile("res/luacheck.lua")))) %>, test_env) -- luacheck: ignore
+      <% return str.quote(basexx.to_base64(check(fs.readfile("res/lib/luacheck.lua")))) %>, test_env) -- luacheck: ignore
 
     add_templated_target_base64(test_dir(base_luacov_cfg),
-      <% return str.quote(basexx.to_base64(check(fs.readfile("res/luacov.lua")))) %>, test_env) -- luacheck: ignore
+      <% return str.quote(basexx.to_base64(check(fs.readfile("res/lib/luacov.lua")))) %>, test_env) -- luacheck: ignore
 
     add_templated_target_base64(test_dir(base_run_sh),
-      <% return str.quote(basexx.to_base64(check(fs.readfile("res/test-run.sh")))) %>, test_env) -- luacheck: ignore
+      <% return str.quote(basexx.to_base64(check(fs.readfile("res/lib/test-run.sh")))) %>, test_env) -- luacheck: ignore
 
     gen.pack("sanitize", "profile", "single")
       :each(function (flag)
@@ -435,8 +439,16 @@ M.init = function (opts)
         -- TODO: simplify with fs.pushd + callback
         check_target(fs.cd(test_dir()))
         local ok, e, cd = sys.execute(
-          { env = { MAKEFLAGS = "-s", LUAROCKS_CONFIG = base_luarocks_cfg } },
-          "luarocks", "make", fs.basename(base_rockspec))
+          { env = { MAKEFLAGS = "-s", LUAROCKS_CONFIG = opts.luarocks_config or base_luarocks_cfg } },
+          "luarocks", "make", fs.basename(base_rockspec),
+          gen.chain(
+            gen.pairs(tbl.get(test_env, "luarocks", "env_vars") or {}),
+            gen.pairs(tbl.get(test_env, "test", "luarocks", "env_vars") or {}),
+            gen.pairs(opts.wasm and tbl.get(test_env, "test", "wasm", "luarocks", "env_vars") or {}),
+            gen.pairs(not opts.wasm and tbl.get(test_env, "test", "native", "luarocks", "env_vars") or {}))
+            :map(function (k, v)
+              return str.interp("%1=%2", { k, v })
+            end):unpack())
         check_target(fs.cd(cwd))
         check_target(ok, e, cd)
         check_target(fs.touch(test_dir(base_lua_modules_ok)))
@@ -446,16 +458,28 @@ M.init = function (opts)
     make:target(vec("build-deps"), build_all, true)
     make:target(vec("test-deps"), test_all, true)
 
+    local install_release_deps = opts.skip_tests
+      and vec("build-deps")
+      or vec("test", "build-deps")
+
     -- NOTE: install not supported in wasm mode
     if not opts.wasm then
 
-      make:target(vec("install"), vec("build-deps"), function (_, _, check_target)
+      make:target(vec("install"), install_release_deps, function (_, _, check_target)
         local cwd = check_target(fs.cwd())
         -- TODO: simplify with fs.pushd + callback
         check_target(fs.cd(build_dir()))
-        local ok, e, cd = sys.execute({
-            env = { MAKEFLAGS = "-s" }
-          }, "luarocks", "make", base_rockspec)
+        local ok, e, cd = sys.execute(
+          { env = { MAKEFLAGS = "-s", LUAROCKS_CONFIG = opts.luarocks_config } },
+          "luarocks", "make", base_rockspec,
+          gen.chain(
+            gen.pairs(tbl.get(build_env, "luarocks", "env_vars") or {}),
+            gen.pairs(tbl.get(build_env, "build", "luarocks", "env_vars") or {}),
+            gen.pairs(opts.wasm and tbl.get(build_env, "build", "wasm", "luarocks", "env_vars") or {}),
+            gen.pairs(not opts.wasm and tbl.get(build_env, "build", "native", "luarocks", "env_vars") or {}))
+            :map(function (k, v)
+              return str.interp("%1=%2", { k, v })
+            end):unpack())
         check_target(fs.cd(cwd))
         check_target(ok, e, cd)
         return true
@@ -480,11 +504,7 @@ M.init = function (opts)
         release_tarball_contents:append(base_bin_makefile)
       end
 
-      local release_deps = opts.skip_tests
-        and vec("build-deps")
-        or vec("test", "build-deps")
-
-      make:target(vec("release"), release_deps, function (_, _, check_target)
+      make:target(vec("release"), install_release_deps, function (_, _, check_target)
         local cwd = check_target(fs.cwd())
         -- TODO: simplify with fs.pushd + callback
         check_target(fs.cd(build_dir()))
