@@ -6,33 +6,24 @@
   tbl = require("santoku.table")
 %>
 
-package = "<% return name %>"
+package = "<% return name .. "-" .. component .. (environment == "test" and "-test" or "") %>"
 version = "<% return version %>"
 rockspec_format = "3.0"
 
-source = {
-  url = "<% return download %>",
-}
-
-description = {
-  homepage = "<% return homepage %>",
-  license = "<% return license or 'UNLICENSED' %>"
-}
+source = { url = "" }
 
 dependencies = {
-  <%
-    return gen.pack(
-        dependencies,
-        environment == "test" and tbl.get(test or {}, "dependencies"),
-        environment == "test" and wasm and tbl.get(test or {}, "wasm", "dependencies"),
-        environment == "test" and not wasm and tbl.get(test or {}, "native", "dependencies"))
+  <% return gen.pack(
+        environment ~= "test" and component == "server" and tbl.get(server or {}, "dependencies"),
+        environment == "test" and component == "server" and tbl.get(server or {}, "test", "spec_dependencies"))
       :map(fun.bindr(op["or"], {}))
       :map(gen.ivals)
       :flatten()
       :map(str.quote)
-      :concat(",\n")
-  %>
+      :concat(",\n") %>
 }
+
+<% template:push(environment == "run") %>
 
 build = {
   type = "make",
@@ -53,7 +44,6 @@ build = {
     LUA_BINDIR = "$(LUA_BINDIR)",
     LUA_INCDIR = "$(LUA_INCDIR)",
     LUA_LIBDIR = "$(LUA_LIBDIR)",
-    LUA_LIBDIR = "$(LUA_LIBDIR)",
     LUA = "$(LUA)",
   },
   install_variables = {
@@ -64,3 +54,5 @@ build = {
     INST_CONFDIR = "$(CONFDIR)",
   }
 }
+
+<% template:pop() %>

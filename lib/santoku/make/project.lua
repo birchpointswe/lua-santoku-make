@@ -18,11 +18,13 @@ M.init = function (opts)
   return err.pwrap(function (check)
     opts.env = opts.env or "default"
     opts.dir = opts.dir or "build"
-    opts.config = opts.config or ((opts.env ~= "default")
-      and string.format("make.%s.lua", opts.env)
-      or "make.lua")
-    opts.config_file = opts.config
-    opts.config = check(fs.loadfile(opts.config))()
+    if type(opts.config) ~= "table" and not opts.config_file then
+      opts.config = opts.config or ((opts.env ~= "default")
+        and string.format("make.%s.lua", opts.env)
+        or "make.lua")
+      opts.config_file = opts.config
+      opts.config = check(fs.loadfile(opts.config))()
+    end
     if type(opts.config) ~= "table" then
       return check(false, "config is not a table")
     elseif opts.config.type == "lib" then

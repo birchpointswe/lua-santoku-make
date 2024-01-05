@@ -67,13 +67,6 @@ LIB_CXXFLAGS := -fsanitize=address -fsanitize=leak $(LIB_CXXFLAGS)
 LIB_LDFLAGS := -fsanitize=address -fsanitize=leak $(LIB_LDFLAGS)
 <% template:pop() %>
 
-<% -- flags for test/sanitize/wasm %>
-<% template:push(environment == "test" and sanitize and wasm) %>
-LIB_CFLAGS += <% return tbl.get(test or {}, "wasm", "sanitize", "cflags") or "" %>
-LIB_CXXFLAGS += <% return tbl.get(test or {}, "wasm", "sanitize", "cxxflags") or "" %>
-LIB_LDFLAGS += <% return tbl.get(test or {}, "wasm", "sanitize", "ldflags") or "" %>
-<% template:pop() %>
-
 all: $(LIB_O) $(LIB_SO)
 
 %.o: %.c
