@@ -21,7 +21,7 @@ export LUA_CPATH='<% return lua_cpath %>'
     return ". " .. env
   end):concat("\n") %>
 
-rm -f luacov.stats.out luacov.report.out || true
+rm -f <% return luacov_stats_file %> <% return luacov_report_file %> || true
 
 <% template:push(wasm) %>
 
@@ -52,12 +52,12 @@ rm -f luacov.stats.out luacov.report.out || true
 
 <% template:pop() %>
 
-if [ "$status_tst" = "0" ] && type luacov >/dev/null 2>/dev/null && [ -f luacov.stats.out ] && [ -f luacov.lua ]; then
+if [ "$status_tst" = "0" ] && type luacov >/dev/null 2>/dev/null && [ -f <% return luacov_stats_file %> ] && [ -f luacov.lua ]; then
   luacov -c luacov.lua
 fi
 
-if [ "$status_tst" = "0" ] && [ -f luacov.report.out ]; then
-  cat luacov.report.out | awk '/^Summary/ { P = NR } P && NR > P + 1'
+if [ "$status_tst" = "0" ] && [ -f <% return luacov_report_file %> ]; then
+  cat <% return luacov_report_file %> | awk '/^Summary/ { P = NR } P && NR > P + 1'
 fi
 
 echo

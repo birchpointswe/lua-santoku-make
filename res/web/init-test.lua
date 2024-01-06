@@ -1,9 +1,18 @@
+<%
+  fs = require("santoku.fs")
+  compat = require("santoku.compat")
+  str = require("santoku.string")
+%>
+
 require("luacov")
-require("luacov.tick")
 
 local fs = require("santoku.fs")
 local err = require("santoku.err")
 
 <% template:push(server.init) %>
-err.check(fs.loadfile("scripts/<% return server.init %>"))()
+local init_file = <% if template:showing() then
+  local path = check:exists(compat.searchpath(server.init, fs.join(dist_dir, "lua_modules/share/lua/5.1/?.lua")))
+  return str.quote(str.stripprefix(path, dist_dir .. "/"))
+end %>
+err.check(fs.loadfile(init_file))()
 <% template:pop() %>

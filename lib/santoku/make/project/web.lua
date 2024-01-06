@@ -4,7 +4,7 @@
   basexx = require("basexx")
 %>
 
--- local env = require("santoku.env")
+local env = require("santoku.env")
 local err = require("santoku.err")
 local compat = require("santoku.compat")
 local tup = require("santoku.tuple")
@@ -76,10 +76,11 @@ M.init = function (opts)
     end
 
     -- TODO: use fs.copy
-    local function add_copied_target (dest, src)
+    local function add_copied_target (dest, src, extra_srcs)
+      extra_srcs = extra_srcs or vec()
       make:target(
         vec(dest),
-        vec(src),
+        vec(src):extend(extra_srcs),
         function (_, _, check_target)
           check_target(fs.mkdirp(fs.dirname(dest)))
           check_target(fs.writefile(dest, check_target(fs.readfile(src))))
@@ -121,31 +122,31 @@ M.init = function (opts)
         end)
     end
 
-    -- local function get_lua_version ()
-    --   return (_VERSION:match("(%d+.%d+)"))
-    -- end
+    local function get_lua_version ()
+      return (_VERSION:match("(%d+.%d+)"))
+    end
 
-    -- local function get_lua_path (prefix)
-    --   local pfx = prefix and fs.join(prefix, "lua_modules") or "lua_modules"
-    --   return gen.pack(
-    --       "share/lua/%ver/?.lua",
-    --       "share/lua/%ver/?/init.lua",
-    --       "lib/lua/%ver/?.lua",
-    --       "lib/lua/%ver/?/init.lua")
-    --     :map(fun.bindr(str.interp, { ver = get_lua_version() }))
-    --     :map(fun.bindl(fs.join, check_init(fs.cwd()), pfx))
-    --     :concat(";")
-    -- end
+    local function get_lua_path (prefix)
+      local pfx = prefix and fs.join(prefix, "lua_modules") or "lua_modules"
+      return gen.pack(
+          "share/lua/%ver/?.lua",
+          "share/lua/%ver/?/init.lua",
+          "lib/lua/%ver/?.lua",
+          "lib/lua/%ver/?/init.lua")
+        :map(fun.bindr(str.interp, { ver = get_lua_version() }))
+        :map(fun.bindl(fs.join, check_init(fs.cwd()), pfx))
+        :concat(";")
+    end
 
-    -- local function get_lua_cpath (prefix)
-    --   local pfx = prefix and fs.join(prefix, "lua_modules") or "lua_modules"
-    --   return gen.pack(
-    --       "lib/lua/%ver/?.so",
-    --       "lib/lua/%ver/loadall.so")
-    --     :map(fun.bindr(str.interp, { ver = get_lua_version() }))
-    --     :map(fun.bindl(fs.join, check_init(fs.cwd()), pfx))
-    --     :concat(";")
-    -- end
+    local function get_lua_cpath (prefix)
+      local pfx = prefix and fs.join(prefix, "lua_modules") or "lua_modules"
+      return gen.pack(
+          "lib/lua/%ver/?.so",
+          "lib/lua/%ver/loadall.so")
+        :map(fun.bindr(str.interp, { ver = get_lua_version() }))
+        :map(fun.bindl(fs.join, check_init(fs.cwd()), pfx))
+        :concat(";")
+    end
 
     local function get_files (dir)
       if not check_init(fs.exists(dir)) then
@@ -159,27 +160,17 @@ M.init = function (opts)
 
     local base_server_libs = get_files("server/lib")
     local base_server_deps = get_files("server/deps")
-    -- local base_server_test_specs = get_files("server/test/spec")
-    -- local base_server_test_res = get_files("server/test/res")
-    -- local base_server_test_deps = get_files("server/test/deps")
-
+    local base_server_test_specs = get_files("server/test/spec")
     local base_server_rockspec = str.interp("%s#(name)-server-%s#(version).rockspec", opts.config.env)
-    -- local base_server_rockspec_test = str.interp("%s#(name)-server-test-%s#(version).rockspec", opts.config.env)
     local base_server_makefile = "Makefile"
     local base_server_lib_makefile = "lib/Makefile"
     local base_server_nginx_cfg = "nginx.conf"
     local base_server_nginx_daemon_cfg = "nginx-daemon.conf"
-    -- local base_server_nginx_test_cfg = "nginx-test.conf"
-    -- local base_server_init_test_lua = "init-test.lua"
+    local base_server_init_test_lua = "init-test.lua"
     local base_server_luarocks_cfg = "luarocks.lua"
     local base_server_lua_modules = "lua_modules"
     local base_server_lua_modules_ok = "lua_modules.ok"
-    -- local base_server_luacheck_cfg = "luacheck.lua"
-    -- local base_server_luacov_cfg = "luacov.lua"
     local base_server_run_sh = "run.sh"
-    -- local base_server_test_run_sh = "test-run.sh"
-    -- local base_server_luacov_stats_out = "luacov.stats.out"
-    -- local base_server_luacov_report_out = "luacov.report.out"
 
     local base_env = {
       var = function (n)
@@ -210,8 +201,12 @@ M.init = function (opts)
       libs = base_server_libs,
       dist_dir = check_init(fs.absolute(test_dist_dir())),
       openresty_dir = check_init(fs.absolute(opts.openresty_dir)),
-      lua_modules = check_init(fs.absolute(test_dist_dir(base_server_lua_modules))),
       luarocks_cfg = check_init(fs.absolute(test_server_dir(base_server_luarocks_cfg))),
+      luacov_config = check_init(fs.absolute(test_server_dir("build", "default", "test", "luacov.lua"))),
+      lua = env.interpreter()[1],
+      lua_path = get_lua_path(test_dist_dir()),
+      lua_cpath = get_lua_cpath(test_dist_dir()),
+      lua_modules = check_init(fs.absolute(test_dist_dir(base_server_lua_modules))),
     }
 
     local test_server_daemon_env = {
@@ -260,11 +255,16 @@ M.init = function (opts)
 
     add_templated_target_base64(test_server_dir(base_server_nginx_cfg),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/web/nginx.conf")))) %>, test_server_env, -- luacheck: ignore
-      vec(test_server_dir(base_server_lua_modules_ok)))
+      vec(test_server_dir(base_server_lua_modules_ok),
+          test_server_dir(base_server_init_test_lua)))
 
     add_templated_target_base64(test_server_dir(base_server_nginx_daemon_cfg),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/web/nginx.conf")))) %>, test_server_daemon_env, -- luacheck: ignore
-      vec(test_server_dir(base_server_lua_modules_ok)))
+      vec(test_server_dir(base_server_lua_modules_ok),
+          test_server_dir(base_server_init_test_lua)))
+
+    add_templated_target_base64(test_server_dir(base_server_init_test_lua),
+      <% return str.quote(basexx.to_base64(check(fs.readfile("res/web/init-test.lua")))) %>, test_server_env) -- luacheck: ignore
 
     add_templated_target_base64(test_server_dir(base_server_rockspec),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/web/template.rockspec")))) %>, test_server_env) -- luacheck: ignore
@@ -278,13 +278,34 @@ M.init = function (opts)
     add_templated_target_base64(test_server_dir(base_server_lib_makefile),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/web/lib.mk")))) %>, test_server_env) -- luacheck: ignore
 
-    add_copied_target(dist_dir(base_server_run_sh), server_dir(base_server_run_sh))
-    add_copied_target(dist_dir(base_server_nginx_cfg), server_dir(base_server_nginx_cfg))
-    add_copied_target(dist_dir(base_server_nginx_daemon_cfg), server_dir(base_server_nginx_daemon_cfg))
+    add_copied_target(
+      dist_dir(base_server_run_sh),
+      server_dir(base_server_run_sh))
 
-    add_copied_target(test_dist_dir(base_server_run_sh), test_server_dir(base_server_run_sh))
-    add_copied_target(test_dist_dir(base_server_nginx_cfg), test_server_dir(base_server_nginx_cfg))
-    add_copied_target(test_dist_dir(base_server_nginx_daemon_cfg), test_server_dir(base_server_nginx_daemon_cfg))
+    add_copied_target(
+      dist_dir(base_server_nginx_cfg),
+      server_dir(base_server_nginx_cfg))
+
+    add_copied_target(
+      dist_dir(base_server_nginx_daemon_cfg),
+      server_dir(base_server_nginx_daemon_cfg))
+
+    add_copied_target(
+      test_dist_dir(base_server_init_test_lua),
+      test_server_dir(base_server_init_test_lua))
+
+    add_copied_target(
+      test_dist_dir(base_server_run_sh),
+      test_server_dir(base_server_run_sh))
+
+    add_copied_target(
+      test_dist_dir(base_server_nginx_cfg),
+      test_server_dir(base_server_nginx_cfg),
+      vec(test_dist_dir(base_server_init_test_lua)))
+
+    add_copied_target(
+      test_dist_dir(base_server_nginx_daemon_cfg),
+      test_server_dir(base_server_nginx_daemon_cfg))
 
     base_server_libs:each(function (fp)
       add_templated_target(server_dir_stripped(fp), fp, server_env)
@@ -302,9 +323,9 @@ M.init = function (opts)
       add_templated_target(test_server_dir_stripped(fp), fp, test_server_env)
     end)
 
-    -- base_server_test_specs:each(function (fp)
-    --   add_templated_target(server_test_dir(fp), fp, server_test_env)
-    -- end)
+    base_server_test_specs:each(function (fp)
+      add_templated_target(test_server_dir_stripped(fp), fp, test_server_env)
+    end)
 
     make:target(
       vec(server_dir(base_server_lua_modules_ok)),
@@ -317,7 +338,7 @@ M.init = function (opts)
           env = {
             name = opts.config.env.name .. "-server",
             version = opts.config.env.version,
-            dependencies = opts.config.env.server.dependencies
+            dependencies = opts.config.env.server.dependencies,
           }
         }
         inherit.pushindex(config, opts.config.env)
@@ -325,18 +346,17 @@ M.init = function (opts)
         -- TODO: simplify with fs.pushd + callback
         check_target(fs.cd(server_dir()))
         local project = require("santoku.make.project")
-        local ok, e, cd = err.pwrap(function (chk)
+        local ret = tup(err.pwrap(function (chk)
           chk(chk(project.init({
             config_file = config_file,
             luarocks_config = chk(fs.absolute(base_server_luarocks_cfg)),
             config = config,
             skip_tests = true,
           })):install())
-        end)
+        end))
         check_target(fs.cd(cwd))
-        check_target(ok, e, cd)
-        local post_make = tbl.get(server_env, "server", "hooks", "post_make")
-          or compat.const(true)
+        check_target(ret())
+        local post_make = tbl.get(server_env, "server", "hooks", "post_make") or compat.const(true)
         check_target(post_make(server_env))
         check_target(fs.touch(server_dir(base_server_lua_modules_ok)))
         return true
@@ -353,7 +373,9 @@ M.init = function (opts)
           env = {
             name = opts.config.env.name .. "-server",
             version = opts.config.env.version,
-            dependencies = opts.config.env.server.dependencies
+            dependencies = vec()
+              :append(compat.unpack(opts.config.env.server.dependencies or {}))
+              :append(compat.unpack(tbl.get(opts.config.env.server, "test", "dependencies") or {}))
           }
         }
         inherit.pushindex(config, opts.config.env)
@@ -361,18 +383,20 @@ M.init = function (opts)
         -- TODO: simplify with fs.pushd + callback
         check_target(fs.cd(test_server_dir()))
         local project = require("santoku.make.project")
-        local ok, e, cd = err.pwrap(function (chk)
+        local ret = tup(err.pwrap(function (chk)
           chk(chk(project.init({
             config_file = config_file,
             luarocks_config = chk(fs.absolute(base_server_luarocks_cfg)),
             config = config,
             skip_tests = true,
+            lua = test_server_env.lua,
+            lua_path = test_server_env.lua_path,
+            lua_cpath = test_server_env.lua_cpath,
           })):install())
-        end)
+        end))
         check_target(fs.cd(cwd))
-        check_target(ok, e, cd)
-        local post_make = tbl.get(test_server_env, "server", "hooks", "post_make")
-          or compat.const(true)
+        check_target(ret())
+        local post_make = tbl.get(test_server_env, "server", "hooks", "post_make") or compat.const(true)
         check_target(post_make(test_server_env))
         check_target(fs.touch(test_server_dir(base_server_lua_modules_ok)))
         return true
@@ -401,11 +425,11 @@ M.init = function (opts)
         local cwd = check_target(fs.cwd())
         -- TODO: simplify with fs.pushd + callback
         check_target(fs.cd(dist_dir()))
-        local ok, e, cd = sys.execute(
+        local ret = tup(sys.execute(
           { env = { [base_env.var("BACKGROUND")] = (background or opts.background) and "1" or "0" } },
-          "sh", "run.sh")
+          "sh", "run.sh"))
         check_target(fs.cd(cwd))
-        check_target(ok, e, cd)
+        check_target(ret())
         return true
       end)
 
@@ -416,28 +440,52 @@ M.init = function (opts)
         local cwd = check_target(fs.cwd())
         -- TODO: simplify with fs.pushd + callback
         check_target(fs.cd(test_dist_dir()))
-        local ok, e, cd = sys.execute(
+        local ret = tup(sys.execute(
           { env = { [base_env.var("BACKGROUND")] = (background or opts.background) and "1" or "0" } },
-          "sh", "run.sh")
+          "sh", "run.sh"))
         check_target(fs.cd(cwd))
-        check_target(ok, e, cd)
+        check_target(ret())
         return true
       end)
 
     make:target(
       vec("test"),
-      vec(),
+      vec():extend(base_server_test_specs):map(test_server_dir_stripped),
       function (_, _, check_target, iterating)
         check_target(make:make({ "stop", "test-stop" }, check_target))
         check_target(make:make({ "test-start" }, check_target, true))
+        -- local cwd = check_target(fs.cwd())
+        -- check_target(fs.cd(test_server_dir()))
+        -- local ok, e, cd = sys.execute("sh", "test-run.sh")
+        local config_file = check_target(fs.absolute(opts.config_file))
+        local config = {
+          type = "lib",
+          env = {
+            name = opts.config.env.name .. "-server",
+            version = opts.config.env.version,
+            dependencies = opts.config.env.server.dependencies
+          }
+        }
+        inherit.pushindex(config, opts.config.env)
         local cwd = check_target(fs.cwd())
+        -- TODO: simplify with fs.pushd + callback
         check_target(fs.cd(test_server_dir()))
-        local ok, e, cd = sys.execute("sh", "test-run.sh")
+        local project = require("santoku.make.project")
+        local ret = tup(err.pwrap(function (chk)
+          chk(chk(project.init({
+            config_file = config_file,
+            luarocks_config = chk(fs.absolute(base_server_luarocks_cfg)),
+            config = config,
+            lua = test_server_env.lua,
+            lua_path = test_server_env.lua_path,
+            lua_cpath = test_server_env.lua_cpath,
+          })):test())
+        end))
         check_target(fs.cd(cwd))
         if not iterating then
           check_target(make:make({ "test-stop" }, check_target))
         end
-        check_target(ok, e, cd)
+        check_target(ret())
         return true
       end)
 
@@ -450,9 +498,9 @@ M.init = function (opts)
           check_target(false, ERR.NO_INOTIFY)
         end
         while true do
-          local ok, err, cd = make:make(vec("test"), check_target, true)
-          if not ok then
-            print(err, cd)
+          local ret = tup(make:make(vec("test"), check_target, true))
+          if not ret() then
+            print(tup.sel(2, ret()))
           end
           while true do
             local watched_files = fs.files(".")
@@ -536,7 +584,7 @@ M.init = function (opts)
     N.build = function (_, opts)
       opts = opts or {}
       return err.pwrap(function (check_target)
-        check_target(make:make(tbl.assign({ "build" }, opts), check_target))
+        check_target(make:make(tbl.assign({ opts.test and "test-build" or "build" }, opts), check_target))
       end)
     end
 
