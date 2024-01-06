@@ -153,8 +153,8 @@ M.init = function (opts)
     local base_luacheck_cfg = "luacheck.lua"
     local base_luacov_cfg = "luacov.lua"
     local base_run_sh = "run.sh"
-    local base_luacov_stats_out = "luacov.stats.out"
-    local base_luacov_report_out = "luacov.report.out"
+    local base_luacov_stats_file = "luacov.stats.out"
+    local base_luacov_report_file = "luacov.report.out"
 
     local base_test_specs = get_files("test/spec")
 
@@ -233,12 +233,12 @@ M.init = function (opts)
 
     local test_env = {
       environment = "test",
-      lua = env.interpreter()[1],
-      lua_path = get_lua_path(test_dir()),
-      lua_cpath = get_lua_cpath(test_dir()),
+      lua = opts.lua or env.interpreter()[1],
+      lua_path = opts.lua_path or get_lua_path(test_dir()),
+      lua_cpath = opts.lua_cpath or get_lua_cpath(test_dir()),
       lua_modules = check_init(fs.absolute(test_dir(base_lua_modules))),
-      luacov_stats_file = check_init(fs.absolute(test_dir(base_luacov_stats_out))),
-      luacov_report_file = check_init(fs.absolute(test_dir(base_luacov_report_out))),
+      luacov_stats_file = check_init(fs.absolute(test_dir(base_luacov_stats_file))),
+      luacov_report_file = check_init(fs.absolute(test_dir(base_luacov_report_file))),
     }
 
     local build_env = {
