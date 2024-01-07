@@ -1,11 +1,5 @@
 # Now
 
-- Stop server before luacov and luacheck so stats is updated
-    - prj = project.lib({ ... })
-    - prj:test({ skip_checks = true })
-    - make:make({ "test-stop" })
-    - prj:test({ checks_only = true })
-
 - Web client
     - Tests
     - Terser/minifier for HTML, JS, CSS
@@ -27,6 +21,9 @@
 - Refactor
     - Abstract duplicated test/main targets etc
     - Clean up calling sub-lib
+
+- Server profile doesn't print out as expected
+- Coverage sometimes shows 0%
 
 - res/* arent tracked as dependencies for this project (changing
   template.rockspec doesn't re-build project/lib.lua)
