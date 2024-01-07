@@ -23,58 +23,44 @@ export LUA_CPATH='<% return lua_cpath %>'
 
 rm -f <% return luacov_stats_file %> <% return luacov_report_file %> || true
 
+echo
+
 <% template:push(wasm) %>
 
 <% template:push(single) %>
-  TEST="<% return single %>"
-  toku test -s -i "node --expose-gc" "${TEST%.lua}"
-  status_tst=$?
+TEST="<% return single %>"
+toku test -s -i "node --expose-gc" "${TEST%.lua}"
+status_tst=$?
 <% template:pop():push(not single) %>
-  toku test -s -i "node --expose-gc" test/spec
-  status_tst=$?
+toku test -s -i "node --expose-gc" test/spec
+status_tst=$?
 <% template:pop() %>
 
 <% template:pop():push(not wasm) %>
+
+MODS=""
+
+<% template:push(not skip_coverage) %>
+MODS="$MODS -l luacov"
+<% template:pop() %>
 
 <% template:push(profile) %>
-  MODS="-l luacov -l santoku.profile"
-<% template:pop():push(not profile) %>
-  MODS="-l luacov"
+MODS="$MODS -l santoku.profile"
 <% template:pop() %>
 
 <% template:push(single) %>
-  toku test -s -i "$LUA $MODS" "<% return single %>"
-  status_tst=$?
+toku test -s -i "$LUA $MODS" "<% return single %>"
+status_tst=$?
 <% template:pop():push(not single) %>
-  toku test -s -i "$LUA $MODS" --match "^.*%.lua$" test/spec
-  status_tst=$?
+toku test -s -i "$LUA $MODS" --match "^.*%.lua$" test/spec
+status_tst=$?
 <% template:pop() %>
 
 <% template:pop() %>
-
-if [ "$status_tst" = "0" ] && type luacov >/dev/null 2>/dev/null && [ -f <% return luacov_stats_file %> ] && [ -f luacov.lua ]; then
-  luacov -c luacov.lua
-fi
-
-if [ "$status_tst" = "0" ] && [ -f <% return luacov_report_file %> ]; then
-  cat <% return luacov_report_file %> | awk '/^Summary/ { P = NR } P && NR > P + 1'
-fi
 
 echo
 
-if type luacheck >/dev/null 2>/dev/null && [ -f luacheck.lua ]; then
-<% template:push(wasm) %>
-  luacheck --config luacheck.lua $(find lib bin bundler-pre/test/spec -maxdepth 0 2>/dev/null)
-  status_chk=$?
-<% template:pop():push(not wasm) %>
-  luacheck --config luacheck.lua $(find lib bin test/spec -maxdepth 0 2>/dev/null)
-  status_chk=$?
-<% template:pop() %>
-fi
-
-echo
-
-if [ "$status_tst" != "0" ] || [ "$status_chk" != "0" ]; then
+if [ "$status_tst" != "0" ]; then
   exit 1
 else
   exit 0

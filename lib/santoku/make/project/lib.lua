@@ -39,8 +39,8 @@ M.init = function (opts)
     opts.sanitize = opts.sanitize or false
     opts.profile = opts.profile or false
     opts.single = opts.single or false
+    opts.skip_coverage = opts.profile or opts.skip_coverage or false
     opts.iterate = opts.iterate or false
-    opts.target = opts.target or "test"
 
     local function work_dir (...)
       if opts.wasm then
@@ -153,6 +153,7 @@ M.init = function (opts)
     local base_luacheck_cfg = "luacheck.lua"
     local base_luacov_cfg = "luacov.lua"
     local base_run_sh = "run.sh"
+    local base_check_sh = "check.sh"
     local base_luacov_stats_file = "luacov.stats.out"
     local base_luacov_report_file = "luacov.report.out"
 
@@ -184,7 +185,8 @@ M.init = function (opts)
         base_luarocks_cfg,
         base_luacheck_cfg,
         base_luacov_cfg,
-        base_run_sh)
+        base_run_sh,
+        base_check_sh)
       :map(test_dir)
 
     local test_srcs = vec()
@@ -193,7 +195,7 @@ M.init = function (opts)
 
     local test_cfgs = vec()
       :append(base_rockspec, base_makefile)
-      :append(base_luarocks_cfg, base_luacheck_cfg, base_luacov_cfg, base_run_sh)
+      :append(base_luarocks_cfg, base_luacheck_cfg, base_luacov_cfg, base_run_sh, base_check_sh)
       :map(test_dir)
 
     local build_all = vec()
@@ -221,6 +223,7 @@ M.init = function (opts)
       wasm = opts.wasm,
       sanitize = opts.sanitize,
       profile = opts.profile,
+      skip_coverage = opts.skip_coverage,
       single = opts.single,
       bins = base_bins,
       libs = base_libs,
@@ -406,7 +409,10 @@ M.init = function (opts)
     add_templated_target_base64(test_dir(base_run_sh),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/lib/test-run.sh")))) %>, test_env) -- luacheck: ignore
 
-    gen.pack("sanitize", "profile", "single")
+    add_templated_target_base64(test_dir(base_check_sh),
+      <% return str.quote(basexx.to_base64(check(fs.readfile("res/lib/test-check.sh")))) %>, test_env) -- luacheck: ignore
+
+    gen.pack("sanitize", "profile", "single", "skip_coverage")
       :each(function (flag)
         local fp = work_dir(flag .. ".flag")
         check_init(fs.mkdirp(fs.dirname(fp)))
@@ -422,8 +428,8 @@ M.init = function (opts)
       end)
 
     make:add_deps(
-      vec(base_run_sh):map(test_dir),
-      vec("single.flag", "profile.flag"):map(work_dir))
+      vec(base_run_sh, base_check_sh):map(test_dir),
+      vec("skip_coverage.flag", "single.flag", "profile.flag"):map(work_dir))
 
     make:add_deps(
       vec(base_lib_makefile):extend(base_libs):map(test_dir),
@@ -460,7 +466,7 @@ M.init = function (opts)
 
     local install_release_deps = opts.skip_tests
       and vec("build-deps")
-      or vec("test", "build-deps")
+      or vec("test", "check", "build-deps")
 
     -- NOTE: install not supported in wasm mode
     if not opts.wasm then
@@ -546,6 +552,16 @@ M.init = function (opts)
       return true
     end)
 
+    make:target(vec("check"), vec("test-deps"), function (_, _, check_target)
+      local cwd = check_target(fs.cwd())
+      -- TODO: simplify with fs.pushd + callback
+      check_target(fs.cd(test_dir()))
+      local ok, e, cd = sys.execute("sh", "check.sh")
+      check_target(fs.cd(cwd))
+      check_target(ok, e, cd)
+      return true
+    end)
+
     make:target(vec("iterate"), vec(), function (_, _, check_target)
       local ok = sys.execute("sh", "-c", "type inotifywait >/dev/null 2>/dev/null")
       if not ok then
@@ -594,6 +610,16 @@ M.init = function (opts)
       opts = opts or {}
       return err.pwrap(function (check_target)
         check_target(make:make(tbl.assign({ "test" }, opts), check_target))
+        if not opts.skip_check then
+          check_target(make:make(tbl.assign({ "check" }, opts), check_target))
+        end
+      end)
+    end
+
+    N.check = function (_, opts)
+      opts = opts or {}
+      return err.pwrap(function (check_target)
+        check_target(make:make(tbl.assign({ "check" }, opts), check_target))
       end)
     end
 

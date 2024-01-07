@@ -42,10 +42,10 @@ M.init = function (opts)
 
   return err.pwrap(function (check_init)
 
-    opts.sanitize = opts.sanitize or false
+    opts.single = opts.single and opts.single:gsub("^[^/]+/", "") or false
     opts.profile = opts.profile or false
+    opts.skip_coverage = opts.profile or opts.skip_coverage or false
     opts.iterate = opts.iterate or false
-    opts.target = opts.target or "test"
 
     local function work_dir (...)
       return fs.join(opts.dir, opts.env, ...)
@@ -167,12 +167,15 @@ M.init = function (opts)
     local base_server_nginx_cfg = "nginx.conf"
     local base_server_nginx_daemon_cfg = "nginx-daemon.conf"
     local base_server_init_test_lua = "init-test.lua"
+    local base_server_init_worker_test_lua = "init-worker-test.lua"
     local base_server_luarocks_cfg = "luarocks.lua"
     local base_server_lua_modules = "lua_modules"
     local base_server_lua_modules_ok = "lua_modules.ok"
     local base_server_run_sh = "run.sh"
 
     local base_env = {
+      profile = opts.profile,
+      skip_coverage = opts.skip_coverage,
       var = function (n)
         assert(compat.istype.string(n))
         return opts.config.env.variable_prefix .. "_" .. n
@@ -256,15 +259,20 @@ M.init = function (opts)
     add_templated_target_base64(test_server_dir(base_server_nginx_cfg),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/web/nginx.conf")))) %>, test_server_env, -- luacheck: ignore
       vec(test_server_dir(base_server_lua_modules_ok),
-          test_server_dir(base_server_init_test_lua)))
+          test_server_dir(base_server_init_test_lua),
+          test_server_dir(base_server_init_worker_test_lua)))
 
     add_templated_target_base64(test_server_dir(base_server_nginx_daemon_cfg),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/web/nginx.conf")))) %>, test_server_daemon_env, -- luacheck: ignore
       vec(test_server_dir(base_server_lua_modules_ok),
-          test_server_dir(base_server_init_test_lua)))
+          test_server_dir(base_server_init_test_lua),
+          test_server_dir(base_server_init_worker_test_lua)))
 
     add_templated_target_base64(test_server_dir(base_server_init_test_lua),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/web/init-test.lua")))) %>, test_server_env) -- luacheck: ignore
+
+    add_templated_target_base64(test_server_dir(base_server_init_worker_test_lua),
+      <% return str.quote(basexx.to_base64(check(fs.readfile("res/web/init-worker-test.lua")))) %>, test_server_env) -- luacheck: ignore
 
     add_templated_target_base64(test_server_dir(base_server_rockspec),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/web/template.rockspec")))) %>, test_server_env) -- luacheck: ignore
@@ -295,17 +303,40 @@ M.init = function (opts)
       test_server_dir(base_server_init_test_lua))
 
     add_copied_target(
+      test_dist_dir(base_server_init_worker_test_lua),
+      test_server_dir(base_server_init_worker_test_lua))
+
+    add_copied_target(
       test_dist_dir(base_server_run_sh),
       test_server_dir(base_server_run_sh))
 
     add_copied_target(
       test_dist_dir(base_server_nginx_cfg),
       test_server_dir(base_server_nginx_cfg),
-      vec(test_dist_dir(base_server_init_test_lua)))
+      vec(test_dist_dir(base_server_init_test_lua), test_dist_dir(base_server_init_worker_test_lua)))
 
     add_copied_target(
       test_dist_dir(base_server_nginx_daemon_cfg),
       test_server_dir(base_server_nginx_daemon_cfg))
+
+    gen.pack("profile", "skip_coverage")
+      :each(function (flag)
+        local fp = work_dir(flag .. ".flag")
+        check_init(fs.mkdirp(fs.dirname(fp)))
+        local strval = tostring(opts[flag])
+        if not check_init(fs.exists(fp)) then
+          check_init(fs.writefile(fp, strval))
+          return
+        end
+        local val = check_init(fs.readfile(fp))
+        if val ~= strval then
+          check_init(fs.writefile(fp, strval))
+        end
+      end)
+
+    make:add_deps(
+      vec(base_server_init_test_lua, base_server_init_worker_test_lua):map(test_server_dir),
+      vec("profile.flag", "skip_coverage.flag"):map(work_dir))
 
     base_server_libs:each(function (fp)
       add_templated_target(server_dir_stripped(fp), fp, server_env)
@@ -351,6 +382,9 @@ M.init = function (opts)
             config_file = config_file,
             luarocks_config = chk(fs.absolute(base_server_luarocks_cfg)),
             config = config,
+            single = opts.single,
+            profile = opts.profile,
+            skip_coverage = opts.skip_coverage,
             skip_tests = true,
           })):install())
         end))
@@ -388,6 +422,9 @@ M.init = function (opts)
             config_file = config_file,
             luarocks_config = chk(fs.absolute(base_server_luarocks_cfg)),
             config = config,
+            single = opts.single,
+            profile = opts.profile,
+            skip_coverage = opts.skip_coverage,
             skip_tests = true,
             lua = test_server_env.lua,
             lua_path = test_server_env.lua_path,
@@ -471,20 +508,29 @@ M.init = function (opts)
         -- TODO: simplify with fs.pushd + callback
         check_target(fs.cd(test_server_dir()))
         local project = require("santoku.make.project")
+        local lib = nil
         local ret = tup(err.pwrap(function (chk)
-          chk(chk(project.init({
+          lib = chk(project.init({
             config_file = config_file,
             luarocks_config = chk(fs.absolute(base_server_luarocks_cfg)),
             config = config,
+            single = opts.single,
+            profile = opts.profile,
+            skip_coverage = opts.skip_coverage,
             lua = test_server_env.lua,
             lua_path = test_server_env.lua_path,
             lua_cpath = test_server_env.lua_cpath,
-          })):test())
+          }))
+          chk(lib:test({ skip_check = true }))
         end))
         check_target(fs.cd(cwd))
         if not iterating then
           check_target(make:make({ "test-stop" }, check_target))
         end
+        check_target(ret())
+        check_target(fs.cd(test_server_dir()))
+        local ret = tup(lib:check())
+        check_target(fs.cd(cwd))
         check_target(ret())
         return true
       end)
