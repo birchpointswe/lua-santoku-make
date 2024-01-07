@@ -85,14 +85,14 @@ M.init = function (opts)
 
     local function dist_dir_client (...)
       return dist_dir("public", tup.map(fun.compose(
-        fun.bindr(str.stripprefix, "client/static"),
-        fun.bindr(str.stripprefix, "client/assets")), ...))
+        fun.bindr(str.stripprefix, "client/static/"),
+        fun.bindr(str.stripprefix, "client/assets/")), ...))
     end
 
     local function test_dist_dir_client (...)
       return test_dist_dir("public", tup.map(fun.compose(
-        fun.bindr(str.stripprefix, "client/static"),
-        fun.bindr(str.stripprefix, "client/assets")), ...))
+        fun.bindr(str.stripprefix, "client/static/"),
+        fun.bindr(str.stripprefix, "client/assets/")), ...))
     end
 
     -- TODO: use fs.copy
