@@ -1,11 +1,14 @@
 # Now
 
-- Web client
-    - Tests
+- Web client (non-lua)
     - Terser/minifier for HTML, JS, CSS
+
+- Web client (lua)
+    - Tests
     - Only build client lua, etc if client lua pages exist
     - Only build client sqlite if configured for a specific page
-    - Only build server if config.server ~= nil
+
+- Only build server if config.server ~= nil
 
 # Next
 

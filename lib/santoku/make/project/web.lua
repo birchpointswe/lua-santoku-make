@@ -75,6 +75,26 @@ M.init = function (opts)
       return test_server_dir(tup.map(fun.bindr(str.stripprefix, "server/"), ...))
     end
 
+    local function client_dir (...)
+      return work_dir("main", "client", ...)
+    end
+
+    local function test_client_dir (...)
+      return work_dir("test", "client", ...)
+    end
+
+    local function dist_dir_client (...)
+      return dist_dir("public", tup.map(fun.compose(
+        fun.bindr(str.stripprefix, "client/static"),
+        fun.bindr(str.stripprefix, "client/assets")), ...))
+    end
+
+    local function test_dist_dir_client (...)
+      return test_dist_dir("public", tup.map(fun.compose(
+        fun.bindr(str.stripprefix, "client/static"),
+        fun.bindr(str.stripprefix, "client/assets")), ...))
+    end
+
     -- TODO: use fs.copy
     local function add_copied_target (dest, src, extra_srcs)
       extra_srcs = extra_srcs or vec()
@@ -173,6 +193,8 @@ M.init = function (opts)
     local base_server_lua_modules_ok = "lua_modules.ok"
     local base_server_run_sh = "run.sh"
 
+    local base_client_static = get_files("client/static")
+
     local base_env = {
       profile = opts.profile,
       skip_coverage = opts.skip_coverage,
@@ -183,7 +205,7 @@ M.init = function (opts)
     }
 
     local server_env = {
-      environment = "run",
+      environment = "main",
       component = "server",
       background = opts.background,
       libs = base_server_libs,
@@ -216,6 +238,16 @@ M.init = function (opts)
       background = true
     }
 
+    local client_env = {
+      environment = "main",
+      component = "client",
+    }
+
+    local test_client_env = {
+      environment = "test",
+      component = "client",
+    }
+
     inherit.pushindex(server_env, _G)
     inherit.pushindex(server_env, base_env)
     inherit.pushindex(server_env, opts.config.env)
@@ -225,6 +257,14 @@ M.init = function (opts)
     inherit.pushindex(test_server_env, base_env)
     inherit.pushindex(test_server_env, opts.config.env)
     inherit.pushindex(test_server_daemon_env, test_server_env)
+
+    inherit.pushindex(client_env, _G)
+    inherit.pushindex(client_env, base_env)
+    inherit.pushindex(client_env, opts.config.env)
+
+    inherit.pushindex(test_client_env, _G)
+    inherit.pushindex(test_client_env, base_env)
+    inherit.pushindex(test_client_env, opts.config.env)
 
     opts.config.env.variable_prefix =
       opts.config.env.variable_prefix or
@@ -358,6 +398,16 @@ M.init = function (opts)
       add_templated_target(test_server_dir_stripped(fp), fp, test_server_env)
     end)
 
+    base_client_static:each(function (fp)
+      add_templated_target(client_dir(fp), fp, client_env)
+      add_copied_target(dist_dir_client(fp), client_dir(fp))
+    end)
+
+    base_client_static:each(function (fp)
+      add_templated_target(test_client_dir(fp), fp, test_client_env)
+      add_copied_target(test_dist_dir_client(fp), test_client_dir(fp))
+    end)
+
     make:target(
       vec(server_dir(base_server_lua_modules_ok)),
       vec(server_dir(base_server_luarocks_cfg))
@@ -444,7 +494,8 @@ M.init = function (opts)
       vec(dist_dir(base_server_run_sh),
           dist_dir(base_server_nginx_cfg),
           dist_dir(base_server_nginx_daemon_cfg),
-          server_dir(base_server_lua_modules_ok)),
+          server_dir(base_server_lua_modules_ok))
+        :extend(vec():extend(base_client_static):map(dist_dir_client)),
       true)
 
     make:target(
@@ -452,7 +503,8 @@ M.init = function (opts)
       vec(test_dist_dir(base_server_run_sh),
           test_dist_dir(base_server_nginx_cfg),
           test_dist_dir(base_server_nginx_daemon_cfg),
-          test_server_dir(base_server_lua_modules_ok)),
+          test_server_dir(base_server_lua_modules_ok))
+        :extend(vec():extend(base_client_static):map(test_dist_dir_client)),
       true)
 
     make:target(
