@@ -113,19 +113,21 @@ M.init = function (opts)
       -- clearer way. In fact, fs.loadfile(make.lua) should probably not be used
       -- directly as config argument to template, but some subset/superset of it
       -- that is passed down explicitly
-      if gen.ivals(opts.config.excludes or {}):co():includes(src) then
+      local action = tpl.get_action(src, opts.config)
+      if action == "copy" then
         return add_copied_target(dest, src, env)
+      elseif action == "template" then
+        make:target(
+          vec(dest),
+          vec(src, opts.config_file),
+          function (_, _, check_target)
+            check_target(fs.mkdirp(fs.dirname(dest)))
+            local t = check_target(tpl.compilefile(src, { env = env }))
+            check_target(fs.writefile(dest, check_target(t:render())))
+            check_target(t:write_deps(dest, dest .. ".d"))
+            return true
+          end)
       end
-      make:target(
-        vec(dest),
-        vec(src, opts.config_file),
-        function (_, _, check_target)
-          check_target(fs.mkdirp(fs.dirname(dest)))
-          local t = check_target(tpl.compilefile(src, { env = env }))
-          check_target(fs.writefile(dest, check_target(t:render())))
-          check_target(t:write_deps(dest, dest .. ".d"))
-          return true
-        end)
     end
 
     local function add_templated_target_base64 (dest, data, env, extra_srcs)
