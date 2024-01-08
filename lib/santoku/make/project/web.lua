@@ -177,6 +177,9 @@ M.init = function (opts)
       return fs.files(dir, { recurse = true })
         :map(check_init)
         :map(fun.nret(1))
+        :filter(function (fp)
+          return tpl.get_action(fp, opts.config) ~= "ignore"
+        end)
         :vec()
     end
 
