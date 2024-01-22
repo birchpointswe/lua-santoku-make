@@ -70,13 +70,13 @@ LIB_LDFLAGS := -fsanitize=address -fsanitize=leak $(LIB_LDFLAGS)
 all: $(LIB_O) $(LIB_SO)
 
 %.o: %.c
-	$(CC) $(CFLAGS) $(LIB_CFLAGS) -c -o $@ $<
+	$(CC) -c $< -o $@ $(CFLAGS) $(LIB_CFLAGS)
 
 %.o: %.cpp
-	$(CXX) $(CXXFLAGS) $(LIB_CXXFLAGS) -c -o $@ $<
+	$(CXX) -c $< -o $@ $(CXXFLAGS) $(LIB_CXXFLAGS)
 
 %.$(LIB_EXTENSION): %.o
-	$(CC) $(LDFLAGS) $(LIB_LDFLAGS) $(LIBFLAG) -o $@ $<
+	$(CC) $(LIBFLAG) $< -o $@ $(LDFLAGS) $(LIB_LDFLAGS)
 
 install: $(INST_LUA) $(INST_SO)
 

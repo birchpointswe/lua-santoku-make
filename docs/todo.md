@@ -1,5 +1,7 @@
 # Now
 
+- Fix iteration: loop exits when a test fails
+
 - Web client (non-lua)
     - Terser/minifier for HTML, JS, CSS
 
