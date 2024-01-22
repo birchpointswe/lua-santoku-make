@@ -4,6 +4,7 @@
   op = require("santoku.op")
   str = require("santoku.string")
   tbl = require("santoku.table")
+  serialize = require("santoku.serialize")
 %>
 
 package = "<% return name %>"
@@ -29,6 +30,18 @@ dependencies = {
       :map(gen.ivals)
       :flatten()
       :map(str.quote)
+      :concat(",\n") %>
+}
+
+external_dependencies = {
+  <% return gen.pack(
+        tbl.get(dependencies, "external"),
+        environment == "test" and tbl.get(test, "dependencies", "external"),
+        environment == "test" and wasm and tbl.get(test or {}, "wasm", "dependencies", "external"),
+        environment == "test" and not wasm and tbl.get(test or {}, "native", "dependencies", "external"))
+      :map(fun.bindr(op["or"], {}))
+      :map(serialize.serialize_table_contents)
+      :filter(fun.compose(op["not"], str.isempty))
       :concat(",\n") %>
 }
 

@@ -5,6 +5,7 @@
 %>
 
 local env = require("santoku.env")
+local tup = require("santoku.tuple")
 local err = require("santoku.err")
 local compat = require("santoku.compat")
 local fs = require("santoku.fs")
@@ -39,6 +40,7 @@ M.init = function (opts)
     opts.sanitize = opts.sanitize or false
     opts.profile = opts.profile or false
     opts.single = opts.single or false
+    opts.lua = opts.lua or false
     opts.skip_coverage = opts.profile or opts.skip_coverage or false
     opts.iterate = opts.iterate or false
 
@@ -245,9 +247,18 @@ M.init = function (opts)
       lua_path = opts.lua_path or get_lua_path(test_dir()),
       lua_cpath = opts.lua_cpath or get_lua_cpath(test_dir()),
       lua_modules = check_init(fs.absolute(test_dir(base_lua_modules))),
+      luarocks_config = check_init(fs.absolute(test_dir(base_luarocks_cfg))),
       luacov_stats_file = check_init(fs.absolute(test_dir(base_luacov_stats_file))),
       luacov_report_file = check_init(fs.absolute(test_dir(base_luacov_report_file))),
     }
+
+    if opts.lua_path_extra then
+      test_env.lua_path = test_env.lua_path .. ";" .. opts.lua_path_extra
+    end
+
+    if opts.lua_cpath_extra then
+      test_env.lua_cpath = test_env.lua_cpath .. ";" .. opts.lua_cpath_extra
+    end
 
     local build_env = {
       environment = "build"
@@ -417,7 +428,7 @@ M.init = function (opts)
     add_templated_target_base64(test_dir(base_check_sh),
       <% return str.quote(basexx.to_base64(check(fs.readfile("res/lib/test-check.sh")))) %>, test_env) -- luacheck: ignore
 
-    gen.pack("sanitize", "profile", "single", "skip_coverage")
+    gen.pack("sanitize", "profile", "single", "skip_coverage", "lua", "lua_path_extra", "lua_cpath_extra")
       :each(function (flag)
         local fp = work_dir(flag .. ".flag")
         check_init(fs.mkdirp(fs.dirname(fp)))
@@ -434,7 +445,9 @@ M.init = function (opts)
 
     make:add_deps(
       vec(base_run_sh, base_check_sh):map(test_dir),
-      vec("skip_coverage.flag", "single.flag", "profile.flag"):map(work_dir))
+      vec("skip_coverage.flag", "single.flag", "profile.flag",
+          "lua.flag", "lua_path_extra.flag", "lua_cpath_extra.flag")
+        :map(work_dir))
 
     make:add_deps(
       vec(base_lib_makefile):extend(base_libs):map(test_dir),
@@ -462,6 +475,8 @@ M.init = function (opts)
             end):unpack())
         check_target(fs.cd(cwd))
         check_target(ok, e, cd)
+        local post_make = tbl.get(test_env, "test", "hooks", "post_make") or compat.const(true)
+        check_target(post_make(test_env))
         check_target(fs.touch(test_dir(base_lua_modules_ok)))
         return true
       end)
@@ -573,7 +588,10 @@ M.init = function (opts)
         check_target(false, "inotifywait not found")
       end
       while true do
-        check_target(make:make(vec("test"), check_target))
+        local ret = tup(make:make(vec("test", "check"), check_target))
+        if not ret() then
+          print(tup.sel(2, ret()))
+        end
         while true do
           local watched_files = fs.files(".")
             :map(check_target)
