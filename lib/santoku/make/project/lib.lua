@@ -288,7 +288,7 @@ M.init = function (opts)
           check_target(fs.mkdirp(test_dir()))
           local cwd = check_target(fs.cwd())
           check_target(fs.cd(test_dir()))
-          local ok, e, cd = err.pwrap(function (chk)
+          local ret = tup(err.pwrap(function (chk)
             if not chk(fs.exists("lua-5.1.5.tar.gz")) then
               chk(sys.execute("wget", "https://www.lua.org/ftp/lua-5.1.5.tar.gz"))
             end
@@ -308,9 +308,9 @@ M.init = function (opts)
             chk(fs.writefile("luac", "#!/bin/sh\nnode \"$(dirname $0)/luac.js\" \"$@\"\n"))
             chk(sys.execute("chmod", "+x", "lua"))
             chk(sys.execute("chmod", "+x", "luac"))
-          end)
+          end))
           check_target(fs.cd(cwd))
-          check_target(ok, e, cd)
+          check_target(ret())
           check_target(fs.touch(test_client_lua_ok))
           return true
         end)
@@ -464,7 +464,7 @@ M.init = function (opts)
         local cwd = check_target(fs.cwd())
         -- TODO: simplify with fs.pushd + callback
         check_target(fs.cd(test_dir()))
-        local ok, e, cd = sys.execute(
+        local ret = tup(sys.execute(
           { env = { MAKEFLAGS = "-s", LUAROCKS_CONFIG = opts.luarocks_config or base_luarocks_cfg } },
           "luarocks", "make", fs.basename(base_rockspec),
           gen.chain(
@@ -474,9 +474,9 @@ M.init = function (opts)
             gen.pairs(not opts.wasm and tbl.get(test_env, "test", "native", "luarocks", "env_vars") or {}))
             :map(function (k, v)
               return str.interp("%1=%2", { k, v })
-            end):unpack())
+            end):unpack()))
         check_target(fs.cd(cwd))
-        check_target(ok, e, cd)
+        check_target(ret())
         local post_make = tbl.get(test_env, "test", "hooks", "post_make") or compat.const(true)
         check_target(post_make(test_env))
         check_target(fs.touch(test_dir(base_lua_modules_ok)))
@@ -497,7 +497,7 @@ M.init = function (opts)
         local cwd = check_target(fs.cwd())
         -- TODO: simplify with fs.pushd + callback
         check_target(fs.cd(build_dir()))
-        local ok, e, cd = sys.execute(
+        local ret = tup(sys.execute(
           { env = { MAKEFLAGS = "-s", LUAROCKS_CONFIG = opts.luarocks_config } },
           "luarocks", "make", base_rockspec,
           gen.chain(
@@ -507,9 +507,9 @@ M.init = function (opts)
             gen.pairs(not opts.wasm and tbl.get(build_env, "build", "native", "luarocks", "env_vars") or {}))
             :map(function (k, v)
               return str.interp("%1=%2", { k, v })
-            end):unpack())
+            end):unpack()))
         check_target(fs.cd(cwd))
-        check_target(ok, e, cd)
+        check_target(ret())
         return true
       end)
 
@@ -536,10 +536,10 @@ M.init = function (opts)
         local cwd = check_target(fs.cwd())
         -- TODO: simplify with fs.pushd + callback
         check_target(fs.cd(build_dir()))
-        local ok, e, cd = err.pwrap(function (chk)
-          local ok, err = sys.execute("git", "diff", "--quiet")
-          if not ok then
-            chk(false, "Commit your changes first", err)
+        local ret = tup(err.pwrap(function (chk)
+          local ret = tup(sys.execute("git", "diff", "--quiet"))
+          if not ret() then
+            chk(false, "Commit your changes first", tup.sel(2, ret()))
           end
           local api_key = chk:exists(opts.luarocks_api_key or os.getenv("LUAROCKS_API_KEY"),
             "Missing luarocks API key")
@@ -556,9 +556,9 @@ M.init = function (opts)
           chk(sys.execute("gh", "release", "create", "--generate-notes",
             opts.config.env.version, release_tarball, base_rockspec))
           chk(sys.execute("luarocks", "upload", "--skip-pack", "--api-key", api_key, base_rockspec))
-        end)
+        end))
         check_target(fs.cd(cwd))
-        check_target(ok, e, cd)
+        check_target(ret())
         return true
       end)
 
@@ -568,9 +568,9 @@ M.init = function (opts)
       local cwd = check_target(fs.cwd())
       -- TODO: simplify with fs.pushd + callback
       check_target(fs.cd(test_dir()))
-      local ok, e, cd = sys.execute("sh", "run.sh")
+      local ret = tup(sys.execute("sh", "run.sh"))
       check_target(fs.cd(cwd))
-      check_target(ok, e, cd)
+      check_target(ret())
       return true
     end)
 
@@ -578,9 +578,9 @@ M.init = function (opts)
       local cwd = check_target(fs.cwd())
       -- TODO: simplify with fs.pushd + callback
       check_target(fs.cd(test_dir()))
-      local ok, e, cd = sys.execute("sh", "check.sh")
+      local ret = tup(sys.execute("sh", "check.sh"))
       check_target(fs.cd(cwd))
-      check_target(ok, e, cd)
+      check_target(ret())
       return true
     end)
 
@@ -590,7 +590,9 @@ M.init = function (opts)
         check_target(false, "inotifywait not found")
       end
       while true do
-        local ret = tup(make:make(vec("test", "check"), check_target))
+        local ret = tup(err.pwrap(function (check)
+          return make:make(vec("test", "check"), check)
+        end))
         if not ret() then
           print(tup.sel(2, ret()))
         end
