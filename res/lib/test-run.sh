@@ -10,6 +10,10 @@ export LUA='<% return lua %>'
 export LUA_PATH='<% return lua_path %>'
 export LUA_CPATH='<% return lua_cpath %>'
 
+<% template:push(sanitize and not wasm) %>
+LUA="env LD_PRELOAD=$(cc -print-file-name=libasan.so) $LUA"
+<% template:pop() %>
+
 <% return gen.pairs(tbl.get(test or {}, "env_vars") or {})
   :map(function (k, v)
     return str.interp("export %1=%2", { k, str.quote(v) })

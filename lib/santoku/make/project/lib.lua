@@ -363,6 +363,7 @@ M.init = function (opts)
                 path = get_lua_path(test_dir()),
                 cpath = get_lua_cpath(test_dir()),
                 flags = {
+                  opts.sanitize and "-fsanitize=address" or "",
                   "-sASSERTIONS", "-sSINGLE_FILE", "-sALLOW_MEMORY_GROWTH",
                   "-I" .. fs.join(base_env.client_lua_dir, "include"),
                   "-L" .. fs.join(base_env.client_lua_dir, "lib"),
@@ -445,7 +446,7 @@ M.init = function (opts)
 
     make:add_deps(
       vec(base_run_sh, base_check_sh):map(test_dir),
-      vec("skip_coverage.flag", "single.flag", "profile.flag",
+      vec("skip_coverage.flag", "single.flag", "profile.flag", "sanitize.flag",
           "lua.flag", "lua_path_extra.flag", "lua_cpath_extra.flag")
         :map(work_dir))
 
@@ -457,7 +458,8 @@ M.init = function (opts)
       vec(base_lua_modules_ok):map(test_dir),
       vec()
         :extend(test_srcs, test_cfgs)
-        :append(test_dir(base_luarocks_cfg)),
+        :append(test_dir(base_luarocks_cfg))
+        :append(work_dir("sanitize.flag")),
       function (_, _, check_target)
         local cwd = check_target(fs.cwd())
         -- TODO: simplify with fs.pushd + callback

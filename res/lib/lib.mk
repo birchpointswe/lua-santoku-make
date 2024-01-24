@@ -62,9 +62,9 @@ LIB_LDFLAGS += <% return tbl.get(test or {}, "wasm", "ldflags") or "" %>
 
 <% -- flags for test/sanitize %>
 <% template:push(environment == "test" and sanitize) %>
-LIB_CFLAGS := -fsanitize=address -fsanitize=leak $(LIB_CFLAGS)
-LIB_CXXFLAGS := -fsanitize=address -fsanitize=leak $(LIB_CXXFLAGS)
-LIB_LDFLAGS := -fsanitize=address -fsanitize=leak $(LIB_LDFLAGS)
+LIB_CFLAGS := -fsanitize=address $(LIB_CFLAGS)
+LIB_CXXFLAGS := -fsanitize=address $(LIB_CXXFLAGS)
+LIB_LDFLAGS := -fsanitize=address $(LIB_LDFLAGS)
 <% template:pop() %>
 
 all: $(LIB_O) $(LIB_SO)
