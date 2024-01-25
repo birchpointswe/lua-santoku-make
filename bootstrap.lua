@@ -1,9 +1,9 @@
-local err = require("santoku.err")
+local check = require("santoku.check")
 local fs = require("santoku.fs")
 local gen = require("santoku.gen")
 local tpl = require("santoku.template")
 
-err.check(err.pwrap(function (check)
+check(check:wrap(function (check)
 
   check(fs.mkdirp(".bootstrap"))
 

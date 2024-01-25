@@ -11,12 +11,12 @@ require("santoku.profile")
 <% template:pop() %>
 
 local fs = require("santoku.fs")
-local err = require("santoku.err")
+local check = require("santoku.check")
 
 <% template:push(server.init) %>
 local init_file = <% if template:showing() then
   local path = check:exists(compat.searchpath(server.init, fs.join(dist_dir, "lua_modules/share/lua/5.1/?.lua")))
   return str.quote(str.stripprefix(path, dist_dir .. "/"))
 end %>
-err.check(fs.loadfile(init_file))()
+check(fs.loadfile(init_file))()
 <% template:pop() %>

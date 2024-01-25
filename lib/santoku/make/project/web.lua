@@ -5,7 +5,7 @@
 %>
 
 local env = require("santoku.env")
-local err = require("santoku.err")
+local check = require("santoku.check")
 local compat = require("santoku.compat")
 local tup = require("santoku.tuple")
 local fs = require("santoku.fs")
@@ -40,7 +40,7 @@ M.init = function (opts)
   assert(compat.istype.table(opts))
   assert(compat.istype.table(opts.config))
 
-  return err.pwrap(function (check_init)
+  return check:wrap(function (check_init)
 
     opts.single = opts.single and opts.single:gsub("^[^/]+/", "") or false
     opts.profile = opts.profile or false
@@ -432,7 +432,7 @@ M.init = function (opts)
         -- TODO: simplify with fs.pushd + callback
         check_target(fs.cd(server_dir()))
         local project = require("santoku.make.project")
-        local ret = tup(err.pwrap(function (chk)
+        local ret = tup(check:wrap(function (chk)
           chk(chk(project.init({
             config_file = config_file,
             luarocks_config = chk(fs.absolute(base_server_luarocks_cfg)),
@@ -472,7 +472,7 @@ M.init = function (opts)
         -- TODO: simplify with fs.pushd + callback
         check_target(fs.cd(test_server_dir()))
         local project = require("santoku.make.project")
-        local ret = tup(err.pwrap(function (chk)
+        local ret = tup(check:wrap(function (chk)
           chk(chk(project.init({
             config_file = config_file,
             luarocks_config = chk(fs.absolute(base_server_luarocks_cfg)),
@@ -566,7 +566,7 @@ M.init = function (opts)
         check_target(fs.cd(test_server_dir()))
         local project = require("santoku.make.project")
         local lib = nil
-        local ret = tup(err.pwrap(function (chk)
+        local ret = tup(check:wrap(function (chk)
           lib = chk(project.init({
             config_file = config_file,
             luarocks_config = chk(fs.absolute(base_server_luarocks_cfg)),
@@ -672,35 +672,35 @@ M.init = function (opts)
 
     N.test = function (_, opts)
       opts = opts or {}
-      return err.pwrap(function (check_target)
+      return check:wrap(function (check_target)
         check_target(make:make(tbl.assign({ "test" }, opts), check_target))
       end)
     end
 
     N.iterate = function (_, opts)
       opts = opts or {}
-      return err.pwrap(function (check_target)
+      return check:wrap(function (check_target)
         check_target(make:make(tbl.assign({ "iterate" }, opts), check_target))
       end)
     end
 
     N.build = function (_, opts)
       opts = opts or {}
-      return err.pwrap(function (check_target)
+      return check:wrap(function (check_target)
         check_target(make:make(tbl.assign({ opts.test and "test-build" or "build" }, opts), check_target))
       end)
     end
 
     N.start = function (_, opts)
       opts = opts or {}
-      return err.pwrap(function (check_target)
+      return check:wrap(function (check_target)
         check_target(make:make(tbl.assign({ opts.test and "test-start" or "start" }, opts), check_target))
       end)
     end
 
     N.stop = function (_, opts)
       opts = opts or {}
-      return err.pwrap(function (check_target)
+      return check:wrap(function (check_target)
         check_target(make:make(tbl.assign({ "stop", "test-stop" }, opts), check_target))
       end)
     end

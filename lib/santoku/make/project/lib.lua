@@ -6,7 +6,7 @@
 
 local env = require("santoku.env")
 local tup = require("santoku.tuple")
-local err = require("santoku.err")
+local check = require("santoku.check")
 local compat = require("santoku.compat")
 local fs = require("santoku.fs")
 local fun = require("santoku.fun")
@@ -34,7 +34,7 @@ M.init = function (opts)
   assert(compat.istype.table(opts))
   assert(compat.istype.table(opts.config))
 
-  return err.pwrap(function (check_init)
+  return check:wrap(function (check_init)
 
     opts.wasm = opts.wasm or false
     opts.sanitize = opts.sanitize or false
@@ -288,7 +288,7 @@ M.init = function (opts)
           check_target(fs.mkdirp(test_dir()))
           local cwd = check_target(fs.cwd())
           check_target(fs.cd(test_dir()))
-          local ret = tup(err.pwrap(function (chk)
+          local ret = tup(check:wrap(function (chk)
             if not chk(fs.exists("lua-5.1.5.tar.gz")) then
               chk(sys.execute("wget", "https://www.lua.org/ftp/lua-5.1.5.tar.gz"))
             end
@@ -536,7 +536,7 @@ M.init = function (opts)
         local cwd = check_target(fs.cwd())
         -- TODO: simplify with fs.pushd + callback
         check_target(fs.cd(build_dir()))
-        local ret = tup(err.pwrap(function (chk)
+        local ret = tup(check:wrap(function (chk)
           local ret = tup(sys.execute("git", "diff", "--quiet"))
           if not ret() then
             chk(false, "Commit your changes first", tup.sel(2, ret()))
@@ -590,7 +590,7 @@ M.init = function (opts)
         check_target(false, "inotifywait not found")
       end
       while true do
-        local ret = tup(err.pwrap(function (check)
+        local ret = tup(check:wrap(function (check)
           return make:make(vec("test", "check"), check)
         end))
         if not ret() then
@@ -635,7 +635,7 @@ M.init = function (opts)
 
     N.test = function (_, opts)
       opts = opts or {}
-      return err.pwrap(function (check_target)
+      return check:wrap(function (check_target)
         check_target(make:make(tbl.assign({ "test" }, opts), check_target))
         if not opts.skip_check then
           check_target(make:make(tbl.assign({ "check" }, opts), check_target))
@@ -645,14 +645,14 @@ M.init = function (opts)
 
     N.check = function (_, opts)
       opts = opts or {}
-      return err.pwrap(function (check_target)
+      return check:wrap(function (check_target)
         check_target(make:make(tbl.assign({ "check" }, opts), check_target))
       end)
     end
 
     N.iterate = function (_, opts)
       opts = opts or {}
-      return err.pwrap(function (check_target)
+      return check:wrap(function (check_target)
         check_target(make:make(tbl.assign({ "iterate" }, opts), check_target))
       end)
     end
@@ -662,14 +662,14 @@ M.init = function (opts)
 
       N.install = function (_, opts)
         opts = opts or {}
-        return err.pwrap(function (check_target)
+        return check:wrap(function (check_target)
           check_target(make:make(tbl.assign({ "install" }, opts), check_target))
         end)
       end
 
       N.release = function (_, opts)
         opts = opts or {}
-        return err.pwrap(function (check_target)
+        return check:wrap(function (check_target)
           check_target(make:make(tbl.assign({ "release" }, opts), check_target))
         end)
       end
