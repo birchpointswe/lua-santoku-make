@@ -1,4 +1,4 @@
-local err = require("santoku.err")
+local check = require("santoku.check")
 local test = require("santoku.test")
 local fs = require("santoku.fs")
 local gen = require("santoku.gen")
@@ -6,7 +6,7 @@ local make = require("santoku.make")
 
 test("make", function ()
 
-  err.check(err.pwrap(function (check_init)
+  check(check:wrap(function (check_init)
 
     fs.walk("test/res", {
       recurse = true,

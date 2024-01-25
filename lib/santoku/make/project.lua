@@ -2,7 +2,7 @@
 
 local fs = require("santoku.fs")
 local compat = require("santoku.compat")
-local err = require("santoku.err")
+local check = require("santoku.check")
 
 local lib = require("santoku.make.project.lib")
 local web = require("santoku.make.project.web")
@@ -15,7 +15,7 @@ M.create_web = web.create
 M.init = function (opts)
   opts = opts or {}
   assert(compat.istype.table(opts))
-  return err.pwrap(function (check)
+  return check:wrap(function (check)
     opts.env = opts.env or "default"
     opts.dir = opts.dir or "build"
     if type(opts.config) ~= "table" and not opts.config_file then

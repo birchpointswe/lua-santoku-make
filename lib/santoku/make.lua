@@ -1,6 +1,6 @@
 local compat = require("santoku.compat")
 local tup = require("santoku.tuple")
-local err = require("santoku.err")
+local check = require("santoku.check")
 local str = require("santoku.string")
 local gen = require("santoku.gen")
 local vec = require("santoku.vector")
@@ -74,7 +74,7 @@ M.make = function (o, opts, ...)
   local targets = gen.ivals(opts):vec()
   opts.verbosity = opts.verbosity or 1
   opts.seen = opts.seen or {}
-  return err.pwrap(function (check)
+  return check:wrap(function (check)
     return make(check, o, opts, targets, args)
   end)
 end
