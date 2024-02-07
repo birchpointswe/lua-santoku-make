@@ -1,66 +1,79 @@
 #!/bin/sh
 
 <%
-  gen = require("santoku.gen")
+  iter = require("santoku.iter")
+  collect = iter.collect
+  map = iter.map
+  pairs = iter.pairs
+  ivals = iter.ivals
+  filter = iter.filter
+
+  arr = require("santoku.array")
+  concat = arr.concat
+
   str = require("santoku.string")
+  sisempty = str.isempty
+  squote = str.quote
+  sformat = string.format
+
   tbl = require("santoku.table")
+  get = tbl.get
 %>
 
 export LUA='<% return lua %>'
 export LUA_PATH='<% return lua_path %>'
 export LUA_CPATH='<% return lua_cpath %>'
 
-<% template:push(sanitize and not wasm) %>
+<% push(sanitize and not wasm) %>
 LUA="env LD_PRELOAD=$(cc -print-file-name=libasan.so) $LUA"
-<% template:pop() %>
+<% pop() %>
 
-<% return gen.pairs(tbl.get(test or {}, "env_vars") or {})
-  :map(function (k, v)
-    return str.interp("export %1=%2", { k, str.quote(v) })
-  end):concat("\n") %>
+<% return concat(collect(map(function (k, v)
+    return sformat("export %s=%s", k, squote(v))
+  end, pairs(get(test or {}, "env_vars") or {}))), "\n") %>
 
-<% return gen.ivals(tbl.get(test or {}, "env_scripts") or {}):filter(function (env)
-    return not str.isempty(env)
-  end):map(function (env)
+<% return concat(collect(map(function (env)
     return ". " .. env
-  end):concat("\n") %>
+  end, filter(function (e)
+    return not sisempty(env)
+  end, ivals(get(test or {}, "env_scripts") or {})))), "\n") %>
 
 rm -f <% return luacov_stats_file %> <% return luacov_report_file %> || true
 
 echo
 
-<% template:push(wasm) %>
+<% push(wasm) %>
 
-<% template:push(single) %>
+<% push(single) %>
 TEST="<% return single %>"
 toku test -s -i "node --expose-gc" "${TEST%.lua}"
 status_tst=$?
-<% template:pop():push(not single) %>
+<% pop() push(not single) %>
 toku test -s -i "node --expose-gc" test/spec
 status_tst=$?
-<% template:pop() %>
+<% pop() %>
 
-<% template:pop():push(not wasm) %>
+<% pop() push(not wasm) %>
 
 MODS=""
 
-<% template:push(not skip_coverage) %>
+<% push(not skip_coverage) %>
 MODS="$MODS -l luacov"
-<% template:pop() %>
+<% pop() %>
 
-<% template:push(profile) %>
+<% push(profile) %>
 MODS="$MODS -l santoku.profile"
-<% template:pop() %>
+<% pop() %>
 
-<% template:push(single) %>
+<% push(single) %>
 toku test -s -i "$LUA $MODS" "<% return single %>"
 status_tst=$?
-<% template:pop():push(not single) %>
+<% pop() push(not single) %>
 toku test -s -i "$LUA $MODS" --match "^.*%.lua$" test/spec
 status_tst=$?
-<% template:pop() %>
+<% pop() %>
 
-<% template:pop() %>
+<% pop() %>
 
 echo
 

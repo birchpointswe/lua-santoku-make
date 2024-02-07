@@ -1,82 +1,91 @@
-local check = require("santoku.check")
 local test = require("santoku.test")
+
+local arr = require("santoku.array")
+local concat = arr.concat
+
+local iter = require("santoku.iter")
+local ivals = iter.ivals
+local collect = iter.collect
+local map = iter.map
+local each = iter.each
+local filter = iter.filter
+
+local validate = require("santoku.validate")
+local eq = validate.isequal
+
 local fs = require("santoku.fs")
-local gen = require("santoku.gen")
+local rm = fs.rm
+local walk = fs.walk
+local writefile = fs.writefile
+local readfile = fs.readfile
+local mkdirp = fs.mkdirp
+local dirname = fs.dirname
+
 local make = require("santoku.make")
 
 test("make", function ()
 
-  check(check:wrap(function (check_init)
+  each(function (fp)
+    return rm(fp)
+  end, filter(function (_, m)
+    return m == "file"
+  end, walk("test/res", function (fp)
+    return fp == "test/res/partials"
+  end)))
 
-    fs.walk("test/res", {
-      recurse = true,
-      prune = function (fp)
-        return fp == "test/res/partials"
-      end
-    }):map(check_init):filter(function (_, m)
-      return m == "file"
-    end):each(function (fp)
-      check_init(fs.rm(fp))
+  local submake = make()
+  local target = submake.target
+  local build = submake.build
+
+  target(
+    { "test/res/main.txt" },
+    { "test/res/header.txt", "test/res/body.txt", "test/res/footer.txt" },
+    function (ts, ds)
+      each(mkdirp, map(dirname, ivals(ts)))
+      writefile(ts[1], concat(collect(map(readfile, ivals(ds)))))
     end)
 
-    local build = make()
+  target(
+    { "test/res/header.txt" },
+    { "test/res/partials/header-content.txt", },
+    function (ts, ds)
+      each(mkdirp, map(dirname, ivals(ts)))
+      writefile(ts[1], "Header: " .. readfile(ds[1]))
+    end)
 
-    build:target(
-      { "test/res/main.txt" },
-      { "test/res/header.txt", "test/res/body.txt", "test/res/footer.txt" },
-      function (ts, ds, check_target)
-        gen.ivals(ts):map(fs.dirname):map(fs.mkdirp):each(check_target)
-        check_target(fs.writefile(ts[1], gen.ivals(ds):map(fs.readfile):map(check_target):concat()))
-        return true
-      end)
+  target(
+    { "test/res/body.txt", "test/res/footer.txt" }, {},
+    function (ts)
+      each(mkdirp, map(dirname, ivals(ts)))
+      writefile(ts[1], "Body\n")
+      writefile(ts[2], "Footer\n")
+    end)
 
-    build:target(
-      { "test/res/header.txt" },
-      { "test/res/partials/header-content.txt", },
-      function (ts, ds, check_target)
-        gen.ivals(ts):map(fs.dirname):map(fs.mkdirp):each(check_target)
-        check_target(fs.writefile(ts[1], "Header: " .. check_target(fs.readfile(ds[1]))))
-        return true
-      end)
+  target(
+    { "test/res/a.txt", "test/res/b.txt", "test/res/c.txt" }, {},
+    function (ts)
+      each(mkdirp, map(dirname, ivals(ts)))
+      writefile(ts[1], "a\n")
+      writefile(ts[2], "b\n")
+      writefile(ts[3], "c\n")
+    end)
 
-    build:target(
-      { "test/res/body.txt", "test/res/footer.txt" }, {},
-      function (ts, _, check_target)
-        gen.ivals(ts):map(fs.dirname):map(fs.mkdirp):each(check_target)
-        check_target(fs.writefile(ts[1], "Body\n"))
-        check_target(fs.writefile(ts[2], "Footer\n"))
-        return true
-      end)
+  target(
+    { "test/res/test.txt" },
+    { "test/res/partials/test-content.txt", "test/res/a.txt", "test/res/b.txt", "test/res/c.txt" },
+    function (ts, ds)
+      each(mkdirp, map(dirname, ivals(ts)))
+      writefile(ts[1], "Test: " .. readfile(ds[1]))
+    end)
 
-    build:target(
-      { "test/res/a.txt", "test/res/b.txt", "test/res/c.txt" }, {},
-      function (ts, _, check_target)
-        gen.ivals(ts):map(fs.dirname):map(fs.mkdirp):each(check_target)
-        check_target(fs.writefile(ts[1], "a\n"))
-        check_target(fs.writefile(ts[2], "b\n"))
-        check_target(fs.writefile(ts[3], "c\n"))
-        return true
-      end)
+  target({ "all-deps" }, { "test/res/main.txt", "test/res/test.txt" }, true)
+  target({ "all" }, { "all-deps" }, true)
 
-    build:target(
-      { "test/res/test.txt" },
-      { "test/res/partials/test-content.txt", "test/res/a.txt", "test/res/b.txt", "test/res/c.txt" },
-      function (ts, ds, check_target)
-        gen.ivals(ts):map(fs.dirname):map(fs.mkdirp):each(check_target)
-        check_target(fs.writefile(ts[1], "Test: " .. check_target(fs.readfile(ds[1]))))
-        return true
-      end)
+  build({ "all" }, 3)
 
-    build:target({ "all-deps" }, { "test/res/main.txt", "test/res/test.txt" }, true)
-
-    build:target({ "all" }, { "all-deps" }, true)
-
-    check_init(build:make({ "all", verbosity = 3 }, check_init))
-    assert("Header: Header content!\n" == check_init(fs.readfile("test/res/header.txt")))
-    assert("Body\n" == check_init(fs.readfile("test/res/body.txt")))
-    assert("Footer\n" == check_init(fs.readfile("test/res/footer.txt")))
-    assert("Header: Header content!\nBody\nFooter\n" == check_init(fs.readfile("test/res/main.txt")))
-
-  end))
+  assert(eq("Header: Header content!\n", readfile("test/res/header.txt")))
+  assert(eq("Body\n", readfile("test/res/body.txt")))
+  assert(eq("Footer\n", readfile("test/res/footer.txt")))
+  assert(eq("Header: Header content!\nBody\nFooter\n", readfile("test/res/main.txt")))
 
 end)

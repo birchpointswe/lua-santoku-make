@@ -1,40 +1,49 @@
-<% str = require("santoku.string") %>
-
 local fs = require("santoku.fs")
-local compat = require("santoku.compat")
-local check = require("santoku.check")
+local runfile = fs.runfile
+
+local err = require("santoku.error")
+local error = err.error
+local assert = err.assert
+
+local validate = require("santoku.validate")
+local hasindex = validate.hasindex
+local istable = validate.istable
 
 local lib = require("santoku.make.project.lib")
+local lib_init = lib.init
+
 local web = require("santoku.make.project.web")
+local web_init = web.init
 
-local M = {}
+local sformat = string.format
 
-M.create_lib = lib.create
-M.create_web = web.create
+local run_env = { __index = _G }
 
-M.init = function (opts)
+local function init (opts)
   opts = opts or {}
-  assert(compat.istype.table(opts))
-  return check:wrap(function (check)
-    opts.env = opts.env or "default"
-    opts.dir = opts.dir or "build"
-    if type(opts.config) ~= "table" and not opts.config_file then
-      opts.config = opts.config or ((opts.env ~= "default")
-        and string.format("make.%s.lua", opts.env)
-        or "make.lua")
-      opts.config_file = opts.config
-      opts.config = check(fs.loadfile(opts.config))()
-    end
-    if type(opts.config) ~= "table" then
-      return check(false, "config is not a table")
-    elseif opts.config.type == "lib" then
-      return check(lib.init(opts))
-    elseif opts.config.type == "web" then
-      return check(web.init(opts))
-    else
-      return check(false, "unexpected project type", opts.config.type)
-    end
-  end)
+  assert(hasindex(opts))
+  opts.env = opts.env or "default"
+  opts.dir = opts.dir or "build"
+  if not istable(opts.config) and not opts.config_file then
+    opts.config = opts.config or ((opts.env ~= "default")
+      and sformat("make.%s.lua", opts.env)
+      or "make.lua")
+    opts.config_file = opts.config
+    opts.config = runfile(opts.config, setmetatable({}, run_env))
+  end
+  if not istable(opts.config) then
+    error("config is not a table", opts.config)
+  elseif opts.config.type == "lib" then
+    return lib_init(opts)
+  elseif opts.config.type == "web" then
+    return web_init(opts)
+  else
+    return error("unexpected project type", opts.config.type)
+  end
 end
 
-return M
+return {
+  init = init,
+  create_lib = lib.create,
+  create_web = web.create,
+}

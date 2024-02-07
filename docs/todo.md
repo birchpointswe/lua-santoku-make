@@ -1,6 +1,13 @@
 # Now
 
-- Fix iteration: loop exits when a test fails
+- Update to latest santoku
+
+- Fix yield error in WASM tests
+
+- Debounce inotify events
+- Re-initialize on iteration loop so that new files are picked up automatically
+
+- Inject license and copyright
 
 - Web client (non-lua)
     - Terser/minifier for HTML, JS, CSS
@@ -15,17 +22,10 @@
 # Next
 
 - Implement init
-- Fix WASM sanitize
-
-- Re-initialize on iteration loop so that new files are picked up automatically
 - In non-wasm, test all lua versions sequentially
 - Use openresty luajit instead of env.interpreter()[1] for server tests
 
 # Later
-
-- Refactor
-    - Abstract duplicated test/main targets etc
-    - Clean up calling sub-lib
 
 - Server profile doesn't print out as expected
 - Coverage sometimes shows 0%

@@ -1,84 +1,125 @@
-local compat = require("santoku.compat")
-local tup = require("santoku.tuple")
-local check = require("santoku.check")
+local err = require("santoku.error")
+local assert = err.assert
+local error = err.error
+
+local validate = require("santoku.validate")
+local hascall = validate.hascall
+local hasindex = validate.hasindex
+local isnumber = validate.isnumber
+
 local str = require("santoku.string")
-local gen = require("santoku.gen")
-local vec = require("santoku.vector")
+local printf = str.printf
+
 local fs = require("santoku.fs")
+local exists = fs.exists
+
+local iter = require("santoku.iter")
+local ivals = iter.ivals
+
+local arr = require("santoku.array")
+local extend = arr.extend
+
+local huge = math.huge
+local max = math.max
 
 local posix = require("santoku.make.posix")
-
-local M = {}
-local MT = { __index = M }
-
-M.target = function (o, ts, ds, fn)
-  assert(compat.hasmeta.ipairs(ts))
-  assert(compat.hasmeta.ipairs(ds))
-  assert(fn == nil or fn == true or compat.hasmeta.call(fn))
-  vec.wrap(ts)
-  vec.wrap(ds)
-  ts:each(function (t)
-    assert(compat.istype.string(t))
-    o.targets[t] = o.targets[t] or vec()
-    o.targets[t]:extend(ts)
-    o.deps[t] = o.deps[t] or vec()
-    o.deps[t]:extend(ds)
-    assert(o.fns[t] == nil, "target already has a function registered: " .. t)
-    o.fns[t] = fn
-  end)
-end
-
-M.add_deps = function (o, ts, ds)
-  gen.ivals(ts):each(function (t)
-    o.deps[t] = o.deps[t] or vec()
-    o.deps[t]:append(compat.unpack(ds))
-  end)
-end
-
-local function make (check, o, opts, targets, args)
-  vec.wrap(targets)
-  return gen.ivals(targets):map(function (t)
-    if opts.seen[t] then
-      return opts.seen[t]
-    end
-    local ttime = check(fs.exists(t)) and check(posix.time(t))
-    local dtimes = make(check, o, opts, o.deps[t] or {}, args)
-    if ttime and not dtimes:find(function (dt) return dt > ttime end) then
-      if opts.verbosity > 1 then
-        str.printf("[ok]    \t%s\n", t)
-      end
-      opts.seen[t] = ttime
-      return ttime
-    end
-    if not ttime and not o.fns[t] then
-      check(false, t .. ": target doesn't exist and no corresponding function registered")
-    end
-    if o.fns[t] == true then
-      if opts.verbosity > 1 then
-        str.printf("[phony] \t%s\n", t)
-      end
-      return check(posix.now())
-    else
-      if opts.verbosity > 0 then
-        str.printf("[make]  \t%s\n", t)
-      end
-      check(o.fns[t](o.targets[t], o.deps[t], args()))
-      opts.seen[t] = check(fs.exists(t)) and check(posix.time(t)) or nil
-      return opts.seen[t]
-    end
-  end):vec()
-end
-
-M.make = function (o, opts, ...)
-  local args = tup(...)
-  local targets = gen.ivals(opts):vec()
-  opts.verbosity = opts.verbosity or 1
-  opts.seen = opts.seen or {}
-  return check:wrap(function (check)
-    return make(check, o, opts, targets, args)
-  end)
-end
+local modtime = posix.time
 
 return function ()
-  return setmetatable({ targets = {}, deps = {}, fns = {} }, MT)
+
+  local targets = {}
+  local deps = {}
+  local fns = {}
+
+  local function target (ts, ds, fn)
+    if not (fn == nil or fn == true) then
+      assert(hascall(fn))
+    end
+    for t in ivals(ts) do
+      local tt = targets[t] or {}
+      local td = deps[t] or {}
+      extend(tt, ts)
+      extend(td, ds)
+      targets[t] = tt
+      deps[t] = td
+      if fn ~= nil then
+        assert(fns[t] == nil, "target already has a registered function or is registered as phony", t)
+        fns[t] = fn
+      end
+    end
+  end
+
+  local function _build (ts, verbosity, cache, ...)
+
+    local maxtime = -huge
+
+    for t in ivals(ts) do
+
+      local tc = cache[t]
+
+      if tc then
+
+        maxtime = max(maxtime, tc)
+
+      else
+
+        local ttime = exists(t) and modtime(t)
+        local dtime = deps[t] and _build(deps[t], verbosity, cache, ...)
+
+        if ttime and (not dtime or dtime < ttime) then
+
+          if verbosity > 1 then
+            printf("[ok]    \t%s\n", t)
+          end
+
+          cache[t] = ttime
+          maxtime = max(maxtime, ttime)
+
+        elseif not ttime and not fns[t] then
+
+          error("target doesn't exist and corresponding function not registered", t)
+
+        elseif fns[t] == true then
+
+          if verbosity > 1 then
+            printf("[phony] \t%s\n", t)
+          end
+
+          maxtime = huge -- now()
+
+        else
+
+          if verbosity > 0 then
+            printf("[make]  \t%s\n", t)
+          end
+
+          fns[t](targets[t], deps[t], ...)
+          cache[t] = exists(t) and modtime(t) or nil
+          maxtime = max(maxtime, cache[t] or maxtime)
+
+        end
+
+      end
+
+    end
+
+    return maxtime
+
+  end
+
+  local function build (ts, verbosity, ...)
+    assert(hasindex(ts))
+    verbosity = verbosity or 1
+    assert(isnumber(verbosity))
+    return _build(ts, verbosity, {}, ...)
+  end
+
+  return {
+    target = target,
+    build = build,
+    targets = targets,
+    deps = deps,
+    fns = fns,
+  }
+
 end

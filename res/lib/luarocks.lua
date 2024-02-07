@@ -3,7 +3,7 @@ rocks_trees = {
     root = "<% return lua_modules %>"
   } }
 
-<% template:push(wasm) %>
+<% push(wasm) %>
 
 -- NOTE: Not specifying the interpreter, version, LUA, LUA_BINDIR, and LUA_DIR
 -- so that the host lua is used install rocks. The other variables affect how
@@ -33,4 +33,4 @@ variables = {
 
 }
 
-<% template:pop() %>
+<% pop() %>
