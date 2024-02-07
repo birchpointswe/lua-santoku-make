@@ -19,53 +19,53 @@ LIB_CXXFLAGS += -Wall $(addprefix -I, $(LUA_INCDIR)) $(<% return var("CXXFLAGS")
 LIB_LDFLAGS += -Wall $(addprefix -L, $(LUA_LIBDIR)) $(<% return var("LDFLAGS") %>) <% return ldflags %>
 
 <% -- flags for build environments %>
-<% template:push(environment == "build") %>
+<% push(environment == "build") %>
 LIB_CFLAGS += <% return tbl.get(build or {}, "cflags") or "" %>
 LIB_CXXFLAGS += <% return tbl.get(build or {}, "cxxflags") or "" %>
 LIB_LDFLAGS += <% return tbl.get(build or {}, "ldflags") or "" %>
-<% template:pop() %>
+<% pop() %>
 
 <% -- flags for test environments %>
-<% template:push(environment == "test") %>
+<% push(environment == "test") %>
 LIB_CFLAGS += <% return tbl.get(test or {}, "cflags") or "" %>
 LIB_CXXFLAGS += <% return tbl.get(test or {}, "cxxflags") or "" %>
 LIB_LDFLAGS += <% return tbl.get(test or {}, "ldflags") or "" %>
-<% template:pop() %>
+<% pop() %>
 
 <% -- flags for build/native environments %>
-<% template:push(environment == "build" and not wasm) %>
+<% push(environment == "build" and not wasm) %>
 LIB_CFLAGS += <% return tbl.get(build or {}, "native", "cflags") or "" %>
 LIB_CXXFLAGS += <% return tbl.get(build or {}, "native", "cxxflags") or "" %>
 LIB_LDFLAGS += <% return tbl.get(build or {}, "native", "ldflags") or "" %>
-<% template:pop() %>
+<% pop() %>
 
 <% -- flags for build/wasm environments %>
-<% template:push(environment == "build" and wasm) %>
+<% push(environment == "build" and wasm) %>
 LIB_CFLAGS += <% return tbl.get(build or {}, "wasm", "cflags") or "" %>
 LIB_CXXFLAGS += <% return tbl.get(build or {}, "wasm", "cxxflags") or "" %>
 LIB_LDFLAGS += <% return tbl.get(build or {}, "wasm", "ldflags") or "" %>
-<% template:pop() %>
+<% pop() %>
 
 <% -- flags for test/native environments %>
-<% template:push(environment == "test" and not wasm) %>
+<% push(environment == "test" and not wasm) %>
 LIB_CFLAGS += <% return tbl.get(test or {}, "native", "cflags") or "" %>
 LIB_CXXFLAGS += <% return tbl.get(test or {}, "native", "cxxflags") or "" %>
 LIB_LDFLAGS += <% return tbl.get(test or {}, "native", "ldflags") or "" %>
-<% template:pop() %>
+<% pop() %>
 
 <% -- flags for test/wasm environments %>
-<% template:push(environment == "test" and wasm) %>
+<% push(environment == "test" and wasm) %>
 LIB_CFLAGS += <% return tbl.get(test or {}, "wasm", "cflags") or "" %>
 LIB_CXXFLAGS += <% return tbl.get(test or {}, "wasm", "cxxflags") or "" %>
 LIB_LDFLAGS += <% return tbl.get(test or {}, "wasm", "ldflags") or "" %>
-<% template:pop() %>
+<% pop() %>
 
 <% -- flags for test/sanitize %>
-<% template:push(environment == "test" and sanitize) %>
+<% push(environment == "test" and sanitize) %>
 LIB_CFLAGS := -fsanitize=address $(LIB_CFLAGS)
 LIB_CXXFLAGS := -fsanitize=address $(LIB_CXXFLAGS)
 LIB_LDFLAGS := -fsanitize=address $(LIB_LDFLAGS)
-<% template:pop() %>
+<% pop() %>
 
 all: $(LIB_O) $(LIB_SO)
 

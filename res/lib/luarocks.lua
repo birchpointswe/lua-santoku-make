@@ -3,7 +3,7 @@ rocks_trees = {
     root = "<% return lua_modules %>"
   } }
 
-<% template:push(wasm) %>
+<% push(wasm) %>
 
 
 
@@ -33,4 +33,4 @@ variables = {
 
 }
 
-<% template:pop() %>
+<% pop() %>

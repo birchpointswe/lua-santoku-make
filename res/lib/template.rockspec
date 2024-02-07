@@ -1,10 +1,21 @@
 <%
-  gen = require("santoku.gen")
-  fun = require("santoku.fun")
-  op = require("santoku.op")
   str = require("santoku.string")
+  squote = str.quote
+
   tbl = require("santoku.table")
+  get = tbl.get
+
+  arr = require("santoku.array")
+  concat = arr.concat
+
+  iter = require("santoku.iter")
+  map = iter.map
+  flatten = iter.flatten
+  ivals = iter.ivals
+  collect = iter.collect
+
   serialize = require("santoku.serialize")
+  serialize_table_contents = serialize.serialize_table_contents
 %>
 
 package = "<% return name %>"
@@ -21,28 +32,21 @@ description = {
 }
 
 dependencies = {
-  <% return gen.pack(
-        dependencies,
-        environment == "test" and tbl.get(test or {}, "dependencies"),
-        environment == "test" and wasm and tbl.get(test or {}, "wasm", "dependencies"),
-        environment == "test" and not wasm and tbl.get(test or {}, "native", "dependencies"))
-      :map(fun.bindr(op["or"], {}))
-      :map(gen.ivals)
-      :flatten()
-      :map(str.quote)
-      :concat(",\n") %>
+  <% return concat(collect(map(squote, flatten(map(ivals, ivals({
+      dependencies or {},
+      environment == "test" and get(test or {}, "dependencies") or {},
+      environment == "test" and wasm and get(test or {}, "wasm", "dependencies") or {},
+      environment == "test" and not wasm and get(test or {}, "native", "dependencies") or {}
+    }))))), ",\n") %>
 }
 
 external_dependencies = {
-  <% return gen.pack(
-        tbl.get(dependencies, "external"),
-        environment == "test" and tbl.get(test, "dependencies", "external"),
-        environment == "test" and wasm and tbl.get(test or {}, "wasm", "dependencies", "external"),
-        environment == "test" and not wasm and tbl.get(test or {}, "native", "dependencies", "external"))
-      :map(fun.bindr(op["or"], {}))
-      :map(serialize.serialize_table_contents)
-      :filter(fun.compose(op["not"], str.isempty))
-      :concat(",\n") %>
+  <% return concat(collect(map(serialize_table_contents, flatten(map(ivals, ivals({
+      get(dependencies, "external") or {},
+      environment == "test" and get(test, "dependencies", "external") or {},
+      environment == "test" and wasm and get(test or {}, "wasm", "dependencies", "external") or {},
+      environment == "test" and not wasm and get(test or {}, "native", "dependencies", "external") or {}
+    }))))), ",\n") %>
 }
 
 build = {

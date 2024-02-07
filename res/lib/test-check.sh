@@ -15,13 +15,13 @@ fi
 echo
 
 if type luacheck >/dev/null 2>/dev/null && [ -f luacheck.lua ]; then
-<% template:push(wasm) %>
+<% push(wasm) %>
   luacheck --config luacheck.lua $(find lib bin bundler-pre/test/spec -maxdepth 0 2>/dev/null)
   status_chk=$?
-<% template:pop():push(not wasm) %>
+<% pop() push(not wasm) %>
   luacheck --config luacheck.lua $(find lib bin test/spec -maxdepth 0 2>/dev/null)
   status_chk=$?
-<% template:pop() %>
+<% pop() %>
 fi
 
 echo

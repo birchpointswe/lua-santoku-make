@@ -1,33 +1,46 @@
-local check = require("santoku.check")
+package.path = "build/default/test/lua_modules/share/lua/5.1/?.lua"
+package.cpath = "build/default/test/lua_modules/lib/lua/5.1/?.so"
+
+local err = require("santoku.error")
+local pcall = err.pcall
+
 local fs = require("santoku.fs")
-local gen = require("santoku.gen")
-local tpl = require("santoku.template")
+local mkdirp = fs.mkdirp
+local join = fs.join
+local dirname = fs.dirname
+local writefile = fs.writefile
+local files = fs.files
 
-check(check:wrap(function (check)
+local template = require("santoku.template")
+local renderfile = template.renderfile
 
-  check(fs.mkdirp(".bootstrap"))
+print(xpcall(function ()
 
-  local tplcfg = { env = setmetatable({}, { __index = _G }) }
+  mkdirp(".bootstrap")
 
-  fs.files("lib", { recurse = true }):map(check):each(function (fp)
-    local outfile = fs.join(".bootstrap", fp)
-    local outdir = fs.dirname(outfile)
-    check(fs.mkdirp(outdir))
-    check(fs.writefile(outfile, check(tpl.renderfile(fp, tplcfg))))
-  end)
+  local env = setmetatable({}, { __index = _G })
+
+  for fp in files("lib", true) do
+    local outfile = join(".bootstrap", fp)
+    local outdir = dirname(outfile)
+    mkdirp(outdir)
+    writefile(outfile, (renderfile(fp, env)))
+  end
 
   package.path = ".bootstrap/lib/?.lua;" .. package.path
 
-
   if arg[1] == "test-wasm" then
-    local prj = check(require("santoku.make.project").init({ wasm = true }))
-    check(prj["test"](prj, { verbosity = 3 }))
+    local prj = require("santoku.make.project").init({ wasm = true })
+    prj.test({ verbosity = 3 })
   elseif arg[1] == "iterate-wasm" then
-    local prj = check(require("santoku.make.project").init({ wasm = true }))
-    check(prj["iterate"](prj, { verbosity = 3 }))
+    local prj = require("santoku.make.project").init({ wasm = true })
+    prj.iterate({ verbosity = 3 })
   else
-    local prj = check(require("santoku.make.project").init())
-    check(prj[arg[1]](prj, { verbosity = 3 }))
+    local prj = require("santoku.make.project").init()
+    prj[arg[1]]({ verbosity = 3 })
   end
 
+end, function (...)
+  print(debug.traceback())
+  return ...
 end))
