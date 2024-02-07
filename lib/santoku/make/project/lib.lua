@@ -547,7 +547,7 @@ local function init (opts)
     target({ "install" }, install_release_deps, function ()
       return pushd(build_dir(), function ()
 
-        local vars = collect(map(bind(sformat("%s=%s")), flatten(map(pairs, ivals({
+        local vars = collect(map(bind(sformat, "%s=%s"), flatten(map(pairs, ivals({
           get(build_env, "luarocks", "env_vars") or {},
           get(build_env, "build", "luarocks", "env_vars") or {},
           opts.wasm and get(build_env, "build", "wasm", "luarocks", "env_vars") or {},
