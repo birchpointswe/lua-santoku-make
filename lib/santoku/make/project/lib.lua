@@ -132,11 +132,11 @@ local function init (opts)
   local function get_action (fp)
     local ext = extension(fp)
     local match_fp = bind(smatch, fp)
-    if (opts.exts and not aincludes(opts.exts, ext)) or
-        find(match_fp, ivals(get(opts, "rules", "exclude") or {}))
+    if (opts.exts and not aincludes(opts.config.exts or {}, ext)) or
+        find(match_fp, ivals(get(opts.config, "rules", "exclude") or {}))
     then
       return "ignore"
-    elseif find(match_fp, ivals(get(opts, "rules", "copy") or {}))
+    elseif find(match_fp, ivals(get(opts.config, "rules", "copy") or {}))
     then
       return "copy"
     else
