@@ -1,11 +1,7 @@
 # Now
 
-- Update to latest santoku
-
 - Fix yield error in WASM tests
-
 - Debounce inotify events
-- Re-initialize on iteration loop so that new files are picked up automatically
 
 - Inject license and copyright
 

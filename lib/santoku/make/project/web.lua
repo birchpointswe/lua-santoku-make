@@ -46,7 +46,6 @@ local iter = require("santoku.iter")
 local find = iter.find
 local chain = iter.chain
 local ivals = iter.ivals
-local map = iter.map
 local collect = iter.collect
 local filter = iter.filter
 
@@ -101,6 +100,7 @@ local function init (opts)
 
   opts.single = opts.single and opts.single:gsub("^[^/]+/", "") or nil
   opts.skip_coverage = opts.profile or opts.skip_coverage or nil
+  opts.openresty_dir = opts.openresty_dir or opts.config.openresty_dir or env.var("OPENRESTY_DIR")
 
   local function work_dir (...)
     return join(opts.dir, opts.env, ...)
@@ -262,6 +262,7 @@ local function init (opts)
   local base_client_static = get_files("client/static")
 
   local base_env = {
+    root_dir = cwd(),
     profile = opts.profile,
     skip_coverage = opts.skip_coverage,
     var = function (n)
@@ -571,16 +572,16 @@ local function init (opts)
       dist_dir(base_server_nginx_cfg),
       dist_dir(base_server_nginx_daemon_cfg),
       server_dir(base_server_lua_modules_ok) },
-      amap(extend({}, base_client_static), dist_dir_client)))
+      amap(extend({}, base_client_static), dist_dir_client)), true)
 
   target(
     { "test-build" },
-    map(extend({
+    extend({
       test_dist_dir(base_server_run_sh),
       test_dist_dir(base_server_nginx_cfg),
       test_dist_dir(base_server_nginx_daemon_cfg),
       test_server_dir(base_server_lua_modules_ok) },
-      amap(extend({}, base_client_static))), test_dist_dir_client))
+      amap(extend({}, base_client_static), test_dist_dir_client)), true)
 
   target(
     { "start" },
@@ -615,8 +616,8 @@ local function init (opts)
     amap(extend({}, base_server_test_specs), test_server_dir_stripped),
     function (_, _, iterating)
 
-      build({ "stop", "test-stop" })
-      build({ "test-start" }, true)
+      build({ "stop", "test-stop" }, opts.verbosity)
+      build({ "test-start" }, opts.verbosity, true)
 
       local config_file = absolute(opts.config_file)
 
@@ -648,7 +649,7 @@ local function init (opts)
         lib.test({ skip_check = true })
 
         if not iterating then
-          build({ "test-stop" })
+          build({ "test-stop" }, opts.verbosity)
         end
 
         lib.check()
@@ -656,7 +657,7 @@ local function init (opts)
       end)
     end)
 
-  target( { "iterate" }, {}, function (_, _)
+  target({ "iterate" }, {}, function (_, _)
 
     tup(function (ok, ...)
 
@@ -674,7 +675,7 @@ local function init (opts)
           print(...)
         end
 
-      end, pcall(build, { "test" }, true))
+      end, pcall(build, { "test" }, opts.verbosity, true))
 
       execute({
         "inotifywait", "-qr",
@@ -690,14 +691,20 @@ local function init (opts)
   end)
 
   target({ "stop" }, {}, function ()
+    mkdirp(dist_dir())
     return pushd(dist_dir(), function ()
-      execute({ "kill", smatch(readfile("server.pid"), "%d+") })
+      if exists("server.pid") then
+        execute({ "kill", smatch(readfile("server.pid"), "(%d+)") })
+      end
     end)
   end)
 
   target({ "test-stop" }, {}, function (_, _)
+    mkdirp(test_dist_dir())
     return pushd(test_dist_dir(), function ()
-      execute({ "kill", smatch(readfile("server.pid"), "%d+") })
+      if exists("server.pid") then
+        execute({ "kill", smatch(readfile("server.pid"), "(%d+)") })
+      end
     end)
   end)
 
@@ -707,27 +714,27 @@ local function init (opts)
 
     test = function (opts)
       opts = opts or {}
-      build(assign({ "test" }, opts))
+      build(assign({ "test" }, opts), opts.verbosity)
     end,
 
     iterate = function (opts)
       opts = opts or {}
-      build(assign({ "iterate" }, opts))
+      build(assign({ "iterate" }, opts), opts.verbosity)
     end,
 
     build = function (opts)
       opts = opts or {}
-      build(assign({ opts.test and "test-build" or "build" }, opts))
+      build(assign({ opts.test and "test-build" or "build" }, opts), opts.verbosity)
     end,
 
     start = function (opts)
       opts = opts or {}
-      build(assign({ opts.test and "test-start" or "start" }, opts))
+      build(assign({ opts.test and "test-start" or "start" }, opts), opts.verbosity)
     end,
 
     stop = function (opts)
       opts = opts or {}
-      build(assign({ "stop", "test-stop" }, opts))
+      build(assign({ "stop", "test-stop" }, opts), opts.verbosity)
     end,
 
   }

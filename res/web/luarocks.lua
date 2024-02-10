@@ -1,4 +1,4 @@
-<% template:push(component == "server") %>
+<% push(component == "server") %>
 
 lua_interpreter = "luajit"
 lua_version = "5.1"
@@ -19,7 +19,7 @@ variables = {
 
 }
 
-<% template:pop():push(component == "client") %>
+<% pop() push(component == "client") %>
 
 lua_interpreter = "lua"
 lua_version = "5.1"
@@ -48,4 +48,4 @@ variables = {
 
 }
 
-<% template:pop() %>
+<% pop() %>

@@ -642,7 +642,7 @@ local function init (opts)
           print(...)
         end
 
-      end, pcall(build, { "test", "check" }))
+      end, pcall(build, { "test", "check" }, opts.verbosity))
 
       execute({
         "inotifywait", "-qr",
@@ -673,30 +673,30 @@ local function init (opts)
 
     test = function (opts)
       opts = opts or {}
-      build(assign({ "test" }, opts))
+      build(assign({ "test" }, opts), opts.verbosity)
       if not opts.skip_check then
-        build(assign({ "check" }, opts))
+        build(assign({ "check" }, opts), opts.verbosity)
       end
     end,
 
     check = function (opts)
       opts = opts or {}
-      build(assign({ "check" }, opts))
+      build(assign({ "check" }, opts), opts.verbosity)
     end,
 
     iterate = function ()
       opts = opts or {}
-      build(assign({ "iterate" }, opts))
+      build(assign({ "iterate" }, opts), opts.verbosity)
     end,
 
     install = not opts.wasm and function (opts)
       opts = opts or {}
-      build(assign({ "install" }, opts))
+      build(assign({ "install" }, opts), opts.verbosity)
     end,
 
     release = not opts.wasm and function (opts)
       opts = opts or {}
-      build(assign({ "release" }, opts))
+      build(assign({ "release" }, opts), opts.verbosity)
     end,
 
   }

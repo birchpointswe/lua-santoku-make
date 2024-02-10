@@ -1,9 +1,8 @@
 <%
-  gen = require("santoku.gen")
-  fun = require("santoku.fun")
-  op = require("santoku.op")
+  it = require("santoku.iter")
   str = require("santoku.string")
   tbl = require("santoku.table")
+  arr = require("santoku.array")
 %>
 
 package = "<% return name .. "-" .. component .. (environment == "test" and "-test" or "") %>"
@@ -13,17 +12,13 @@ rockspec_format = "3.0"
 source = { url = "" }
 
 dependencies = {
-  <% return gen.pack(
-        environment ~= "test" and component == "server" and tbl.get(server or {}, "dependencies"),
-        environment == "test" and component == "server" and tbl.get(server or {}, "test", "spec_dependencies"))
-      :map(fun.bindr(op["or"], {}))
-      :map(gen.ivals)
-      :flatten()
-      :map(str.quote)
-      :concat(",\n") %>
+  <% return arr.concat(it.collect(it.map(str.quote, it.flatten(it.map(it.ivals, it.ivals({
+      environment ~= "test" and component == "server" and tbl.get(server or {}, "dependencies"),
+      environment == "test" and component == "server" and tbl.get(server or {}, "test", "spec_dependencies"))
+    }))))), ",\n") %>
 }
 
-<% template:push(environment == "run") %>
+<% push(environment == "run") %>
 
 build = {
   type = "make",
@@ -55,4 +50,4 @@ build = {
   }
 }
 
-<% template:pop() %>
+<% pop() %>
