@@ -393,7 +393,9 @@ local function init (opts)
         function ()
           bundle(test_dir("bundler-pre", fp), test_dir("bundler-post", dirname(fp)), {
             cc = "emcc",
-            mods = { "luacov", "luacov.hook", "luacov.tick", opts.profile and "santoku.profile" or nil },
+            mods = extend({},
+              opts.skip_coverage and {} or { "luacov", "luacov.hook", "luacov.tick" },
+              opts.profile and { "santoku.profile" } or {}),
             ignores = { "debug" },
             env = {
               { base_env.var("WASM"), "1" },
