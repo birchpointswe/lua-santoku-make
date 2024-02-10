@@ -35,7 +35,7 @@ LUA="env LD_PRELOAD=$(cc -print-file-name=libasan.so) $LUA"
 <% return concat(collect(map(function (env)
     return ". " .. env
   end, filter(function (e)
-    return not sisempty(env)
+    return not sisempty(e)
   end, ivals(get(test or {}, "env_scripts") or {})))), "\n") %>
 
 rm -f <% return luacov_stats_file %> <% return luacov_report_file %> || true

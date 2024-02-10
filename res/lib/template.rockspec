@@ -42,8 +42,8 @@ dependencies = {
 
 external_dependencies = {
   <% return concat(collect(map(serialize_table_contents, flatten(map(ivals, ivals({
-      get(dependencies, "external") or {},
-      environment == "test" and get(test, "dependencies", "external") or {},
+      get(dependencies or {}, "external") or {},
+      environment == "test" and get(test or {}, "dependencies", "external") or {},
       environment == "test" and wasm and get(test or {}, "wasm", "dependencies", "external") or {},
       environment == "test" and not wasm and get(test or {}, "native", "dependencies", "external") or {}
     }))))), ",\n") %>
