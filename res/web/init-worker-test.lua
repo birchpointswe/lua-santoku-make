@@ -13,9 +13,9 @@ require("santoku.profile")
 
 local fs = require("santoku.fs")
 
-<% push(server.init_worker) %>
+<% push(init_worker) %>
 local init_file = <% if showing() then
-  local path = err.checknil(env.searchpath(server.init_worker, fs.join(dist_dir, "lua_modules/share/lua/5.1/?.lua")))
+  local path = err.checknil(env.searchpath(init_worker, fs.join(dist_dir, "lua_modules/share/lua/5.1/?.lua")))
   return str.quote(str.stripprefix(path, dist_dir .. "/"))
 end %>
 fs.runfile(init_file)

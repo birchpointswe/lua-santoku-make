@@ -228,6 +228,7 @@ local function init (opts)
   local base_check_sh = "check.sh"
   local base_luacov_stats_file = "luacov.stats.out"
   local base_luacov_report_file = "luacov.report.out"
+  local base_lua_dir = "lua-5.1.5"
 
   local base_test_specs = opts.single and { opts.single } or get_files("test/spec")
 
@@ -258,7 +259,7 @@ local function init (opts)
     base_check_sh), test_dir)
 
   local build_all = amap(push(extend({},
-    base_bins, base_libs, base_deps),
+    base_bins, base_libs, base_deps, opts.wasm and { base_luarocks_cfg } or {}),
     base_rockspec, base_makefile), build_dir)
 
   if #base_libs > 0 then
@@ -310,7 +311,8 @@ local function init (opts)
   end
 
   local build_env = {
-    environment = "build"
+    environment = "build",
+    lua_modules = opts.wasm and absolute(build_dir(base_lua_modules)) or nil,
   }
 
   pushindex(test_env, _G)
@@ -323,42 +325,49 @@ local function init (opts)
 
   if opts.wasm then
 
-    local test_client_lua_dir = absolute(test_dir("lua-5.1.5"))
-    local test_client_lua_ok = test_client_lua_dir .. ".ok"
+    for dir, all, env in map(spread, ivals({
+      { test_dir, test_all, test_env },
+      { build_dir, build_all, build_env }
+    })) do
 
-    base_env.client_lua_dir = test_client_lua_dir
+      local client_lua_dir = absolute(dir(base_lua_dir))
+      local client_lua_ok = client_lua_dir .. ".ok"
 
-    insert(test_all, 1, test_client_lua_ok)
+      env.client_lua_dir = client_lua_dir
 
-    target({ test_client_lua_ok }, {}, function ()
-      mkdirp(test_dir())
-      return pushd(test_dir(), function ()
+      insert(all, 1, client_lua_ok)
 
-        if not exists("lua-5.1.5.tar.gz") then
-          execute({ "wget", "https://www.lua.org/ftp/lua-5.1.5.tar.gz" })
-        end
+      target({ client_lua_ok }, {}, function ()
+        mkdirp(dir())
+        return pushd(dir(), function ()
 
-        if exists("lua-5.1.5") then
-          execute({ "rm", "-rf", "lua-5.1.5" }) -- TODO: use fs.rm(x, { recurse = true })
-        end
+          if not exists("lua-5.1.5.tar.gz") then
+            execute({ "wget", "https://www.lua.org/ftp/lua-5.1.5.tar.gz" })
+          end
 
-        execute({ "tar", "xf", "lua-5.1.5.tar.gz" })
-        cd("lua-5.1.5")
-        execute({ "emmake", "sh", "-c",
-          "make generic CC=\"$CC\" LD=\"$LD\" AR=\"$AR rcu\"" ..
-          "  RANLIB=\"$RANLIB\" MYLDFLAGS=\"-sSINGLE_FILE -sEXIT_RUNTIME=1 -lnodefs.js -lnoderawfs.js\"" })
-        execute({ "make", "local" })
-        cd("bin")
-        execute({ "mv", "lua", "lua.js" })
-        execute({ "mv", "luac", "luac.js" })
-        writefile("lua", "#!/bin/sh\nnode \"$(dirname $0)/lua.js\" \"$@\"\n")
-        writefile("luac", "#!/bin/sh\nnode \"$(dirname $0)/luac.js\" \"$@\"\n")
-        execute({ "chmod", "+x", "lua" })
-        execute({ "chmod", "+x", "luac" })
-        touch(test_client_lua_ok)
+          if exists("lua-5.1.5") then
+            execute({ "rm", "-rf", "lua-5.1.5" }) -- TODO: use fs.rm(x, { recurse = true })
+          end
 
+          execute({ "tar", "xf", "lua-5.1.5.tar.gz" })
+          cd("lua-5.1.5")
+          execute({ "emmake", "sh", "-c",
+            "make generic CC=\"$CC\" LD=\"$LD\" AR=\"$AR rcu\"" ..
+            "  RANLIB=\"$RANLIB\" MYLDFLAGS=\"-sSINGLE_FILE -sEXIT_RUNTIME=1 -lnodefs.js -lnoderawfs.js\"" })
+          execute({ "make", "local" })
+          cd("bin")
+          execute({ "mv", "lua", "lua.js" })
+          execute({ "mv", "luac", "luac.js" })
+          writefile("lua", "#!/bin/sh\nnode \"$(dirname $0)/lua.js\" \"$@\"\n")
+          writefile("luac", "#!/bin/sh\nnode \"$(dirname $0)/luac.js\" \"$@\"\n")
+          execute({ "chmod", "+x", "lua" })
+          execute({ "chmod", "+x", "luac" })
+          touch(client_lua_ok)
+
+        end)
       end)
-    end)
+
+    end
 
   end
 
@@ -408,8 +417,8 @@ local function init (opts)
             flags = {
               opts.sanitize and "-fsanitize=address" or "",
               "-sASSERTIONS", "-sSINGLE_FILE", "-sALLOW_MEMORY_GROWTH",
-              "-I" .. join(base_env.client_lua_dir, "include"),
-              "-L" .. join(base_env.client_lua_dir, "lib"),
+              "-I" .. join(test_env.client_lua_dir, "include"),
+              "-L" .. join(test_env.client_lua_dir, "lib"),
               "-lnodefs.js", "-lnoderawfs.js", "-llua", "-lm",
               get(test_env, "test", "cflags") or "",
               get(test_env, "test", "ldflags") or "",
@@ -459,6 +468,11 @@ local function init (opts)
 
   add_templated_target_base64(test_dir(base_luarocks_cfg),
     <% return squote(to_base64(readfile("res/lib/luarocks.lua"))) %>, test_env) -- luacheck: ignore
+
+  if opts.wasm then
+    add_templated_target_base64(build_dir(base_luarocks_cfg),
+      <% return squote(to_base64(readfile("res/lib/luarocks.lua"))) %>, build_env) -- luacheck: ignore
+  end
 
   add_templated_target_base64(test_dir(base_luacheck_cfg),
     <% return squote(to_base64(readfile("res/lib/luacheck.lua"))) %>, test_env) -- luacheck: ignore
@@ -543,31 +557,26 @@ local function init (opts)
     and { "build-deps" }
     or { "test", "check", "build-deps" }
 
-  -- NOTE: install not supported in wasm mode
-  if not opts.wasm then
+  target({ "install" }, install_release_deps, function ()
+    return pushd(build_dir(), function ()
 
-    target({ "install" }, install_release_deps, function ()
-      return pushd(build_dir(), function ()
+      local vars = collect(map(bind(sformat, "%s=%s"), flatten(map(pairs, ivals({
+        get(build_env, "luarocks", "env_vars") or {},
+        get(build_env, "build", "luarocks", "env_vars") or {},
+        opts.wasm and get(build_env, "build", "wasm", "luarocks", "env_vars") or {},
+        not opts.wasm and get(build_env, "build", "native", "luarocks", "env_vars") or {}
+      })))))
 
-        local vars = collect(map(bind(sformat, "%s=%s"), flatten(map(pairs, ivals({
-          get(build_env, "luarocks", "env_vars") or {},
-          get(build_env, "build", "luarocks", "env_vars") or {},
-          opts.wasm and get(build_env, "build", "wasm", "luarocks", "env_vars") or {},
-          not opts.wasm and get(build_env, "build", "native", "luarocks", "env_vars") or {}
-        })))))
+      execute(extend({
+        "luarocks", "make", base_rockspec,
+        env = {
+          MAKEFLAGS = "-s",
+          LUAROCKS_CONFIG = opts.luarocks_config or (opts.wasm and base_luarocks_cfg) or nil
+        },
+      }, vars))
 
-        execute(extend({
-          "luarocks", "make", base_rockspec,
-          env = {
-            MAKEFLAGS = "-s",
-            LUAROCKS_CONFIG = opts.luarocks_config
-          },
-        }, vars))
-
-      end)
     end)
-
-  end
+  end)
 
   -- NOTE: release not supported in wasm mode
   if not opts.wasm and opts.config.env.public then
@@ -686,12 +695,12 @@ local function init (opts)
       build(assign({ "check" }, opts), opts.verbosity)
     end,
 
-    iterate = function ()
+    iterate = function (opts)
       opts = opts or {}
       build(assign({ "iterate" }, opts), opts.verbosity)
     end,
 
-    install = not opts.wasm and function (opts)
+    install = function (opts)
       opts = opts or {}
       build(assign({ "install" }, opts), opts.verbosity)
     end,

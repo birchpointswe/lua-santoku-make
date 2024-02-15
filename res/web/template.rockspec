@@ -13,8 +13,7 @@ source = { url = "" }
 
 dependencies = {
   <% return arr.concat(it.collect(it.map(str.quote, it.flatten(it.map(it.ivals, it.ivals({
-      environment ~= "test" and component == "server" and tbl.get(server or {}, "dependencies"),
-      environment == "test" and component == "server" and tbl.get(server or {}, "test", "spec_dependencies"))
+      environment ~= "test" and component == "server" and tbl.get(test or {}, "dependencies") or {},
     }))))), ",\n") %>
 }
 

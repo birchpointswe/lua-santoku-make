@@ -7,6 +7,7 @@
 %>
 
 local make = require("santoku.make")
+local bundle = require("santoku.bundle")
 
 local varg = require("santoku.varg")
 local tup = varg.tup
@@ -15,6 +16,8 @@ local reduce = varg.reduce
 
 local fs = require("santoku.fs")
 local pushd = fs.pushd
+local stripexts = fs.stripextensions
+local stripparts = fs.stripparts
 local cwd = fs.cwd
 local join = fs.join
 local mkdirp = fs.mkdirp
@@ -42,12 +45,13 @@ local extend = arr.extend
 local push = arr.push
 local concat = arr.concat
 
-local iter = require("santoku.iter")
-local find = iter.find
-local chain = iter.chain
-local ivals = iter.ivals
-local collect = iter.collect
-local filter = iter.filter
+local it = require("santoku.iter")
+local find = it.find
+local chain = it.chain
+local ivals = it.ivals
+local collect = it.collect
+local filter = it.filter
+local map = it.map
 
 local inherit = require("santoku.inherit")
 local pushindex = inherit.pushindex
@@ -64,10 +68,7 @@ local renderfile = tmpl.renderfile
 local compile = tmpl.compile
 local serialize_deps = tmpl.serialize_deps
 
--- local bundle = require("santoku.bundle")
-
 local str = require("santoku.string")
-local sinterp = str.interp
 local stripprefix = str.stripprefix
 local supper = string.upper
 local sformat = string.format
@@ -138,23 +139,39 @@ local function init (opts)
     return work_dir("main", "client", ...)
   end
 
+  local function client_dir_stripped (...)
+    return client_dir(vmap(function (fp)
+      return stripprefix(fp, "client/")
+    end, ...))
+  end
+
   local function test_client_dir (...)
     return work_dir("test", "client", ...)
   end
 
-  local function dist_dir_client (...)
-    return dist_dir("public", vmap(function  (fp)
-      fp = stripprefix(fp, "client/assets/")
-      fp = stripprefix(fp, "client/static/")
-      return fp
+  local function test_client_dir_stripped (...)
+    return test_client_dir(vmap(function (fp)
+      return stripprefix(fp, "client/")
     end, ...))
   end
 
+  local function dist_dir_client (...)
+    return dist_dir("public", ...)
+  end
+
   local function test_dist_dir_client (...)
+    return test_dist_dir("public",...)
+  end
+
+  local function dist_dir_client_stripped (...)
+    return dist_dir("public", vmap(function (fp)
+      return stripparts(fp, 2)
+    end, ...))
+  end
+
+  local function test_dist_dir_client_stripped (...)
     return test_dist_dir("public", vmap(function (fp)
-      fp = stripprefix(fp, "client/static/")
-      fp = stripprefix(fp, "client/assets/")
-      return fp
+      return stripparts(fp, 2)
     end, ...))
   end
 
@@ -187,7 +204,7 @@ local function init (opts)
   local function add_templated_target (dest, src, env)
     local action = get_action(src, opts.config)
     if action == "copy" then
-      return add_copied_target(dest, src, env)
+      return add_copied_target(dest, src)
     elseif action == "template" then
       target({ dest }, { src, opts.config_file }, function ()
         mkdirp(dirname(dest))
@@ -247,9 +264,7 @@ local function init (opts)
   local base_server_libs = get_files("server/lib")
   local base_server_deps = get_files("server/deps")
   local base_server_test_specs = get_files("server/test/spec")
-  local base_server_rockspec = sinterp("%s#(name)-server-%s#(version).rockspec", opts.config.env)
-  local base_server_makefile = "Makefile"
-  local base_server_lib_makefile = "lib/Makefile"
+  local base_server_run_sh = "run.sh"
   local base_server_nginx_cfg = "nginx.conf"
   local base_server_nginx_daemon_cfg = "nginx-daemon.conf"
   local base_server_init_test_lua = "init-test.lua"
@@ -257,9 +272,18 @@ local function init (opts)
   local base_server_luarocks_cfg = "luarocks.lua"
   local base_server_lua_modules = "lua_modules"
   local base_server_lua_modules_ok = "lua_modules.ok"
-  local base_server_run_sh = "run.sh"
 
   local base_client_static = get_files("client/static")
+  local base_client_assets = get_files("client/assets")
+  local base_client_deps = get_files("client/deps")
+  local base_client_libs = get_files("client/lib")
+  local base_client_bins = get_files("client/bin")
+  local base_client_res = get_files("client/res")
+  local base_client_lua_modules_ok = "lua_modules.ok"
+
+  local base_client_pages = collect(map(function (fp)
+    return stripparts(stripexts(fp) .. ".js", 2)
+  end, ivals(base_client_bins)))
 
   local base_env = {
     root_dir = cwd(),
@@ -308,30 +332,32 @@ local function init (opts)
   local client_env = {
     environment = "main",
     component = "client",
+    dist_dir = absolute(dist_dir()),
   }
 
   local test_client_env = {
     environment = "test",
     component = "client",
+    dist_dir = absolute(test_dist_dir()),
   }
 
   pushindex(server_env, _G)
-  pushindex(server_env, base_env)
-  pushindex(server_env, opts.config.env)
-  pushindex(server_daemon_env, server_env)
+  tbl.merge(server_env, base_env, opts.config.env.server)
+
+  pushindex(server_daemon_env, _G)
+  tbl.merge(server_daemon_env, server_env)
 
   pushindex(test_server_env, _G)
-  pushindex(test_server_env, base_env)
-  pushindex(test_server_env, opts.config.env)
-  pushindex(test_server_daemon_env, test_server_env)
+  tbl.merge(test_server_env, base_env, opts.config.env.server)
+
+  pushindex(test_server_daemon_env, _G)
+  tbl.merge(test_server_daemon_env, test_server_env)
 
   pushindex(client_env, _G)
-  pushindex(client_env, base_env)
-  pushindex(client_env, opts.config.env)
+  tbl.merge(client_env, base_env, opts.config.env.client)
 
   pushindex(test_client_env, _G)
-  pushindex(test_client_env, base_env)
-  pushindex(test_client_env, opts.config.env)
+  tbl.merge(test_client_env, base_env, opts.config.env.client)
 
   opts.config.env.variable_prefix =
     opts.config.env.variable_prefix or
@@ -340,28 +366,12 @@ local function init (opts)
   add_templated_target_base64(server_dir(base_server_run_sh),
     <% return squote(to_base64(readfile("res/web/run.sh"))) %>, server_env) -- luacheck: ignore
 
+  add_templated_target_base64(test_server_dir(base_server_run_sh),
+    <% return squote(to_base64(readfile("res/web/run.sh"))) %>, test_server_env) -- luacheck: ignore
+
   add_templated_target_base64(server_dir(base_server_nginx_cfg),
     <% return squote(to_base64(readfile("res/web/nginx.conf"))) %>, server_env, -- luacheck: ignore
     { server_dir(base_server_lua_modules_ok) })
-
-  add_templated_target_base64(server_dir(base_server_nginx_daemon_cfg),
-    <% return squote(to_base64(readfile("res/web/nginx.conf"))) %>, server_daemon_env, -- luacheck: ignore
-    { server_dir(base_server_lua_modules_ok) })
-
-  add_templated_target_base64(server_dir(base_server_rockspec),
-    <% return squote(to_base64(readfile("res/web/template.rockspec"))) %>, server_env) -- luacheck: ignore
-
-  add_templated_target_base64(server_dir(base_server_luarocks_cfg),
-    <% return squote(to_base64(readfile("res/web/luarocks.lua"))) %>, server_env) -- luacheck: ignore
-
-  add_templated_target_base64(server_dir(base_server_makefile),
-    <% return squote(to_base64(readfile("res/web/luarocks.mk"))) %>, server_env) -- luacheck: ignore
-
-  add_templated_target_base64(server_dir(base_server_lib_makefile),
-    <% return squote(to_base64(readfile("res/web/lib.mk"))) %>, server_env) -- luacheck: ignore
-
-  add_templated_target_base64(test_server_dir(base_server_run_sh),
-    <% return squote(to_base64(readfile("res/web/run.sh"))) %>, test_server_env) -- luacheck: ignore
 
   add_templated_target_base64(test_server_dir(base_server_nginx_cfg),
     <% return squote(to_base64(readfile("res/web/nginx.conf"))) %>, test_server_env, -- luacheck: ignore
@@ -369,29 +379,27 @@ local function init (opts)
       test_server_dir(base_server_init_test_lua),
       test_server_dir(base_server_init_worker_test_lua) })
 
+  add_templated_target_base64(server_dir(base_server_nginx_daemon_cfg),
+    <% return squote(to_base64(readfile("res/web/nginx.conf"))) %>, server_daemon_env, -- luacheck: ignore
+    { server_dir(base_server_lua_modules_ok) })
+
   add_templated_target_base64(test_server_dir(base_server_nginx_daemon_cfg),
     <% return squote(to_base64(readfile("res/web/nginx.conf"))) %>, test_server_daemon_env, -- luacheck: ignore
     { test_server_dir(base_server_lua_modules_ok),
       test_server_dir(base_server_init_test_lua),
       test_server_dir(base_server_init_worker_test_lua) })
 
+  add_templated_target_base64(server_dir(base_server_luarocks_cfg),
+    <% return squote(to_base64(readfile("res/web/luarocks.lua"))) %>, server_env) -- luacheck: ignore
+
+  add_templated_target_base64(test_server_dir(base_server_luarocks_cfg),
+    <% return squote(to_base64(readfile("res/web/luarocks.lua"))) %>, test_server_env) -- luacheck: ignore
+
   add_templated_target_base64(test_server_dir(base_server_init_test_lua),
     <% return squote(to_base64(readfile("res/web/init-test.lua"))) %>, test_server_env) -- luacheck: ignore
 
   add_templated_target_base64(test_server_dir(base_server_init_worker_test_lua),
     <% return squote(to_base64(readfile("res/web/init-worker-test.lua"))) %>, test_server_env) -- luacheck: ignore
-
-  add_templated_target_base64(test_server_dir(base_server_rockspec),
-    <% return squote(to_base64(readfile("res/web/template.rockspec"))) %>, test_server_env) -- luacheck: ignore
-
-  add_templated_target_base64(test_server_dir(base_server_luarocks_cfg),
-    <% return squote(to_base64(readfile("res/web/luarocks.lua"))) %>, test_server_env) -- luacheck: ignore
-
-  add_templated_target_base64(test_server_dir(base_server_makefile),
-    <% return squote(to_base64(readfile("res/web/luarocks.mk"))) %>, test_server_env) -- luacheck: ignore
-
-  add_templated_target_base64(test_server_dir(base_server_lib_makefile),
-    <% return squote(to_base64(readfile("res/web/lib.mk"))) %>, test_server_env) -- luacheck: ignore
 
   add_copied_target(
     dist_dir(base_server_run_sh),
@@ -466,15 +474,106 @@ local function init (opts)
     add_templated_target(test_server_dir_stripped(fp), fp, test_server_env)
   end
 
-  for fp in ivals(base_client_static) do
-    add_templated_target(client_dir(fp), fp, client_env)
-    add_copied_target(dist_dir_client(fp), client_dir(fp))
+  for ddir, ddir_stripped, cdir, cdir_stripped, env in map(spread, ivals({
+    { dist_dir_client, dist_dir_client_stripped, client_dir, client_dir_stripped, client_env },
+    { test_dist_dir_client, test_dist_dir_client_stripped, test_client_dir, test_client_dir_stripped, test_client_env }
+  })) do
+
+    for fp in ivals(base_client_assets) do
+      add_copied_target(ddir_stripped(fp), fp)
+    end
+
+    for fp in ivals(base_client_static) do
+      add_templated_target(cdir(fp), fp, env)
+      add_copied_target(ddir_stripped(fp), cdir(fp))
+    end
+
+    for fp in ivals(base_client_deps) do
+      add_copied_target(cdir_stripped(fp), fp)
+    end
+
+    for fp in ivals(base_client_libs) do
+      add_copied_target(cdir_stripped(fp), fp)
+    end
+
+    for fp in ivals(base_client_bins) do
+      add_copied_target(cdir_stripped(fp), fp)
+    end
+
+    for fp in ivals(base_client_res) do
+      add_copied_target(cdir_stripped(fp), fp)
+    end
+
+    for fp in ivals(base_client_pages) do
+      local pre = cdir("build", "default-wasm", "build", "bin", stripexts(fp)) .. ".lua"
+      local post = cdir("bundler-post", stripexts(fp))
+      target({ post }, { cdir(base_client_lua_modules_ok) }, function ()
+        bundle(pre, dirname(post), {
+          cc = "emcc",
+          ignores = { "debug" },
+          path = get_lua_path(cdir("build", "default-wasm", "build")),
+          cpath = get_lua_cpath(cdir("build", "default-wasm", "build")),
+          flags = extend({
+            "-sASSERTIONS", "-sSINGLE_FILE", "-sALLOW_MEMORY_GROWTH",
+            "-I" .. join(cdir("build", "default-wasm", "build", "lua-5.1.5"), "include"),
+            "-L" .. join(cdir("build", "default-wasm", "build", "lua-5.1.5"), "lib"),
+            "-llua", "-lm",
+            get(env, "cxxflags") or "",
+            get(env, "ldflags") or "",
+          }, it.reduce(function (a, k, v)
+            if it.find(function (pat)
+              return str.find(post, pat)
+            end, ivals(v)) then
+              arr.push(a, "--extern-pre-js", cdir("build", "default-wasm", "build", k))
+            end
+            return a
+          end, {}, it.pairs(get(env, "extern_pre_js") or {})), it.reduce(function (a, k, v)
+            if it.find(function (pat)
+              return str.find(post, pat)
+            end, ivals(v)) then
+              arr.push(a, "--pre-js", cdir("build", "default-wasm", "build", k))
+            end
+            return a;
+          end, {}, it.pairs(get(env, "pre_js") or {})))
+        })
+      end)
+      add_copied_target(ddir(fp), post)
+    end
+
+    target(
+      { cdir(base_client_lua_modules_ok) },
+      extend({ opts.config_file },
+        amap(extend({}, base_client_bins, base_client_libs, base_client_deps, base_client_res), cdir_stripped)),
+      function ()
+        local config_file = absolute(opts.config_file)
+        local config = {
+          type = "lib",
+          env = tbl.merge({
+            name = opts.config.env.name .. "-client",
+            version = opts.config.env.version,
+          }, env)
+        }
+        mkdirp(cdir())
+        return pushd(cdir(), function ()
+          require("santoku.make.project").init({
+            config_file = config_file,
+            config = config,
+            single = opts.single,
+            profile = opts.profile,
+            skip_coverage = opts.skip_coverage,
+            wasm = true,
+            skip_tests = true,
+          }).install()
+          local post_make = get(env, "client", "hooks", "post_make")
+          if post_make then
+            post_make(env)
+          end
+          touch(base_client_lua_modules_ok)
+        end)
+      end)
+
   end
 
-  for fp in ivals(base_client_static) do
-    add_templated_target(test_client_dir(fp), fp, test_client_env)
-    add_copied_target(test_dist_dir_client(fp), test_client_dir(fp))
-  end
 
   target(
     { server_dir(base_server_lua_modules_ok) },
@@ -486,14 +585,11 @@ local function init (opts)
 
       local config = {
         type = "lib",
-        env = {
+        env = tbl.assign({
           name = opts.config.env.name .. "-server",
           version = opts.config.env.version,
-          dependencies = opts.config.env.server.dependencies,
-        }
+        }, opts.config.env.server, false)
       }
-
-      pushindex(config, opts.config.env)
 
       return pushd(server_dir(), function ()
 
@@ -528,16 +624,11 @@ local function init (opts)
 
       local config = {
         type = "lib",
-        env = {
+        env = tbl.assign({
           name = opts.config.env.name .. "-server",
           version = opts.config.env.version,
-          dependencies = extend({},
-            opts.config.env.server.dependencies or {},
-            get(opts.config.env.server, "test", "dependencies") or {})
-        }
+        }, opts.config.env.server, false)
       }
-
-      pushindex(config, opts.config.env)
 
       return pushd(test_server_dir(), function ()
 
@@ -571,8 +662,14 @@ local function init (opts)
       dist_dir(base_server_run_sh),
       dist_dir(base_server_nginx_cfg),
       dist_dir(base_server_nginx_daemon_cfg),
-      server_dir(base_server_lua_modules_ok) },
-      amap(extend({}, base_client_static), dist_dir_client)), true)
+      server_dir(base_server_lua_modules_ok),
+      client_dir(base_client_lua_modules_ok) },
+      amap(extend({},
+        base_client_static, base_client_assets),
+      dist_dir_client_stripped),
+      amap(extend({},
+        base_client_pages),
+      dist_dir_client)), true)
 
   target(
     { "test-build" },
@@ -580,8 +677,14 @@ local function init (opts)
       test_dist_dir(base_server_run_sh),
       test_dist_dir(base_server_nginx_cfg),
       test_dist_dir(base_server_nginx_daemon_cfg),
-      test_server_dir(base_server_lua_modules_ok) },
-      amap(extend({}, base_client_static), test_dist_dir_client)), true)
+      test_server_dir(base_server_lua_modules_ok),
+      test_client_dir(base_client_lua_modules_ok) },
+      amap(extend({},
+        base_client_static, base_client_assets),
+      test_dist_dir_client_stripped),
+      amap(extend({},
+        base_client_pages),
+      test_dist_dir_client)), true)
 
   target(
     { "start" },
@@ -623,14 +726,11 @@ local function init (opts)
 
       local config = {
         type = "lib",
-        env = {
+        env = tbl.assign({
           name = opts.config.env.name .. "-server",
           version = opts.config.env.version,
-          dependencies = opts.config.env.server.dependencies
-        }
+        }, opts.config.env.server, false)
       }
-
-      pushindex(config, opts.config.env)
 
       return pushd(test_server_dir(), function ()
 
