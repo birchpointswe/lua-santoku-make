@@ -1,5 +1,7 @@
 # Now
 
+- Web: lib install with --wasm, then subsequent bundle step
+
 - Fix yield error in WASM tests
 - Debounce inotify events
 
@@ -9,7 +11,7 @@
     - Terser/minifier for HTML, JS, CSS
 
 - Web client (lua)
-    - Tests
+    - Tests, deps
     - Only build client lua, etc if client lua pages exist
     - Only build client sqlite if configured for a specific page
 
