@@ -286,6 +286,15 @@ local function init (opts)
     return stripparts(stripexts(fp) .. ".js", 2)
   end, ivals(base_client_bins)))
 
+  local base_client_public = extend({},
+    amap(extend({}, base_client_assets), function (fp)
+      return fs.stripparts(fp, 2)
+    end),
+    amap(extend({}, base_client_static), function (fp)
+      return fs.stripparts(fp, 2)
+    end),
+    base_client_pages)
+
   local base_env = {
     root_dir = cwd(),
     profile = opts.profile,
@@ -334,12 +343,14 @@ local function init (opts)
     environment = "main",
     component = "client",
     dist_dir = absolute(dist_dir()),
+    public_files = base_client_public,
   }
 
   local test_client_env = {
     environment = "test",
     component = "client",
     dist_dir = absolute(test_dist_dir()),
+    public_files = base_client_public,
   }
 
   pushindex(server_env, _G)
