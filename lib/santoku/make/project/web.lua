@@ -279,6 +279,7 @@ local function init (opts)
   local base_client_libs = get_files("client/lib")
   local base_client_bins = get_files("client/bin")
   local base_client_res = get_files("client/res")
+  local base_client_res_templated = get_files("client/res/templated")
   local base_client_lua_modules_ok = "lua_modules.ok"
 
   local base_client_pages = collect(map(function (fp)
@@ -504,6 +505,10 @@ local function init (opts)
       add_copied_target(cdir_stripped(fp), fp)
     end
 
+    for fp in ivals(base_client_res_templated) do
+      add_templated_target(cdir_stripped("build", "default-wasm", "build", fp), fp, env)
+    end
+
     for fp in ivals(base_client_pages) do
       local pre = cdir("build", "default-wasm", "build", "bin", stripexts(fp)) .. ".lua"
       local post = cdir("bundler-post", stripexts(fp))
@@ -543,6 +548,9 @@ local function init (opts)
     target(
       { cdir(base_client_lua_modules_ok) },
       extend({ opts.config_file },
+        amap(extend({}, base_client_res_templated), function (fp)
+          return cdir_stripped("build", "default-wasm", "build", fp)
+        end),
         amap(extend({}, base_client_bins, base_client_libs, base_client_deps, base_client_res), cdir_stripped)),
       function ()
         local config_file = absolute(opts.config_file)
@@ -564,7 +572,7 @@ local function init (opts)
             wasm = true,
             skip_tests = true,
           }).install()
-          local post_make = get(env, "client", "hooks", "post_make")
+          local post_make = get(env, "hooks", "post_make")
           if post_make then
             post_make(env)
           end
@@ -603,7 +611,7 @@ local function init (opts)
           skip_tests = true,
         }).install()
 
-        local post_make = get(server_env, "server", "hooks", "post_make")
+        local post_make = get(server_env, "hooks", "post_make")
 
         if post_make then
           post_make(server_env)
@@ -645,7 +653,7 @@ local function init (opts)
           lua_cpath = test_server_env.lua_cpath,
         }).install()
 
-        local post_make = get(test_server_env, "server", "hooks", "post_make")
+        local post_make = get(test_server_env, "hooks", "post_make")
 
         if post_make then
           post_make(test_server_env)

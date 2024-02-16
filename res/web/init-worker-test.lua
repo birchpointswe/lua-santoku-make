@@ -11,9 +11,8 @@ require("luacov")
 require("santoku.profile")
 <% pop() %>
 
-local fs = require("santoku.fs")
-
 <% push(init_worker) %>
+local fs = require("santoku.fs")
 local init_file = <% if showing() then
   local path = err.checknil(env.searchpath(init_worker, fs.join(dist_dir, "lua_modules/share/lua/5.1/?.lua")))
   return str.quote(str.stripprefix(path, dist_dir .. "/"))
