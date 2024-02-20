@@ -1,21 +1,15 @@
 # Now
 
-- Web: lib install with --wasm, then subsequent bundle step
+- Client terser/minifier
+- Client skip build if no env.client
+- Client tests
+- Client spa integrate service worker, sqlite db worker
+- Server skip build if no env.server, still allow iterate
 
 - Fix yield error in WASM tests
 - Debounce inotify events
 
 - Inject license and copyright
-
-- Web client (non-lua)
-    - Terser/minifier for HTML, JS, CSS
-
-- Web client (lua)
-    - Tests, deps
-    - Only build client lua, etc if client lua pages exist
-    - Only build client sqlite if configured for a specific page
-
-- Only build server if config.server ~= nil
 
 # Next
 
