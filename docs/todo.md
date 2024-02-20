@@ -4,6 +4,7 @@
 - Client skip build if no env.client
 - Client tests
 - Client spa integrate service worker, sqlite db worker
+- Client generate icons, etc. from SVGs
 - Server skip build if no env.server, still allow iterate
 
 - Fix yield error in WASM tests
