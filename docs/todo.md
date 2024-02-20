@@ -3,8 +3,10 @@
 - Client terser/minifier
 - Client skip build if no env.client
 - Client tests
+- Client spa generate icons, etc. from SVGs
 - Client spa integrate service worker, sqlite db worker
-- Client generate icons, etc. from SVGs
+- Client spa path-based routing
+
 - Server skip build if no env.server, still allow iterate
 
 - Fix yield error in WASM tests
