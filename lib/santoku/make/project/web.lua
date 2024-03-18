@@ -508,6 +508,9 @@ local function init (opts)
     { test_dist_dir_client, test_dist_dir_client_stripped, test_client_dir, test_client_dir_stripped, test_client_env }
   })) do
 
+    mkdirp(ddir())
+    mkdirp(cdir())
+
     add_templated_target_base64(fs.join(cwd(), cdir(base_client_wrap_events_js)),
       <% return squote(to_base64(readfile("res/web/wrap_events.js"))) %>, env) -- luacheck: ignore
 
