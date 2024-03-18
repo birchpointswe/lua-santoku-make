@@ -1,5 +1,8 @@
 # Now
 
+- struct stat doesn't have st_mtim property on mac, replace this with something
+  POSIX compliant if possible, if not use include guards
+
 - Client terser/minifier
 - Client skip build if no env.client
 - Client tests
