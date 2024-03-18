@@ -62,6 +62,7 @@ local bind = fun.bind
 local tbl = require("santoku.table")
 local get = tbl.get
 local assign = tbl.assign
+local merge = tbl.merge
 
 local tmpl = require("santoku.template")
 local renderfile = tmpl.renderfile
@@ -370,22 +371,22 @@ local function init (opts)
   }
 
   pushindex(server_env, _G)
-  tbl.merge(server_env, base_env, opts.config.env.server)
+  merge(server_env, base_env, opts.config.env.server)
 
   pushindex(server_daemon_env, _G)
-  tbl.merge(server_daemon_env, server_env)
+  merge(server_daemon_env, server_env)
 
   pushindex(test_server_env, _G)
-  tbl.merge(test_server_env, base_env, opts.config.env.server)
+  merge(test_server_env, base_env, opts.config.env.server)
 
   pushindex(test_server_daemon_env, _G)
-  tbl.merge(test_server_daemon_env, test_server_env)
+  merge(test_server_daemon_env, test_server_env)
 
   pushindex(client_env, _G)
-  tbl.merge(client_env, base_env, opts.config.env.client)
+  merge(client_env, base_env, opts.config.env.client)
 
   pushindex(test_client_env, _G)
-  tbl.merge(test_client_env, base_env, opts.config.env.client)
+  merge(test_client_env, base_env, opts.config.env.client)
 
   opts.config.env.variable_prefix =
     opts.config.env.variable_prefix or
@@ -611,7 +612,7 @@ local function init (opts)
         local config_file = absolute(opts.config_file)
         local config = {
           type = "lib",
-          env = tbl.merge({
+          env = merge({
             name = opts.config.env.name .. "-client",
             version = opts.config.env.version,
           }, env)
@@ -647,10 +648,10 @@ local function init (opts)
 
       local config = {
         type = "lib",
-        env = tbl.assign({
+        env = assign(opts.config.env.server, {
           name = opts.config.env.name .. "-server",
           version = opts.config.env.version,
-        }, opts.config.env.server, false)
+        })
       }
 
       return pushd(server_dir(), function ()
@@ -686,10 +687,10 @@ local function init (opts)
 
       local config = {
         type = "lib",
-        env = tbl.assign({
+        env = assign(opts.config.env.server, {
           name = opts.config.env.name .. "-server",
           version = opts.config.env.version,
-        }, opts.config.env.server, false)
+        })
       }
 
       return pushd(test_server_dir(), function ()
@@ -794,10 +795,10 @@ local function init (opts)
 
       local config = {
         type = "lib",
-        env = tbl.assign({
+        env = assign(opts.config.env.server, {
           name = opts.config.env.name .. "-server",
           version = opts.config.env.version,
-        }, opts.config.env.server, false)
+        })
       }
 
       return pushd(test_server_dir(), function ()
