@@ -76,12 +76,12 @@ local bundle = require("santoku.bundle")
 
 local str = require("santoku.string")
 local sinterp = str.interp
-local ssplit = str.split
-local supper = string.upper
-local sformat = string.format
-local smatch = string.match
-local gsub = string.gsub
-local ssub = string.sub
+local ssplits = str.splits
+local supper = str.upper
+local sformat = str.format
+local smatch = str.match
+local gsub = str.gsub
+local ssub = str.sub
 
 local env = require("santoku.env")
 local interpreter = env.interpreter
@@ -534,7 +534,6 @@ local function init (opts)
         execute(extend({
           "luarocks", "make", basename(base_rockspec),
           env = {
-            MAKEFLAGS = "-s",
             LUAROCKS_CONFIG = opts.luarocks_config or base_luarocks_cfg
           }
         }, vars))
@@ -570,7 +569,6 @@ local function init (opts)
       execute(extend({
         "luarocks", "make", base_rockspec,
         env = {
-          MAKEFLAGS = "-s",
           LUAROCKS_CONFIG = opts.luarocks_config or (opts.wasm and base_luarocks_cfg) or nil
         },
       }, vars))
@@ -672,7 +670,7 @@ local function init (opts)
     local dfile = fp .. ".d"
     if exists(dfile) then
       local chunks = map(ssub, map(function (str, s, e)
-        return ssplit(str, "%s*:%s*", false, s, e)
+        return ssplits(str, "%s*:%s*", false, s, e)
       end, lines(dfile)))
       target(chunks(), collect(chunks))
     end
