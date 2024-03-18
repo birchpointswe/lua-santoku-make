@@ -18,7 +18,7 @@ if type luacheck >/dev/null 2>/dev/null && [ -f luacheck.lua ]; then
 <% push(wasm) %>
   find lib bin bundler-pre/test/spec -maxdepth 0 2>/dev/null > luacheck.in.txt
   nl="$(wc -l luacheck.in.txt | cut -d' ' -f1)"
-  if [[ $nl -gt 0 ]]; then
+  if [ $nl -gt 0 ]; then
     xargs -a luacheck.in.txt luacheck --config luacheck.lua
   fi
   status_chk=$?
