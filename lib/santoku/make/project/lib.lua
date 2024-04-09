@@ -633,6 +633,17 @@ local function init (opts)
     end)
   end)
 
+  target({ "exec" }, { "test-deps" }, function (_, _, args)
+    return pushd(test_dir(), function ()
+      execute(arr.copy({
+        env = {
+          LUA_PATH = test_env.lua_path,
+          LUA_CPATH = test_env.lua_cpath,
+        }
+      }, args))
+    end)
+  end)
+
   target({ "iterate" }, {}, function ()
 
     tup(function (ok, ...)
@@ -706,6 +717,11 @@ local function init (opts)
     release = not opts.wasm and function (opts)
       opts = opts or {}
       build(assign({ "release" }, opts), opts.verbosity)
+    end,
+
+    exec = not opts.wasm and function (opts)
+      opts = opts or {}
+      build(assign({ "exec" }), opts.verbosity, opts)
     end,
 
   }
