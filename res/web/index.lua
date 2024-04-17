@@ -95,7 +95,7 @@ require("santoku.web.trace.index")("<% return app.trace_url %>", { name = "main"
     local old_classes = it.reduce(function (a, n)
       a[n] = true
       return a
-    end, {}, it.map(str.sub, str.match(view.el.className, "[^%s]+")))
+    end, {}, it.map(str.sub, str.matches(view.el.className, "[^%s]+")))
 
     view.observer = MutationObserver:new(function (_, mutations)
 
@@ -139,7 +139,7 @@ require("santoku.web.trace.index")("<% return app.trace_url %>", { name = "main"
         old_classes = it.reduce(function (a, n)
           a[n] = true
           return a
-        end, {}, it.map(str.sub, str.match(view.el.className or "", "[^%s]+")))
+        end, {}, it.map(str.sub, str.matches(view.el.className or "", "[^%s]+")))
 
         if fabs then
           M.style_fabs(view, true)
@@ -173,11 +173,11 @@ require("santoku.web.trace.index")("<% return app.trace_url %>", { name = "main"
 
       local el = next_view.e_fabs:item(i)
 
-      for c in it.map(str.sub, str.match(el.dataset.hide or "", "[^%s]+")) do
+      for c in it.map(str.sub, str.matches(el.dataset.hide or "", "[^%s]+")) do
         next_view.fab_observed_classes[c] = true
       end
 
-      for c in it.map(str.sub, str.match(el.dataset.show or "", "[^%s]+")) do
+      for c in it.map(str.sub, str.matches(el.dataset.show or "", "[^%s]+")) do
         next_view.fab_observed_classes[c] = true
       end
 
@@ -210,11 +210,11 @@ require("santoku.web.trace.index")("<% return app.trace_url %>", { name = "main"
 
       local el = next_view.e_snacks:item(i)
 
-      for c in it.map(str.sub, str.match(el.dataset.hide or "", "[^%s]+")) do
+      for c in it.map(str.sub, str.matches(el.dataset.hide or "", "[^%s]+")) do
         next_view.snack_observed_classes[c] = true
       end
 
-      for c in it.map(str.sub, str.match(el.dataset.show or "", "[^%s]+")) do
+      for c in it.map(str.sub, str.matches(el.dataset.show or "", "[^%s]+")) do
         next_view.snack_observed_classes[c] = true
       end
 
@@ -361,7 +361,7 @@ require("santoku.web.trace.index")("<% return app.trace_url %>", { name = "main"
 
   M.should_show = function (view, el)
 
-    local hides = it.collect(it.map(str.sub, str.match(el.dataset.hide or "", "[^%s]+")))
+    local hides = it.collect(it.map(str.sub, str.matches(el.dataset.hide or "", "[^%s]+")))
 
     for h in it.ivals(hides) do
       if view.el.classList:contains(h) then
@@ -369,7 +369,7 @@ require("santoku.web.trace.index")("<% return app.trace_url %>", { name = "main"
       end
     end
 
-    local shows = it.collect(it.map(str.sub, str.match(el.dataset.show or "", "[^%s]+")))
+    local shows = it.collect(it.map(str.sub, str.matches(el.dataset.show or "", "[^%s]+")))
 
     if #shows == 0 then
       return true
