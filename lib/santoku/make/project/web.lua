@@ -584,6 +584,7 @@ local function init (opts)
         return a
       end, {}, it.pairs(get(env, "rules") or {}))
       target({ post }, deps, function ()
+        mkdirp(cdir("build", "default-wasm", "build"))
         pushd(cdir("build", "default-wasm", "build"), function ()
           bundle(pre, dirname(post), {
             cc = "emcc",
@@ -657,6 +658,7 @@ local function init (opts)
         })
       }
 
+      mkdirp(server_dir())
       return pushd(server_dir(), function ()
 
         require("santoku.make.project").init({
@@ -696,6 +698,7 @@ local function init (opts)
         })
       }
 
+      mkdirp(test_server_dir())
       return pushd(test_server_dir(), function ()
 
         require("santoku.make.project").init({
@@ -762,6 +765,7 @@ local function init (opts)
     { "start" },
     { "build" },
     function (_, _, background)
+      mkdirp(dist_dir())
       return pushd(dist_dir(), function ()
         execute({
           "sh", "run.sh",
@@ -776,6 +780,7 @@ local function init (opts)
     { "test-start" },
     { "test-build" },
     function (_, _, background)
+      mkdirp(test_dist_dir())
       return pushd(test_dist_dir(), function ()
         execute({
           "sh", "run.sh",
@@ -804,6 +809,7 @@ local function init (opts)
         })
       }
 
+      mkdirp(test_server_dir())
       return pushd(test_server_dir(), function ()
 
         local lib = require("santoku.make.project").init({

@@ -557,6 +557,7 @@ local function init (opts)
     or { "test", "check", "build-deps" }
 
   target({ "install" }, install_release_deps, function ()
+    mkdirp(build_dir())
     return pushd(build_dir(), function ()
 
       local vars = collect(map(bind(sformat, "%s=%s"), flatten(map(pairs, ivals({
@@ -592,6 +593,7 @@ local function init (opts)
     end
 
     target({ "release" }, install_release_deps, function ()
+      mkdirp(build_dir())
       return pushd(build_dir(), function ()
 
         tup(function (ok, ...)
@@ -622,18 +624,21 @@ local function init (opts)
   end
 
   target({ "test" }, { "test-deps" }, function ()
+    mkdirp(test_dir())
     return pushd(test_dir(), function ()
       execute({ "sh", "run.sh" })
     end)
   end)
 
   target({ "check" }, { "test-deps" }, function ()
+    mkdirp(test_dir())
     return pushd(test_dir(), function ()
       execute({ "sh", "check.sh" })
     end)
   end)
 
   target({ "exec" }, { "test-deps" }, function (_, _, args)
+    mkdirp(test_dir())
     return pushd(test_dir(), function ()
       execute(arr.copy({
         env = {
