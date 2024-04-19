@@ -5,14 +5,13 @@
   str = require("santoku.string")
 %>
 
-<% push(app.trace) %>
-require("santoku.web.trace.index")("<% return app.trace_url %>", { name = "main" }, function ()
-<% pop() %>
+local js = require("santoku.web.js")
+
+local function run ()
 
   local err = require("santoku.error")
   local error = err.error
 
-  local js = require("santoku.web.js")
   local str = require("santoku.string")
   local it = require("santoku.iter")
   local arr = require("santoku.array")
@@ -1369,6 +1368,12 @@ require("santoku.web.trace.index")("<% return app.trace_url %>", { name = "main"
 
   M.forward("home")
 
-<% push(app.trace) %>
-end)
-<% pop() %>
+end
+
+local trace = js.URLSearchParams:new(js.window.location):get("trace")
+
+if trace then
+  return require("santoku.web.trace.index")(trace, { name = "main" }, run)
+else
+  return run()
+end
