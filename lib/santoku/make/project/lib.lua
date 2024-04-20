@@ -685,8 +685,8 @@ local function init (opts)
   for fp in ivals(targets) do
     local dfile = fp .. ".d"
     if exists(dfile) then
-      local chunks = map(ssub, map(function (str, s, e)
-        return ssplits(str, "%s*:%s*", false, s, e)
+      local chunks = map(ssub, map(function (line)
+        return ssplits(line, "%s*:%s*", false)
       end, lines(dfile)))
       target(chunks(), collect(chunks))
     end
