@@ -202,13 +202,6 @@ local function init (opts)
     end)
   end
 
-  local function add_copied_target_base64 (dest, data)
-    target({ dest }, {}, function ()
-      mkdirp(dirname(dest))
-      writefile(dest, from_base64(data))
-    end)
-  end
-
   local function add_templated_target (dest, src, env)
     local action = get_action(src, opts.config)
     if action == "copy" then
@@ -289,19 +282,10 @@ local function init (opts)
   local base_client_res = get_files("client/res")
   local base_client_res_templated = get_files("client/res/templated")
   local base_client_lua_modules_ok = "lua_modules.ok"
-  local base_client_wrap_events_js = "wrap_events.js"
-  local base_client_spa_index_lua = "spa_index.lua"
-  local base_client_spa_index_html = "spa_index.html"
-
-  local base_client_spa = fs.exists("client/spa") and collect(fs.dirs("client/spa")) or {}
 
   local base_client_pages = collect(map(function (fp)
     return stripparts(stripexts(fp) .. ".js", 2)
   end, ivals(base_client_bins)))
-
-  extend(base_client_pages, it.collect(it.map(function (d)
-    return stripparts(d, 2) .. ".js"
-  end, it.ivals(base_client_spa))))
 
   local base_client_public = extend({},
     amap(extend({}, base_client_assets), function (fp)
@@ -311,6 +295,21 @@ local function init (opts)
       return fs.stripparts(fp, 2)
     end),
     base_client_pages)
+
+  local function wrap_require (env)
+    env = env or {}
+    return function (mod)
+      local oldpath = package.path
+      local oldcpath = package.cpath
+      package.path = env.lua_path or ""
+      package.cpath = env.lua_cpath or ""
+      return varg.tup(function (...)
+        package.path = oldpath
+        package.cpath = oldcpath
+        return ...
+      end, require(mod))
+    end
+  end
 
   local base_env = {
     root_dir = cwd(),
@@ -361,6 +360,8 @@ local function init (opts)
     component = "client",
     dist_dir = absolute(dist_dir()),
     public_files = base_client_public,
+    lua_path = get_lua_path(client_dir("build", "default-wasm", "build")),
+    lua_cpath = get_lua_cpath(client_dir("build", "default-wasm", "build")),
   }
 
   local test_client_env = {
@@ -368,7 +369,14 @@ local function init (opts)
     component = "client",
     dist_dir = absolute(test_dist_dir()),
     public_files = base_client_public,
+    lua_path = get_lua_path(test_client_dir("build", "default-wasm", "build")),
+    lua_cpath = get_lua_cpath(test_client_dir("build", "default-wasm", "build")),
   }
+
+  -- TODO: Expose both require_client and require_server to both client and
+  -- server builds
+  client_env.require_client = wrap_require(client_env)
+  test_client_env.require_client = wrap_require(test_client_env)
 
   pushindex(server_env, _G)
   merge(server_env, base_env, opts.config.env.server)
@@ -504,15 +512,14 @@ local function init (opts)
   end
 
   for ddir, ddir_stripped, cdir, cdir_stripped, env in map(spread, ivals({
-    { dist_dir_client, dist_dir_client_stripped, client_dir, client_dir_stripped, client_env },
-    { test_dist_dir_client, test_dist_dir_client_stripped, test_client_dir, test_client_dir_stripped, test_client_env }
+    { dist_dir_client, dist_dir_client_stripped, client_dir,
+      client_dir_stripped, client_env },
+    { test_dist_dir_client, test_dist_dir_client_stripped,
+      test_client_dir, test_client_dir_stripped, test_client_env }
   })) do
 
     mkdirp(ddir())
     mkdirp(cdir())
-
-    add_templated_target_base64(fs.join(cwd(), cdir(base_client_wrap_events_js)),
-      <% return squote(to_base64(readfile("res/web/wrap_events.js"))) %>, env) -- luacheck: ignore
 
     for fp in ivals(base_client_assets) do
       add_copied_target(ddir_stripped(fp), fp)
@@ -543,28 +550,6 @@ local function init (opts)
       add_templated_target(cdir_stripped("build", "default-wasm", "build", fp), fp, env)
     end
 
-    if fs.exists("client/spa") then
-      add_copied_target_base64(fs.join(cwd(), cdir(base_client_spa_index_lua)),
-        <% return squote(to_base64(readfile("res/web/index.lua"))) %>) -- luacheck: ignore
-      add_copied_target_base64(fs.join(cwd(), cdir(base_client_spa_index_html)),
-        <% return squote(to_base64(readfile("res/web/index.html"))) %>) -- luacheck: ignore
-      for fp in fs.files("client/spa", true) do
-        add_templated_target(cdir_stripped(fp), fp, env)
-      end
-      for fp in fs.dirs("client/spa") do
-        add_templated_target(cdir(fp) .. ".html", fs.join(cwd(), cdir(base_client_spa_index_html)), pushindex({
-          spa_name = fs.basename(fp)
-        }, env))
-        add_copied_target(ddir_stripped(fp) .. ".html", cdir(fp) .. ".html")
-        add_templated_target(
-          fs.join(cwd(), cdir("build", "default-wasm", "build", "bin", stripparts(stripexts(fp), 2))) .. ".lua",
-          fs.join(cwd(), cdir(base_client_spa_index_lua)),
-          pushindex({
-            spa_name = fs.basename(fp)
-          }, env))
-      end
-    end
-
     for fp in ivals(base_client_pages) do
       local pre = absolute(cdir("build", "default-wasm", "build", "bin", stripexts(fp)) .. ".lua")
       local post = absolute(cdir("bundler-post", stripexts(fp)))
@@ -572,10 +557,6 @@ local function init (opts)
       local wd = cwd()
       local extra_flags = it.reduce(function (a, k, v)
         if str.find(post, k) then
-          if v.wrap_events then
-            arr.push(deps, fs.join(wd, cdir("wrap_events.js")))
-            arr.push(a, "--pre-js", fs.join(wd, cdir("wrap_events.js")))
-          end
           if v.cxxflags then
             arr.extend(a, v.cxxflags)
           end
@@ -740,10 +721,7 @@ local function init (opts)
       dist_dir_client_stripped),
       amap(extend({},
         base_client_pages),
-      dist_dir_client),
-      it.collect(it.flatten(it.map(function (d)
-        return it.map(dist_dir_client_stripped, it.ivals({ d .. ".html", d .. ".js" }))
-      end, it.ivals(base_client_spa))))), true)
+      dist_dir_client)), true)
 
   target(
     { "test-build" },
@@ -758,10 +736,7 @@ local function init (opts)
       test_dist_dir_client_stripped),
       amap(extend({},
         base_client_pages),
-      test_dist_dir_client),
-      it.collect(it.flatten(it.map(function (d)
-        return it.map(test_dist_dir_client_stripped, it.ivals({ d .. ".html", d .. ".js" }))
-      end, it.ivals(base_client_spa))))), true)
+      test_dist_dir_client)), true)
 
   target(
     { "start" },
