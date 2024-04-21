@@ -414,19 +414,19 @@ local function init (opts)
             },
             path = get_lua_path(test_dir()),
             cpath = get_lua_cpath(test_dir()),
-            flags = {
+            flags = extend({
               opts.sanitize and "-fsanitize=address" or "",
               "-sASSERTIONS", "-sSINGLE_FILE", "-sALLOW_MEMORY_GROWTH",
               "-I" .. join(test_env.client_lua_dir, "include"),
               "-L" .. join(test_env.client_lua_dir, "lib"),
               "-lnodefs.js", "-lnoderawfs.js", "-llua", "-lm",
-              get(test_env, "test", "cflags") or "",
-              get(test_env, "test", "ldflags") or "",
-              get(test_env, "test", "wasm", "cflags") or "",
-              get(test_env, "test", "wasm", "ldflags") or "",
-              get(test_env, "test", "sanitize", "wasm", "cflags") or "",
-              get(test_env, "test", "sanitize", "wasm", "ldflags") or "",
-            }
+            },
+            get(test_env, "test", "cflags") or {},
+            get(test_env, "test", "ldflags") or {},
+            get(test_env, "test", "wasm", "cflags") or {},
+            get(test_env, "test", "wasm", "ldflags") or {},
+            get(test_env, "test", "sanitize", "wasm", "cflags") or {},
+            get(test_env, "test", "sanitize", "wasm", "ldflags") or {})
           })
         end)
     end
@@ -577,6 +577,27 @@ local function init (opts)
     end)
   end)
 
+  target({ "install-deps" }, install_release_deps, function ()
+    mkdirp(build_dir())
+    return pushd(build_dir(), function ()
+
+      local vars = collect(map(bind(sformat, "%s=%s"), flatten(map(pairs, ivals({
+        get(build_env, "luarocks", "env_vars") or {},
+        get(build_env, "build", "luarocks", "env_vars") or {},
+        opts.wasm and get(build_env, "build", "wasm", "luarocks", "env_vars") or {},
+        not opts.wasm and get(build_env, "build", "native", "luarocks", "env_vars") or {}
+      })))))
+
+      execute(extend({
+        "luarocks", "make", "--deps-only", base_rockspec,
+        env = {
+          LUAROCKS_CONFIG = opts.luarocks_config or (opts.wasm and base_luarocks_cfg) or nil
+        },
+      }, vars))
+
+    end)
+  end)
+
   -- NOTE: release not supported in wasm mode
   if not opts.wasm and opts.config.env.public then
 
@@ -717,6 +738,11 @@ local function init (opts)
     install = function (opts)
       opts = opts or {}
       build(assign({ "install" }, opts), opts.verbosity)
+    end,
+
+    install_deps = function (opts)
+      opts = opts or {}
+      build(assign({ "install-deps" }, opts), opts.verbosity)
     end,
 
     release = not opts.wasm and function (opts)

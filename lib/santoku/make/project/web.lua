@@ -202,12 +202,13 @@ local function init (opts)
     end)
   end
 
-  local function add_templated_target (dest, src, env)
+  local function add_templated_target (dest, src, env, extra_srcs)
+    extra_srcs = extra_srcs or {}
     local action = get_action(src, opts.config)
     if action == "copy" then
-      return add_copied_target(dest, src)
+      return add_copied_target(dest, extend({ src }, extra_srcs))
     elseif action == "template" then
-      target({ dest }, { src, opts.config_file }, function ()
+      target({ dest }, extend({ src, opts.config_file }, extra_srcs), function ()
         mkdirp(dirname(dest))
         local t, ds = renderfile(src, env)
         writefile(dest, t)
@@ -282,6 +283,7 @@ local function init (opts)
   local base_client_res = get_files("client/res")
   local base_client_res_templated = get_files("client/res/templated")
   local base_client_lua_modules_ok = "lua_modules.ok"
+  local base_client_lua_modules_deps_ok = "lua_modules.deps.ok"
 
   local base_client_pages = collect(map(function (fp)
     return stripparts(stripexts(fp) .. ".js", 2)
@@ -547,7 +549,8 @@ local function init (opts)
     end
 
     for fp in ivals(base_client_res_templated) do
-      add_templated_target(cdir_stripped("build", "default-wasm", "build", fp), fp, env)
+      add_templated_target(cdir_stripped("build", "default-wasm", "build", fp), fp, env,
+        { cdir(base_client_lua_modules_deps_ok) })
     end
 
     for fp in ivals(base_client_pages) do
@@ -579,14 +582,45 @@ local function init (opts)
               "-I" .. join(wd, cdir("build", "default-wasm", "build", "lua-5.1.5"), "include"),
               "-L" .. join(wd, cdir("build", "default-wasm", "build", "lua-5.1.5"), "lib"),
               "-llua", "-lm",
-              get(env, "cxxflags") or "",
-              get(env, "ldflags") or "",
-            }, extra_flags)
+            }, extra_flags,
+              get(env, "cxxflags") or {},
+              get(env, "ldflags") or {})
           })
         end)
       end)
       add_copied_target(ddir(fp), post)
     end
+
+    target(
+      { cdir(base_client_lua_modules_deps_ok) },
+      { opts.config_file },
+      function ()
+        local config_file = absolute(opts.config_file)
+        local config = {
+          type = "lib",
+          env = merge({
+            name = opts.config.env.name .. "-client",
+            version = opts.config.env.version,
+          }, env)
+        }
+        mkdirp(cdir())
+        return pushd(cdir(), function ()
+          require("santoku.make.project").init({
+            config_file = config_file,
+            config = config,
+            single = opts.single,
+            profile = opts.profile,
+            skip_coverage = opts.skip_coverage,
+            wasm = true,
+            skip_tests = true,
+          }).install_deps()
+          local post_make = get(env, "hooks", "post_make")
+          if post_make then
+            post_make(env)
+          end
+          touch(base_client_lua_modules_deps_ok)
+        end)
+      end)
 
     target(
       { cdir(base_client_lua_modules_ok) },
