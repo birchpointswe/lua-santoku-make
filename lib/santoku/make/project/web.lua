@@ -6,13 +6,18 @@
   to_base64 = basexx.to_base64
 %>
 
-local make = require("santoku.make")
+local basexx = require("basexx")
 local bundle = require("santoku.bundle")
-
+local env = require("santoku.env")
+local fun = require("santoku.functional")
+local inherit = require("santoku.inherit")
+local make = require("santoku.make")
+local sys = require("santoku.system")
+local tbl = require("santoku.table")
+local tmpl = require("santoku.template")
 local varg = require("santoku.varg")
-local tup = varg.tup
-local vmap = varg.map
-local reduce = varg.reduce
+local vdt = require("santoku.validate")
+local err = require("santoku.error")
 
 local fs = require("santoku.fs")
 local pushd = fs.pushd
@@ -30,13 +35,6 @@ local exists = fs.exists
 local touch = fs.touch
 local files = fs.files
 
-local validate = require("santoku.validate")
-local istable = validate.istable
-local isstring = validate.isstring
-
-local sys = require("santoku.system")
-local execute = sys.execute
-
 local arr = require("santoku.array")
 local amap = arr.map
 local spread = arr.spread
@@ -53,22 +51,6 @@ local collect = it.collect
 local filter = it.filter
 local map = it.map
 
-local inherit = require("santoku.inherit")
-local pushindex = inherit.pushindex
-
-local fun = require("santoku.functional")
-local bind = fun.bind
-
-local tbl = require("santoku.table")
-local get = tbl.get
-local assign = tbl.assign
-local merge = tbl.merge
-
-local tmpl = require("santoku.template")
-local renderfile = tmpl.renderfile
-local compile = tmpl.compile
-local serialize_deps = tmpl.serialize_deps
-
 local str = require("santoku.string")
 local stripprefix = str.stripprefix
 local supper = string.upper
@@ -76,19 +58,8 @@ local sformat = string.format
 local smatch = string.match
 local gsub = string.gsub
 
-local env = require("santoku.env")
-local interpreter = env.interpreter
-
-local basexx = require("basexx")
-local from_base64 = basexx.from_base64
-
-local err = require("santoku.error")
-local pcall = err.pcall
-local assert = err.assert
-local error = err.error
-
 local function create ()
-  error("create web not yet implemented")
+  err.error("create web not yet implemented")
 end
 
 local function init (opts)
@@ -97,8 +68,8 @@ local function init (opts)
   local target = submake.target
   local build = submake.build
 
-  assert(istable(opts))
-  assert(istable(opts.config))
+  err.assert(vdt.istable(opts))
+  err.assert(vdt.istable(opts.config))
 
   opts.single = opts.single and opts.single:gsub("^[^/]+/", "") or nil
   opts.skip_coverage = opts.profile or opts.skip_coverage or nil
@@ -117,7 +88,7 @@ local function init (opts)
   end
 
   local function server_dir_stripped (...)
-    return server_dir(vmap(function (fp)
+    return server_dir(varg.map(function (fp)
       return stripprefix(fp, "server/")
     end, ...))
   end
@@ -131,7 +102,7 @@ local function init (opts)
   end
 
   local function test_server_dir_stripped (...)
-    return test_server_dir(vmap(function (fp)
+    return test_server_dir(varg.map(function (fp)
       return stripprefix(fp, "server/")
     end, ...))
   end
@@ -141,7 +112,7 @@ local function init (opts)
   end
 
   local function client_dir_stripped (...)
-    return client_dir(vmap(function (fp)
+    return client_dir(varg.map(function (fp)
       return stripprefix(fp, "client/")
     end, ...))
   end
@@ -151,7 +122,7 @@ local function init (opts)
   end
 
   local function test_client_dir_stripped (...)
-    return test_client_dir(vmap(function (fp)
+    return test_client_dir(varg.map(function (fp)
       return stripprefix(fp, "client/")
     end, ...))
   end
@@ -165,13 +136,13 @@ local function init (opts)
   end
 
   local function dist_dir_client_stripped (...)
-    return dist_dir("public", vmap(function (fp)
+    return dist_dir("public", varg.map(function (fp)
       return stripparts(fp, 2)
     end, ...))
   end
 
   local function test_dist_dir_client_stripped (...)
-    return test_dist_dir("public", vmap(function (fp)
+    return test_dist_dir("public", varg.map(function (fp)
       return stripparts(fp, 2)
     end, ...))
   end
@@ -180,12 +151,12 @@ local function init (opts)
   -- nil instead of erroring. It would allow omitting the {} below
   local function get_action (fp)
     local ext = extension(fp)
-    local match_fp = bind(smatch, fp)
+    local match_fp = fun.bind(smatch, fp)
     if (opts.exts and not aincludes(opts.exts, ext)) or
-        find(match_fp, ivals(get(opts, "rules", "exclude") or {}))
+        find(match_fp, ivals(tbl.get(opts, "rules", "exclude") or {}))
     then
       return "ignore"
-    elseif find(match_fp, ivals(get(opts, "rules", "copy") or {}))
+    elseif find(match_fp, ivals(tbl.get(opts, "rules", "copy") or {}))
     then
       return "copy"
     else
@@ -210,9 +181,9 @@ local function init (opts)
     elseif action == "template" then
       target({ dest }, extend({ src, opts.config_file }, extra_srcs), function ()
         mkdirp(dirname(dest))
-        local t, ds = renderfile(src, env)
+        local t, ds = tmpl.renderfile(src, env)
         writefile(dest, t)
-        writefile(dest .. ".d", serialize_deps(src, dest, ds))
+        writefile(dest .. ".d", tmpl.serialize_deps(src, dest, ds))
       end)
     end
   end
@@ -221,9 +192,9 @@ local function init (opts)
     extra_srcs = extra_srcs or {}
     target({ dest }, extend({ opts.config_file }, extra_srcs), function ()
       mkdirp(dirname(dest))
-      local t, ds = compile(from_base64(data))(env)
+      local t, ds = tmpl.compile(basexx.from_base64(data))(env)
       writefile(dest, t)
-      writefile(dest .. ".d", serialize_deps(dest, opts.config_file, ds))
+      writefile(dest .. ".d", tmpl.serialize_deps(dest, opts.config_file, ds))
     end)
   end
 
@@ -235,7 +206,7 @@ local function init (opts)
     wd = wd or cwd()
     local pfx = prefix and join(prefix, "lua_modules") or "lua_modules"
     local ver = get_lua_version()
-    return concat(reduce(function (t, n)
+    return concat(varg.reduce(function (t, n)
       return push(t, join(wd, pfx, sformat(n, ver)))
     end, {}, ...), ";")
   end
@@ -318,7 +289,7 @@ local function init (opts)
     profile = opts.profile,
     skip_coverage = opts.skip_coverage,
     var = function (n)
-      assert(isstring(n))
+      err.assert(vdt.isstring(n))
       return concat({ opts.config.env.variable_prefix, "_", n })
     end
   }
@@ -347,7 +318,7 @@ local function init (opts)
     openresty_dir = absolute(opts.openresty_dir),
     luarocks_cfg = absolute(test_server_dir(base_server_luarocks_cfg)),
     luacov_config = absolute(test_server_dir("build", "default", "test", "luacov.lua")),
-    lua = interpreter()[1],
+    lua = env.interpreter()[1],
     lua_path = get_lua_path(test_dist_dir()),
     lua_cpath = get_lua_cpath(test_dist_dir()),
     lua_modules = absolute(test_dist_dir(base_server_lua_modules)),
@@ -380,23 +351,23 @@ local function init (opts)
   client_env.require_client = wrap_require(client_env)
   test_client_env.require_client = wrap_require(test_client_env)
 
-  pushindex(server_env, _G)
-  merge(server_env, base_env, opts.config.env.server)
+  tbl.merge(server_env, base_env, opts.config.env.server)
+  inherit.pushindex(server_env, _G, true)
 
-  pushindex(server_daemon_env, _G)
-  merge(server_daemon_env, server_env)
+  tbl.merge(server_daemon_env, server_env)
+  inherit.pushindex(server_daemon_env, _G, true)
 
-  pushindex(test_server_env, _G)
-  merge(test_server_env, base_env, opts.config.env.server)
+  tbl.merge(test_server_env, base_env, opts.config.env.server)
+  inherit.pushindex(test_server_env, _G, true)
 
-  pushindex(test_server_daemon_env, _G)
-  merge(test_server_daemon_env, test_server_env)
+  tbl.merge(test_server_daemon_env, test_server_env)
+  inherit.pushindex(test_server_daemon_env, _G, true)
 
-  pushindex(client_env, _G)
-  merge(client_env, base_env, opts.config.env.client)
+  tbl.merge(client_env, base_env, opts.config.env.client)
+  inherit.pushindex(client_env, _G, true)
 
-  pushindex(test_client_env, _G)
-  merge(test_client_env, base_env, opts.config.env.client)
+  tbl.merge(test_client_env, base_env, opts.config.env.client)
+  inherit.pushindex(test_client_env, _G, true)
 
   opts.config.env.variable_prefix =
     opts.config.env.variable_prefix or
@@ -568,7 +539,7 @@ local function init (opts)
           end
         end
         return a
-      end, {}, it.pairs(get(env, "rules") or {}))
+      end, {}, it.pairs(tbl.get(env, "rules") or {}))
       target({ post }, deps, function ()
         mkdirp(cdir("build", "default-wasm", "build"))
         pushd(cdir("build", "default-wasm", "build"), function ()
@@ -583,8 +554,8 @@ local function init (opts)
               "-L" .. join(wd, cdir("build", "default-wasm", "build", "lua-5.1.5"), "lib"),
               "-llua", "-lm",
             }, extra_flags,
-              get(env, "cxxflags") or {},
-              get(env, "ldflags") or {})
+              tbl.get(env, "cxxflags") or {},
+              tbl.get(env, "ldflags") or {})
           })
         end)
       end)
@@ -598,7 +569,7 @@ local function init (opts)
         local config_file = absolute(opts.config_file)
         local config = {
           type = "lib",
-          env = merge({
+          env = tbl.merge({
             name = opts.config.env.name .. "-client",
             version = opts.config.env.version,
           }, env)
@@ -614,7 +585,7 @@ local function init (opts)
             wasm = true,
             skip_tests = true,
           }).install_deps()
-          local post_make = get(env, "hooks", "post_make")
+          local post_make = tbl.get(env, "hooks", "post_make")
           if post_make then
             post_make(env)
           end
@@ -633,7 +604,7 @@ local function init (opts)
         local config_file = absolute(opts.config_file)
         local config = {
           type = "lib",
-          env = merge({
+          env = tbl.merge({
             name = opts.config.env.name .. "-client",
             version = opts.config.env.version,
           }, env)
@@ -649,7 +620,7 @@ local function init (opts)
             wasm = true,
             skip_tests = true,
           }).install()
-          local post_make = get(env, "hooks", "post_make")
+          local post_make = tbl.get(env, "hooks", "post_make")
           if post_make then
             post_make(env)
           end
@@ -669,7 +640,7 @@ local function init (opts)
 
       local config = {
         type = "lib",
-        env = assign(opts.config.env.server, {
+        env = tbl.assign(opts.config.env.server, {
           name = opts.config.env.name .. "-server",
           version = opts.config.env.version,
         })
@@ -688,7 +659,7 @@ local function init (opts)
           skip_tests = true,
         }).install()
 
-        local post_make = get(server_env, "hooks", "post_make")
+        local post_make = tbl.get(server_env, "hooks", "post_make")
 
         if post_make then
           post_make(server_env)
@@ -709,7 +680,7 @@ local function init (opts)
 
       local config = {
         type = "lib",
-        env = assign(opts.config.env.server, {
+        env = tbl.assign(opts.config.env.server, {
           name = opts.config.env.name .. "-server",
           version = opts.config.env.version,
         })
@@ -731,7 +702,7 @@ local function init (opts)
           lua_cpath = test_server_env.lua_cpath,
         }).install()
 
-        local post_make = get(test_server_env, "hooks", "post_make")
+        local post_make = tbl.get(test_server_env, "hooks", "post_make")
 
         if post_make then
           post_make(test_server_env)
@@ -778,7 +749,7 @@ local function init (opts)
     function (_, _, background)
       mkdirp(dist_dir())
       return pushd(dist_dir(), function ()
-        execute({
+        sys.execute({
           "sh", "run.sh",
           env = {
             [base_env.var("BACKGROUND")] = (background or opts.background) and "1" or "0"
@@ -793,7 +764,7 @@ local function init (opts)
     function (_, _, background)
       mkdirp(test_dist_dir())
       return pushd(test_dist_dir(), function ()
-        execute({
+        sys.execute({
           "sh", "run.sh",
           env = {
             [base_env.var("BACKGROUND")] = (background or opts.background) and "1" or "0"
@@ -814,7 +785,7 @@ local function init (opts)
 
       local config = {
         type = "lib",
-        env = assign(opts.config.env.server, {
+        env = tbl.assign(opts.config.env.server, {
           name = opts.config.env.name .. "-server",
           version = opts.config.env.version,
         })
@@ -848,25 +819,25 @@ local function init (opts)
 
   target({ "iterate" }, {}, function (_, _)
 
-    tup(function (ok, ...)
+    varg.tup(function (ok, ...)
 
       if not ok then
-        error("inotify not found", ...)
+        err.error("inotify not found", ...)
       end
 
-    end, pcall(execute, { "sh", "-c", "type inotifywait >/dev/null 2>/dev/null" }))
+    end, err.pcall(sys.execute, { "sh", "-c", "type inotifywait >/dev/null 2>/dev/null" }))
 
     while true do
 
-      tup(function (ok, ...)
+      varg.tup(function (ok, ...)
 
         if not ok then
           print(...)
         end
 
-      end, pcall(build, { "test" }, opts.verbosity, true))
+      end, err.pcall(build, { "test" }, opts.verbosity, true))
 
-      execute({
+      sys.execute({
         "inotifywait", "-qr",
         "-e", "close_write", "-e", "modify",
         "-e", "move", "-e", "create", "-e", "delete",
@@ -883,7 +854,7 @@ local function init (opts)
     mkdirp(dist_dir())
     return pushd(dist_dir(), function ()
       if exists("server.pid") then
-        execute({ "kill", smatch(readfile("server.pid"), "(%d+)") })
+        sys.execute({ "kill", smatch(readfile("server.pid"), "(%d+)") })
       end
     end)
   end)
@@ -892,7 +863,7 @@ local function init (opts)
     mkdirp(test_dist_dir())
     return pushd(test_dist_dir(), function ()
       if exists("server.pid") then
-        execute({ "kill", smatch(readfile("server.pid"), "(%d+)") })
+        sys.execute({ "kill", smatch(readfile("server.pid"), "(%d+)") })
       end
     end)
   end)
@@ -903,27 +874,27 @@ local function init (opts)
 
     test = function (opts)
       opts = opts or {}
-      build(assign({ "test" }, opts), opts.verbosity)
+      build(tbl.assign({ "test" }, opts), opts.verbosity)
     end,
 
     iterate = function (opts)
       opts = opts or {}
-      build(assign({ "iterate" }, opts), opts.verbosity)
+      build(tbl.assign({ "iterate" }, opts), opts.verbosity)
     end,
 
     build = function (opts)
       opts = opts or {}
-      build(assign({ opts.test and "test-build" or "build" }, opts), opts.verbosity)
+      build(tbl.assign({ opts.test and "test-build" or "build" }, opts), opts.verbosity)
     end,
 
     start = function (opts)
       opts = opts or {}
-      build(assign({ opts.test and "test-start" or "start" }, opts), opts.verbosity)
+      build(tbl.assign({ opts.test and "test-start" or "start" }, opts), opts.verbosity)
     end,
 
     stop = function (opts)
       opts = opts or {}
-      build(assign({ "stop", "test-stop" }, opts), opts.verbosity)
+      build(tbl.assign({ "stop", "test-stop" }, opts), opts.verbosity)
     end,
 
   }

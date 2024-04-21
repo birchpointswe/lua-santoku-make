@@ -6,37 +6,19 @@
   to_base64 = basexx.to_base64
 %>
 
-local make = require("santoku.make")
-
-local varg = require("santoku.varg")
-local tup = varg.tup
-local reduce = varg.reduce
-
+local basexx = require("basexx")
+local bundle = require("santoku.bundle")
+local env = require("santoku.env")
 local fs = require("santoku.fs")
-local cd = fs.cd
-local pushd = fs.pushd
-local cwd = fs.cwd
-local join = fs.join
-local mkdirp = fs.mkdirp
-local dirname = fs.dirname
-local writefile = fs.writefile
-local stripextension = fs.stripextension
-local readfile = fs.readfile
-local rm = fs.rm
-local extension = fs.extension
-local absolute = fs.absolute
-local exists = fs.exists
-local touch = fs.touch
-local files = fs.files
-local lines = fs.lines
-local basename = fs.basename
-
-local validate = require("santoku.validate")
-local istable = validate.istable
-local isstring = validate.isstring
-
+local fun = require("santoku.functional")
+local inherit = require("santoku.inherit")
+local make = require("santoku.make")
 local sys = require("santoku.system")
-local execute = sys.execute
+local tbl = require("santoku.table")
+local tmpl = require("santoku.template")
+local varg = require("santoku.varg")
+local vdt = require("santoku.validate")
+local err = require("santoku.error")
 
 local arr = require("santoku.array")
 local amap = arr.map
@@ -56,24 +38,6 @@ local collect = iter.collect
 local filter = iter.filter
 local flatten = iter.flatten
 
-local inherit = require("santoku.inherit")
-local pushindex = inherit.pushindex
-
-local fun = require("santoku.functional")
-local bind = fun.bind
-
-local tbl = require("santoku.table")
-local get = tbl.get
-local assign = tbl.assign
-local insert = table.insert
-
-local tmpl = require("santoku.template")
-local renderfile = tmpl.renderfile
-local compile = tmpl.compile
-local serialize_deps = tmpl.serialize_deps
-
-local bundle = require("santoku.bundle")
-
 local str = require("santoku.string")
 local sinterp = str.interp
 local ssplits = str.splits
@@ -83,20 +47,8 @@ local smatch = str.match
 local gsub = str.gsub
 local ssub = str.sub
 
-local env = require("santoku.env")
-local interpreter = env.interpreter
-local var = env.var
-
-local basexx = require("basexx")
-local from_base64 = basexx.from_base64
-
-local err = require("santoku.error")
-local pcall = err.pcall
-local assert = err.assert
-local error = err.error
-
 local function create ()
-  error("create lib not yet implemented")
+  err.error("create lib not yet implemented")
 end
 
 local function init (opts)
@@ -106,16 +58,16 @@ local function init (opts)
   local build = submake.build
   local targets = submake.targets
 
-  assert(istable(opts))
-  assert(istable(opts.config))
+  err.assert(vdt.istable(opts))
+  err.assert(vdt.istable(opts.config))
 
   opts.skip_coverage = opts.profile or opts.skip_coverage or nil
 
   local function work_dir (...)
     if opts.wasm then
-      return join(opts.dir, opts.env .. "-wasm", ...)
+      return fs.join(opts.dir, opts.env .. "-wasm", ...)
     else
-      return join(opts.dir, opts.env, ...)
+      return fs.join(opts.dir, opts.env, ...)
     end
   end
 
@@ -130,13 +82,13 @@ local function init (opts)
   -- TODO: It would be nice if santoku ivals returned an empty iterator for
   -- nil instead of erroring. It would allow omitting the {} below
   local function get_action (fp)
-    local ext = extension(fp)
-    local match_fp = bind(smatch, fp)
+    local ext = fs.extension(fp)
+    local match_fp = fun.bind(smatch, fp)
     if (opts.exts and not aincludes(opts.config.exts or {}, ext)) or
-        find(match_fp, ivals(get(opts.config, "rules", "exclude") or {}))
+        find(match_fp, ivals(tbl.get(opts.config, "rules", "exclude") or {}))
     then
       return "ignore"
-    elseif find(match_fp, ivals(get(opts.config, "rules", "copy") or {}))
+    elseif find(match_fp, ivals(tbl.get(opts.config, "rules", "copy") or {}))
     then
       return "copy"
     else
@@ -147,8 +99,8 @@ local function init (opts)
   -- TODO: use fs.copy
   local function add_copied_target (dest, src)
     target({ dest }, { src }, function ()
-      mkdirp(dirname(dest))
-      writefile(dest, readfile(src))
+      fs.mkdirp(fs.dirname(dest))
+      fs.writefile(dest, fs.readfile(src))
     end)
   end
 
@@ -158,20 +110,20 @@ local function init (opts)
       return add_copied_target(dest, src, env)
     elseif action == "template" then
       target({ dest }, { src, opts.config_file }, function ()
-        mkdirp(dirname(dest))
-        local t, ds = renderfile(src, env)
-        writefile(dest, t)
-        writefile(dest .. ".d", serialize_deps(src, dest, ds))
+        fs.mkdirp(fs.dirname(dest))
+        local t, ds = tmpl.renderfile(src, env)
+        fs.writefile(dest, t)
+        fs.writefile(dest .. ".d", tmpl.serialize_deps(src, dest, ds))
       end)
     end
   end
 
   local function add_templated_target_base64 (dest, data, env)
     target({ dest }, { opts.config_file }, function ()
-      mkdirp(dirname(dest))
-      local t, ds = compile(from_base64(data))(env)
-      writefile(dest, t)
-      writefile(dest .. ".d", serialize_deps(dest, opts.config_file, ds))
+      fs.mkdirp(fs.dirname(dest))
+      local t, ds = tmpl.compile(basexx.from_base64(data))(env)
+      fs.writefile(dest, t)
+      fs.writefile(dest .. ".d", tmpl.serialize_deps(dest, opts.config_file, ds))
     end)
   end
 
@@ -180,11 +132,11 @@ local function init (opts)
   end
 
   local function get_require_paths (prefix, ...)
-    local pfx = prefix and join(prefix, "lua_modules") or "lua_modules"
+    local pfx = prefix and fs.join(prefix, "lua_modules") or "lua_modules"
     local ver = get_lua_version()
-    local cwd = cwd()
-    return concat(reduce(function (t, n)
-      return push(t, join(cwd, pfx, sformat(n, ver)))
+    local cwd = fs.cwd()
+    return concat(varg.reduce(function (t, n)
+      return push(t, fs.join(cwd, pfx, sformat(n, ver)))
     end, {}, ...), ";")
   end
 
@@ -203,12 +155,12 @@ local function init (opts)
   end
 
   local function get_files (dir)
-    if not exists(dir) then
+    if not fs.exists(dir) then
       return {}
     end
     return collect(filter(function (fp)
       return get_action(fp) ~= "ignore"
-    end, files(dir, true)))
+    end, fs.files(dir, true)))
   end
 
   local base_bins = get_files("bin")
@@ -240,7 +192,7 @@ local function init (opts)
     base_test_deps, base_test_res)
 
   if opts.wasm then
-    extend(test_all_base, collect(map(stripextension, ivals(base_test_specs))))
+    extend(test_all_base, collect(map(fs.stripextension, ivals(base_test_specs))))
   else
     extend(test_all_base, base_test_specs)
   end
@@ -284,22 +236,22 @@ local function init (opts)
     single = opts.single,
     bins = base_bins,
     libs = base_libs,
-    root_dir = cwd(),
+    root_dir = fs.cwd(),
     var = function (n)
-      assert(isstring(n))
+      err.assert(vdt.isstring(n))
       return concat({ opts.config.env.variable_prefix, "_", n })
     end
   }
 
   local test_env = {
     environment = "test",
-    lua = opts.lua or interpreter()[1],
+    lua = opts.lua or env.interpreter()[1],
     lua_path = opts.lua_path or get_lua_path(test_dir()),
     lua_cpath = opts.lua_cpath or get_lua_cpath(test_dir()),
-    lua_modules = absolute(test_dir(base_lua_modules)),
-    luarocks_config = absolute(test_dir(base_luarocks_cfg)),
-    luacov_stats_file = absolute(test_dir(base_luacov_stats_file)),
-    luacov_report_file = absolute(test_dir(base_luacov_report_file))
+    lua_modules = fs.absolute(test_dir(base_lua_modules)),
+    luarocks_config = fs.absolute(test_dir(base_luarocks_cfg)),
+    luacov_stats_file = fs.absolute(test_dir(base_luacov_stats_file)),
+    luacov_report_file = fs.absolute(test_dir(base_luacov_report_file))
   }
 
   if opts.lua_path_extra then
@@ -312,16 +264,14 @@ local function init (opts)
 
   local build_env = {
     environment = "build",
-    lua_modules = opts.wasm and absolute(build_dir(base_lua_modules)) or nil,
+    lua_modules = opts.wasm and fs.absolute(build_dir(base_lua_modules)) or nil,
   }
 
-  pushindex(test_env, _G)
-  pushindex(test_env, base_env)
-  pushindex(test_env, opts.config.env)
+  tbl.merge(test_env, opts.config.env, base_env)
+  inherit.pushindex(test_env, _G, true)
 
-  pushindex(build_env, _G)
-  pushindex(build_env, base_env)
-  pushindex(build_env, opts.config.env)
+  tbl.merge(build_env, opts.config.env, base_env)
+  inherit.pushindex(build_env, _G, true)
 
   if opts.wasm then
 
@@ -330,39 +280,39 @@ local function init (opts)
       { build_dir, build_all, build_env }
     })) do
 
-      local client_lua_dir = absolute(dir(base_lua_dir))
+      local client_lua_dir = fs.absolute(dir(base_lua_dir))
       local client_lua_ok = client_lua_dir .. ".ok"
 
       env.client_lua_dir = client_lua_dir
 
-      insert(all, 1, client_lua_ok)
+      tbl.insert(all, 1, client_lua_ok)
 
       target({ client_lua_ok }, {}, function ()
-        mkdirp(dir())
-        return pushd(dir(), function ()
+        fs.mkdirp(dir())
+        return fs.pushd(dir(), function ()
 
-          if not exists("lua-5.1.5.tar.gz") then
-            execute({ "wget", "https://www.lua.org/ftp/lua-5.1.5.tar.gz" })
+          if not fs.exists("lua-5.1.5.tar.gz") then
+            sys.execute({ "wget", "https://www.lua.org/ftp/lua-5.1.5.tar.gz" })
           end
 
-          if exists("lua-5.1.5") then
-            execute({ "rm", "-rf", "lua-5.1.5" }) -- TODO: use fs.rm(x, { recurse = true })
+          if fs.exists("lua-5.1.5") then
+            sys.execute({ "rm", "-rf", "lua-5.1.5" }) -- TODO: use fs.rm(x, { recurse = true })
           end
 
-          execute({ "tar", "xf", "lua-5.1.5.tar.gz" })
-          cd("lua-5.1.5")
-          execute({ "emmake", "sh", "-c",
+          sys.execute({ "tar", "xf", "lua-5.1.5.tar.gz" })
+          fs.cd("lua-5.1.5")
+          sys.execute({ "emmake", "sh", "-c",
             "make generic CC=\"$CC\" LD=\"$LD\" AR=\"$AR rcu\"" ..
             "  RANLIB=\"$RANLIB\" MYLDFLAGS=\"-sSINGLE_FILE -sEXIT_RUNTIME=1 -lnodefs.js -lnoderawfs.js\"" })
-          execute({ "make", "local" })
-          cd("bin")
-          execute({ "mv", "lua", "lua.js" })
-          execute({ "mv", "luac", "luac.js" })
-          writefile("lua", "#!/bin/sh\nnode \"$(dirname $0)/lua.js\" \"$@\"\n")
-          writefile("luac", "#!/bin/sh\nnode \"$(dirname $0)/luac.js\" \"$@\"\n")
-          execute({ "chmod", "+x", "lua" })
-          execute({ "chmod", "+x", "luac" })
-          touch(client_lua_ok)
+          sys.execute({ "make", "local" })
+          fs.cd("bin")
+          sys.execute({ "mv", "lua", "lua.js" })
+          sys.execute({ "mv", "luac", "luac.js" })
+          fs.writefile("lua", "#!/bin/sh\nnode \"$(dirname $0)/lua.js\" \"$@\"\n")
+          fs.writefile("luac", "#!/bin/sh\nnode \"$(dirname $0)/luac.js\" \"$@\"\n")
+          sys.execute({ "chmod", "+x", "lua" })
+          sys.execute({ "chmod", "+x", "luac" })
+          fs.touch(client_lua_ok)
 
         end)
       end)
@@ -396,11 +346,11 @@ local function init (opts)
     end
 
     for fp in ivals(base_test_specs) do
-      target({ test_dir("bundler-post", stripextension(fp)) },
+      target({ test_dir("bundler-post", fs.stripextension(fp)) },
         push(extend({ test_dir("bundler-pre", fp) },
           test_cfgs), test_dir(base_lua_modules_ok)),
         function ()
-          bundle(test_dir("bundler-pre", fp), test_dir("bundler-post", dirname(fp)), {
+          bundle(test_dir("bundler-pre", fp), test_dir("bundler-post", fs.dirname(fp)), {
             cc = "emcc",
             mods = extend({},
               opts.skip_coverage and {} or { "luacov", "luacov.hook", "luacov.tick" },
@@ -410,30 +360,30 @@ local function init (opts)
               { base_env.var("WASM"), "1" },
               { base_env.var("PROFILE"), opts.profile and "1" or "" },
               { base_env.var("SANITIZE"), opts.sanitize and "1" or "" },
-              { "LUACOV_CONFIG", absolute(test_dir(base_luacov_cfg)) }
+              { "LUACOV_CONFIG", fs.absolute(test_dir(base_luacov_cfg)) }
             },
             path = get_lua_path(test_dir()),
             cpath = get_lua_cpath(test_dir()),
             flags = extend({
               opts.sanitize and "-fsanitize=address" or "",
               "-sASSERTIONS", "-sSINGLE_FILE", "-sALLOW_MEMORY_GROWTH",
-              "-I" .. join(test_env.client_lua_dir, "include"),
-              "-L" .. join(test_env.client_lua_dir, "lib"),
+              "-I" .. fs.join(test_env.client_lua_dir, "include"),
+              "-L" .. fs.join(test_env.client_lua_dir, "lib"),
               "-lnodefs.js", "-lnoderawfs.js", "-llua", "-lm",
             },
-            get(test_env, "test", "cflags") or {},
-            get(test_env, "test", "ldflags") or {},
-            get(test_env, "test", "wasm", "cflags") or {},
-            get(test_env, "test", "wasm", "ldflags") or {},
-            get(test_env, "test", "sanitize", "wasm", "cflags") or {},
-            get(test_env, "test", "sanitize", "wasm", "ldflags") or {})
+            tbl.get(test_env, "test", "cflags") or {},
+            tbl.get(test_env, "test", "ldflags") or {},
+            tbl.get(test_env, "test", "wasm", "cflags") or {},
+            tbl.get(test_env, "test", "wasm", "ldflags") or {},
+            tbl.get(test_env, "test", "sanitize", "wasm", "cflags") or {},
+            tbl.get(test_env, "test", "sanitize", "wasm", "ldflags") or {})
           })
         end)
     end
 
     for fp in ivals(base_test_specs) do
-      add_copied_target(test_dir(stripextension(fp)),
-        test_dir("bundler-post", stripextension(fp)), test_env)
+      add_copied_target(test_dir(fs.stripextension(fp)),
+        test_dir("bundler-post", fs.stripextension(fp)), test_env)
     end
 
   end
@@ -491,14 +441,14 @@ local function init (opts)
     "skip_coverage", "lua", "lua_path_extra", "lua_cpath_extra"
   }) do
     local fp = work_dir(flag .. ".flag")
-    mkdirp(dirname(fp))
+    fs.mkdirp(fs.dirname(fp))
     local strval = tostring(opts[flag])
-    if not exists(fp) then
-      writefile(fp, strval)
+    if not fs.exists(fp) then
+      fs.writefile(fp, strval)
     else
-      local val = readfile(fp)
+      local val = fs.readfile(fp)
       if val ~= strval then
-        writefile(fp, strval)
+        fs.writefile(fp, strval)
       end
     end
   end
@@ -519,32 +469,32 @@ local function init (opts)
       test_dir(base_luarocks_cfg),
       work_dir("sanitize.flag")),
     function ()
-      mkdirp(test_dir())
-      return pushd(test_dir(), function ()
+      fs.mkdirp(test_dir())
+      return fs.pushd(test_dir(), function ()
 
         -- TODO: It would be nice if santoku ivals returned an empty iterator
         -- for nil instead of erroring. It would allow omitting the {} below
-        local vars = collect(map(bind(sformat, "%s=%s"), flatten(map(pairs, ivals({
-          get(test_env, "luarocks", "env_vars") or {},
-          get(test_env, "test", "luarocks", "env_vars") or {},
-          opts.wasm and get(test_env, "test", "wasm", "luarocks", "env_vars") or {},
-          not opts.wasm and get(test_env, "test", "native", "luarocks", "env_vars") or {},
+        local vars = collect(map(fun.bind(sformat, "%s=%s"), flatten(map(pairs, ivals({
+          tbl.get(test_env, "luarocks", "env_vars") or {},
+          tbl.get(test_env, "test", "luarocks", "env_vars") or {},
+          opts.wasm and tbl.get(test_env, "test", "wasm", "luarocks", "env_vars") or {},
+          not opts.wasm and tbl.get(test_env, "test", "native", "luarocks", "env_vars") or {},
         })))))
 
-        execute(extend({
-          "luarocks", "make", basename(base_rockspec),
+        sys.execute(extend({
+          "luarocks", "make", fs.basename(base_rockspec),
           env = {
             LUAROCKS_CONFIG = opts.luarocks_config or base_luarocks_cfg
           }
         }, vars))
 
-        local post_make = get(test_env, "test", "hooks", "post_make")
+        local post_make = tbl.get(test_env, "test", "hooks", "post_make")
 
         if post_make then
           post_make(test_env)
         end
 
-        touch(base_lua_modules_ok)
+        fs.touch(base_lua_modules_ok)
 
       end)
     end)
@@ -557,17 +507,17 @@ local function init (opts)
     or { "test", "check", "build-deps" }
 
   target({ "install" }, install_release_deps, function ()
-    mkdirp(build_dir())
-    return pushd(build_dir(), function ()
+    fs.mkdirp(build_dir())
+    return fs.pushd(build_dir(), function ()
 
-      local vars = collect(map(bind(sformat, "%s=%s"), flatten(map(pairs, ivals({
-        get(build_env, "luarocks", "env_vars") or {},
-        get(build_env, "build", "luarocks", "env_vars") or {},
-        opts.wasm and get(build_env, "build", "wasm", "luarocks", "env_vars") or {},
-        not opts.wasm and get(build_env, "build", "native", "luarocks", "env_vars") or {}
+      local vars = collect(map(fun.bind(sformat, "%s=%s"), flatten(map(pairs, ivals({
+        tbl.get(build_env, "luarocks", "env_vars") or {},
+        tbl.get(build_env, "build", "luarocks", "env_vars") or {},
+        opts.wasm and tbl.get(build_env, "build", "wasm", "luarocks", "env_vars") or {},
+        not opts.wasm and tbl.get(build_env, "build", "native", "luarocks", "env_vars") or {}
       })))))
 
-      execute(extend({
+      sys.execute(extend({
         "luarocks", "make", base_rockspec,
         env = {
           LUAROCKS_CONFIG = opts.luarocks_config or (opts.wasm and base_luarocks_cfg) or nil
@@ -578,17 +528,17 @@ local function init (opts)
   end)
 
   target({ "install-deps" }, install_release_deps, function ()
-    mkdirp(build_dir())
-    return pushd(build_dir(), function ()
+    fs.mkdirp(build_dir())
+    return fs.pushd(build_dir(), function ()
 
-      local vars = collect(map(bind(sformat, "%s=%s"), flatten(map(pairs, ivals({
-        get(build_env, "luarocks", "env_vars") or {},
-        get(build_env, "build", "luarocks", "env_vars") or {},
-        opts.wasm and get(build_env, "build", "wasm", "luarocks", "env_vars") or {},
-        not opts.wasm and get(build_env, "build", "native", "luarocks", "env_vars") or {}
+      local vars = collect(map(fun.bind(sformat, "%s=%s"), flatten(map(pairs, ivals({
+        tbl.get(build_env, "luarocks", "env_vars") or {},
+        tbl.get(build_env, "build", "luarocks", "env_vars") or {},
+        opts.wasm and tbl.get(build_env, "build", "wasm", "luarocks", "env_vars") or {},
+        not opts.wasm and tbl.get(build_env, "build", "native", "luarocks", "env_vars") or {}
       })))))
 
-      execute(extend({
+      sys.execute(extend({
         "luarocks", "make", "--deps-only", base_rockspec,
         env = {
           LUAROCKS_CONFIG = opts.luarocks_config or (opts.wasm and base_luarocks_cfg) or nil
@@ -614,30 +564,30 @@ local function init (opts)
     end
 
     target({ "release" }, install_release_deps, function ()
-      mkdirp(build_dir())
-      return pushd(build_dir(), function ()
+      fs.mkdirp(build_dir())
+      return fs.pushd(build_dir(), function ()
 
-        tup(function (ok, ...)
+        varg.tup(function (ok, ...)
           if not ok then
-            error("Commit your changes first", ...)
+            err.error("Commit your changes first", ...)
           end
-        end, pcall(execute, { "git", "diff", "--quiet" }))
+        end, err.pcall(sys.execute, { "git", "diff", "--quiet" }))
 
-        local api_key = opts.luarocks_api_key or var("LUAROCKS_API_KEY")
+        local api_key = opts.luarocks_api_key or env.var("LUAROCKS_API_KEY")
 
-        if exists(release_tarball) then
-          rm(release_tarball)
+        if fs.exists(release_tarball) then
+          fs.rm(release_tarball)
         end
 
-        execute({ "git", "tag", opts.config.env.version })
-        execute({ "git", "push", "--tags" })
-        execute({ "git", "push" })
-        execute({
+        sys.execute({ "git", "tag", opts.config.env.version })
+        sys.execute({ "git", "push", "--tags" })
+        sys.execute({ "git", "push" })
+        sys.execute({
           "tar", "--dereference", "--transform", sformat("s#^#%s/#", release_tarball_dir),
           "-czvf", release_tarball, spread(release_tarball_contents) })
-        execute({ "gh", "release", "create", "--generate-notes",
+        sys.execute({ "gh", "release", "create", "--generate-notes",
           opts.config.env.version, release_tarball, base_rockspec })
-        execute({ "luarocks", "upload", "--skip-pack", "--api-key", api_key, base_rockspec })
+        sys.execute({ "luarocks", "upload", "--skip-pack", "--api-key", api_key, base_rockspec })
 
       end)
     end)
@@ -645,23 +595,23 @@ local function init (opts)
   end
 
   target({ "test" }, { "test-deps" }, function ()
-    mkdirp(test_dir())
-    return pushd(test_dir(), function ()
-      execute({ "sh", "run.sh" })
+    fs.mkdirp(test_dir())
+    return fs.pushd(test_dir(), function ()
+      sys.execute({ "sh", "run.sh" })
     end)
   end)
 
   target({ "check" }, { "test-deps" }, function ()
-    mkdirp(test_dir())
-    return pushd(test_dir(), function ()
-      execute({ "sh", "check.sh" })
+    fs.mkdirp(test_dir())
+    return fs.pushd(test_dir(), function ()
+      sys.execute({ "sh", "check.sh" })
     end)
   end)
 
   target({ "exec" }, { "test-deps" }, function (_, _, args)
-    mkdirp(test_dir())
-    return pushd(test_dir(), function ()
-      execute(arr.copy({
+    fs.mkdirp(test_dir())
+    return fs.pushd(test_dir(), function ()
+      sys.execute(arr.copy({
         env = {
           LUA_PATH = test_env.lua_path,
           LUA_CPATH = test_env.lua_cpath,
@@ -672,31 +622,31 @@ local function init (opts)
 
   target({ "iterate" }, {}, function ()
 
-    tup(function (ok, ...)
+    varg.tup(function (ok, ...)
 
       if not ok then
-        error("inotify not found", ...)
+        err.error("inotify not found", ...)
       end
 
-    end, pcall(execute, { "sh", "-c", "type inotifywait >/dev/null 2>/dev/null" }))
+    end, err.pcall(sys.execute, { "sh", "-c", "type inotifywait >/dev/null 2>/dev/null" }))
 
     while true do
 
-      tup(function (ok, ...)
+      varg.tup(function (ok, ...)
 
         if not ok then
           print(...)
         end
 
-      end, pcall(build, { "test", "check" }, opts.verbosity))
+      end, err.pcall(build, { "test", "check" }, opts.verbosity))
 
-      execute({
+      sys.execute({
         "inotifywait", "-qr",
         "-e", "close_write", "-e", "modify",
         "-e", "move", "-e", "create", "-e", "delete",
         spread(collect(filter(function (fp)
-          return exists(fp)
-        end, chain(files("."), ivals({ "lib", "bin", "test", "res" })))))
+          return fs.exists(fp)
+        end, chain(fs.files("."), ivals({ "lib", "bin", "test", "res" })))))
       })
 
     end
@@ -705,10 +655,10 @@ local function init (opts)
 
   for fp in ivals(targets) do
     local dfile = fp .. ".d"
-    if exists(dfile) then
+    if fs.exists(dfile) then
       local chunks = map(ssub, map(function (line)
         return ssplits(line, "%s*:%s*", false)
-      end, lines(dfile)))
+      end, fs.lines(dfile)))
       target(chunks(), collect(chunks))
     end
   end
@@ -719,40 +669,40 @@ local function init (opts)
 
     test = function (opts)
       opts = opts or {}
-      build(assign({ "test" }, opts), opts.verbosity)
+      build(tbl.assign({ "test" }, opts), opts.verbosity)
       if not opts.skip_check then
-        build(assign({ "check" }, opts), opts.verbosity)
+        build(tbl.assign({ "check" }, opts), opts.verbosity)
       end
     end,
 
     check = function (opts)
       opts = opts or {}
-      build(assign({ "check" }, opts), opts.verbosity)
+      build(tbl.assign({ "check" }, opts), opts.verbosity)
     end,
 
     iterate = function (opts)
       opts = opts or {}
-      build(assign({ "iterate" }, opts), opts.verbosity)
+      build(tbl.assign({ "iterate" }, opts), opts.verbosity)
     end,
 
     install = function (opts)
       opts = opts or {}
-      build(assign({ "install" }, opts), opts.verbosity)
+      build(tbl.assign({ "install" }, opts), opts.verbosity)
     end,
 
     install_deps = function (opts)
       opts = opts or {}
-      build(assign({ "install-deps" }, opts), opts.verbosity)
+      build(tbl.assign({ "install-deps" }, opts), opts.verbosity)
     end,
 
     release = not opts.wasm and function (opts)
       opts = opts or {}
-      build(assign({ "release" }, opts), opts.verbosity)
+      build(tbl.assign({ "release" }, opts), opts.verbosity)
     end,
 
     exec = not opts.wasm and function (opts)
       opts = opts or {}
-      build(assign({ "exec" }), opts.verbosity, opts)
+      build(tbl.assign({ "exec" }), opts.verbosity, opts)
     end,
 
   }
