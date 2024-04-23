@@ -10,7 +10,6 @@ local basexx = require("basexx")
 local bundle = require("santoku.bundle")
 local env = require("santoku.env")
 local fun = require("santoku.functional")
-local inherit = require("santoku.inherit")
 local make = require("santoku.make")
 local sys = require("santoku.system")
 local tbl = require("santoku.table")
@@ -181,7 +180,7 @@ local function init (opts)
     elseif action == "template" then
       target({ dest }, extend({ src, opts.config_file }, extra_srcs), function ()
         mkdirp(dirname(dest))
-        local t, ds = tmpl.renderfile(src, env)
+        local t, ds = tmpl.renderfile(src, env, _G)
         writefile(dest, t)
         writefile(dest .. ".d", tmpl.serialize_deps(src, dest, ds))
       end)
@@ -192,7 +191,7 @@ local function init (opts)
     extra_srcs = extra_srcs or {}
     target({ dest }, extend({ opts.config_file }, extra_srcs), function ()
       mkdirp(dirname(dest))
-      local t, ds = tmpl.compile(basexx.from_base64(data))(env)
+      local t, ds = tmpl.render(basexx.from_base64(data), env, _G)
       writefile(dest, t)
       writefile(dest .. ".d", tmpl.serialize_deps(dest, opts.config_file, ds))
     end)
@@ -352,22 +351,11 @@ local function init (opts)
   test_client_env.require_client = wrap_require(test_client_env)
 
   tbl.merge(server_env, base_env, opts.config.env.server)
-  inherit.pushindex(server_env, _G, true)
-
   tbl.merge(server_daemon_env, server_env)
-  inherit.pushindex(server_daemon_env, _G, true)
-
   tbl.merge(test_server_env, base_env, opts.config.env.server)
-  inherit.pushindex(test_server_env, _G, true)
-
   tbl.merge(test_server_daemon_env, test_server_env)
-  inherit.pushindex(test_server_daemon_env, _G, true)
-
   tbl.merge(client_env, base_env, opts.config.env.client)
-  inherit.pushindex(client_env, _G, true)
-
   tbl.merge(test_client_env, base_env, opts.config.env.client)
-  inherit.pushindex(test_client_env, _G, true)
 
   opts.config.env.variable_prefix =
     opts.config.env.variable_prefix or

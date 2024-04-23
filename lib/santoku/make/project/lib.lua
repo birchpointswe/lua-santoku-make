@@ -11,7 +11,6 @@ local bundle = require("santoku.bundle")
 local env = require("santoku.env")
 local fs = require("santoku.fs")
 local fun = require("santoku.functional")
-local inherit = require("santoku.inherit")
 local make = require("santoku.make")
 local sys = require("santoku.system")
 local tbl = require("santoku.table")
@@ -111,7 +110,7 @@ local function init (opts)
     elseif action == "template" then
       target({ dest }, { src, opts.config_file }, function ()
         fs.mkdirp(fs.dirname(dest))
-        local t, ds = tmpl.renderfile(src, env)
+        local t, ds = tmpl.renderfile(src, env, _G)
         fs.writefile(dest, t)
         fs.writefile(dest .. ".d", tmpl.serialize_deps(src, dest, ds))
       end)
@@ -121,7 +120,7 @@ local function init (opts)
   local function add_templated_target_base64 (dest, data, env)
     target({ dest }, { opts.config_file }, function ()
       fs.mkdirp(fs.dirname(dest))
-      local t, ds = tmpl.compile(basexx.from_base64(data))(env)
+      local t, ds = tmpl.render(basexx.from_base64(data), env, _G)
       fs.writefile(dest, t)
       fs.writefile(dest .. ".d", tmpl.serialize_deps(dest, opts.config_file, ds))
     end)
@@ -268,10 +267,7 @@ local function init (opts)
   }
 
   tbl.merge(test_env, opts.config.env, base_env)
-  inherit.pushindex(test_env, _G, true)
-
   tbl.merge(build_env, opts.config.env, base_env)
-  inherit.pushindex(build_env, _G, true)
 
   if opts.wasm then
 
