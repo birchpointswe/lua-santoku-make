@@ -771,21 +771,38 @@ local function init (opts)
 
       local config_file = absolute(opts.config_file)
 
-      local config = {
+      local client_config = {
+        type = "lib",
+        env = tbl.merge({
+          name = opts.config.env.name .. "-client",
+          version = opts.config.env.version,
+        }, test_client_env)
+      }
+      mkdirp(test_client_dir())
+      pushd(test_client_dir(), function ()
+        require("santoku.make.project").init({
+          config_file = config_file,
+          config = client_config,
+          single = opts.single,
+          profile = opts.profile,
+          skip_coverage = opts.skip_coverage,
+          wasm = true,
+        }).test()
+      end)
+
+      local server_config = {
         type = "lib",
         env = tbl.assign(opts.config.env.server, {
           name = opts.config.env.name .. "-server",
           version = opts.config.env.version,
         })
       }
-
       mkdirp(test_server_dir())
-      return pushd(test_server_dir(), function ()
-
+      pushd(test_server_dir(), function ()
         local lib = require("santoku.make.project").init({
           config_file = config_file,
           luarocks_config = absolute(base_server_luarocks_cfg),
-          config = config,
+          config = sever_config,
           single = opts.single,
           profile = opts.profile,
           skip_coverage = opts.skip_coverage,
@@ -793,16 +810,13 @@ local function init (opts)
           lua_path = test_server_env.lua_path,
           lua_cpath = test_server_env.lua_cpath,
         })
-
         lib.test({ skip_check = true })
-
         if not iterating then
           build({ "test-stop" }, opts.verbosity)
         end
-
         lib.check()
-
       end)
+
     end)
 
   target({ "iterate" }, {}, function (_, _)
