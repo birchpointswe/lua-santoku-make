@@ -802,7 +802,7 @@ local function init (opts)
         local lib = require("santoku.make.project").init({
           config_file = config_file,
           luarocks_config = absolute(base_server_luarocks_cfg),
-          config = sever_config,
+          config = server_config,
           single = opts.single,
           profile = opts.profile,
           skip_coverage = opts.skip_coverage,
