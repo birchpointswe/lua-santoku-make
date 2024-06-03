@@ -87,7 +87,8 @@ local function init (opts)
         find(match_fp, ivals(tbl.get(opts.config, "rules", "exclude") or {}))
     then
       return "ignore"
-    elseif find(match_fp, ivals(tbl.get(opts.config, "rules", "copy") or {}))
+    elseif find(match_fp, ivals(tbl.get(opts.config, "rules", "copy") or {})) or
+      not (str.find(fp, "%.tk$") or str.find(fp, "%.tk%."))
     then
       return "copy"
     else
@@ -95,20 +96,29 @@ local function init (opts)
     end
   end
 
+  local function remove_tk (fp)
+    return get_action(fp) == "template"
+      and str.gsub(fp, "%.tk", "")
+      or fp
+  end
+
   -- TODO: use fs.copy
-  local function add_copied_target (dest, src)
-    target({ dest }, { src }, function ()
+  local function add_copied_target (dest, src, extra_srcs)
+    extra_srcs = extra_srcs or {}
+    target({ dest }, extend({ src }, extra_srcs), function ()
       fs.mkdirp(fs.dirname(dest))
       fs.writefile(dest, fs.readfile(src))
     end)
   end
 
-  local function add_templated_target (dest, src, env)
+  local function add_file_target (dest, src, env, extra_srcs)
+    extra_srcs = extra_srcs or {}
     local action = get_action(src, opts.config)
     if action == "copy" then
-      return add_copied_target(dest, src, env)
+      return add_copied_target(dest, src, extra_srcs)
     elseif action == "template" then
-      target({ dest }, { src, opts.config_file }, function ()
+      dest = str.gsub(dest, "%.tk", "")
+      target({ dest }, extend({ src, opts.config_file }, extra_srcs), function ()
         fs.mkdirp(fs.dirname(dest))
         local t, ds = tmpl.renderfile(src, env, _G)
         fs.writefile(dest, t)
@@ -196,22 +206,22 @@ local function init (opts)
     extend(test_all_base, base_test_specs)
   end
 
-  local test_all = amap(extend({},
+  local test_all = amap(amap(extend({},
     test_all_base, base_rockspec, base_makefile,
     base_luarocks_cfg, base_luacheck_cfg, base_luacov_cfg,
-    base_run_sh, base_check_sh), test_dir)
+    base_run_sh, base_check_sh), test_dir), remove_tk)
 
-  local test_srcs = amap(extend({},
-    base_bins, base_libs, base_deps, base_test_deps), test_dir)
+  local test_srcs = amap(amap(extend({},
+    base_bins, base_libs, base_deps, base_test_deps), test_dir), remove_tk)
 
-  local test_cfgs = amap(push({},
+  local test_cfgs = amap(amap(push({},
     base_rockspec, base_makefile, base_luarocks_cfg,
     base_luacheck_cfg, base_luacov_cfg, base_run_sh,
-    base_check_sh), test_dir)
+    base_check_sh), test_dir), remove_tk)
 
-  local build_all = amap(push(extend({},
+  local build_all = amap(amap(push(extend({},
     base_bins, base_libs, base_deps, opts.wasm and { base_luarocks_cfg } or {}),
-    base_rockspec, base_makefile), build_dir)
+    base_rockspec, base_makefile), build_dir), remove_tk)
 
   if #base_libs > 0 then
     push(test_all, test_dir(base_lib_makefile))
@@ -226,6 +236,7 @@ local function init (opts)
   end
 
   push(test_all, test_dir(base_lua_modules_ok))
+  amap(test_all, remove_tk)
 
   local base_env = {
     wasm = opts.wasm,
@@ -322,23 +333,23 @@ local function init (opts)
     supper((gsub(opts.config.env.name, "%W+", "_")))
 
   for fp in flatten(map(ivals, ivals({ base_libs, base_bins, base_deps }))) do
-    add_templated_target(build_dir(fp), fp, build_env)
+    add_file_target(build_dir(fp), fp, build_env)
   end
 
   for fp in flatten(map(ivals, ivals({ base_libs, base_bins, base_deps, base_test_deps }))) do
-    add_templated_target(test_dir(fp), fp, test_env)
+    add_file_target(test_dir(fp), fp, test_env)
   end
 
   if not opts.wasm then
 
     for fp in ivals(base_test_specs) do
-      add_templated_target(test_dir(fp), fp, test_env)
+      add_file_target(test_dir(fp), fp, test_env)
     end
 
   else
 
     for fp in ivals(base_test_specs) do
-      add_templated_target(test_dir("bundler-pre", fp), fp, test_env)
+      add_file_target(test_dir("bundler-pre", fp), fp, test_env)
     end
 
     for fp in ivals(base_test_specs) do
@@ -456,7 +467,7 @@ local function init (opts)
       "lua.flag", "lua_path_extra.flag", "lua_cpath_extra.flag" }, work_dir))
 
   target(
-    amap(extend({ base_run_sh, base_check_sh }, base_libs), test_dir),
+    amap(amap(extend({ base_run_sh, base_check_sh }, base_libs), test_dir), remove_tk),
     amap({ "sanitize.flag" }, work_dir))
 
   target(
@@ -549,7 +560,7 @@ local function init (opts)
 
     local release_tarball_dir = sinterp("%s#(name)-%s#(version)", opts.config.env)
     local release_tarball = release_tarball_dir .. ".tar.gz"
-    local release_tarball_contents = push(extend({}, base_bins, base_libs, base_deps), base_makefile)
+    local release_tarball_contents = push(amap(extend({}, base_bins, base_libs, base_deps), remove_tk), base_makefile)
 
     if #base_libs > 0 then
       push(release_tarball_contents, base_lib_makefile)

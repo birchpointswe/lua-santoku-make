@@ -17,22 +17,7 @@ local tmpl = require("santoku.template")
 local varg = require("santoku.varg")
 local vdt = require("santoku.validate")
 local err = require("santoku.error")
-
 local fs = require("santoku.fs")
-local pushd = fs.pushd
-local stripexts = fs.stripextensions
-local stripparts = fs.stripparts
-local cwd = fs.cwd
-local join = fs.join
-local mkdirp = fs.mkdirp
-local dirname = fs.dirname
-local writefile = fs.writefile
-local readfile = fs.readfile
-local extension = fs.extension
-local absolute = fs.absolute
-local exists = fs.exists
-local touch = fs.touch
-local files = fs.files
 
 local arr = require("santoku.array")
 local amap = arr.map
@@ -75,7 +60,7 @@ local function init (opts)
   opts.openresty_dir = opts.openresty_dir or opts.config.openresty_dir or env.var("OPENRESTY_DIR")
 
   local function work_dir (...)
-    return join(opts.dir, opts.env, ...)
+    return fs.join(opts.dir, opts.env, ...)
   end
 
   local function dist_dir (...)
@@ -136,26 +121,27 @@ local function init (opts)
 
   local function dist_dir_client_stripped (...)
     return dist_dir("public", varg.map(function (fp)
-      return stripparts(fp, 2)
+      return fs.stripparts(fp, 2)
     end, ...))
   end
 
   local function test_dist_dir_client_stripped (...)
     return test_dist_dir("public", varg.map(function (fp)
-      return stripparts(fp, 2)
+      return fs.stripparts(fp, 2)
     end, ...))
   end
 
   -- TODO: It would be nice if santoku ivals returned an empty iterator for
   -- nil instead of erroring. It would allow omitting the {} below
   local function get_action (fp)
-    local ext = extension(fp)
+    local ext = fs.extension(fp)
     local match_fp = fun.bind(smatch, fp)
     if (opts.exts and not aincludes(opts.exts, ext)) or
         find(match_fp, ivals(tbl.get(opts, "rules", "exclude") or {}))
     then
       return "ignore"
     elseif find(match_fp, ivals(tbl.get(opts, "rules", "copy") or {}))
+      or not (str.find(fp, "%.tk$") or str.find(fp, "%.tk%."))
     then
       return "copy"
     else
@@ -163,26 +149,33 @@ local function init (opts)
     end
   end
 
+  local function remove_tk (fp)
+    return get_action(fp) == "template"
+      and str.gsub(fp, "%.tk", "")
+      or fp
+  end
+
   -- TODO: use fs.copy
   local function add_copied_target (dest, src, extra_srcs)
     extra_srcs = extra_srcs or {}
     target({ dest }, extend({ src }, extra_srcs), function ()
-      mkdirp(dirname(dest))
-      writefile(dest, readfile(src))
+      fs.mkdirp(fs.dirname(dest))
+      fs.writefile(dest, fs.readfile(src))
     end)
   end
 
-  local function add_templated_target (dest, src, env, extra_srcs)
+  local function add_file_target (dest, src, env, extra_srcs)
     extra_srcs = extra_srcs or {}
     local action = get_action(src, opts.config)
     if action == "copy" then
-      return add_copied_target(dest, extend({ src }, extra_srcs))
+      return add_copied_target(dest, src, extra_srcs)
     elseif action == "template" then
+      dest = str.gsub(dest, "%.tk", "")
       target({ dest }, extend({ src, opts.config_file }, extra_srcs), function ()
-        mkdirp(dirname(dest))
+        fs.mkdirp(fs.dirname(dest))
         local t, ds = tmpl.renderfile(src, env, _G)
-        writefile(dest, t)
-        writefile(dest .. ".d", tmpl.serialize_deps(src, dest, ds))
+        fs.writefile(dest, t)
+        fs.writefile(dest .. ".d", tmpl.serialize_deps(src, dest, ds))
       end)
     end
   end
@@ -190,10 +183,10 @@ local function init (opts)
   local function add_templated_target_base64 (dest, data, env, extra_srcs)
     extra_srcs = extra_srcs or {}
     target({ dest }, extend({ opts.config_file }, extra_srcs), function ()
-      mkdirp(dirname(dest))
+      fs.mkdirp(fs.dirname(dest))
       local t, ds = tmpl.render(basexx.from_base64(data), env, _G)
-      writefile(dest, t)
-      writefile(dest .. ".d", tmpl.serialize_deps(dest, opts.config_file, ds))
+      fs.writefile(dest, t)
+      fs.writefile(dest .. ".d", tmpl.serialize_deps(dest, opts.config_file, ds))
     end)
   end
 
@@ -202,11 +195,11 @@ local function init (opts)
   end
 
   local function get_require_paths (prefix, wd, ...)
-    wd = wd or cwd()
-    local pfx = prefix and join(prefix, "lua_modules") or "lua_modules"
+    wd = wd or fs.cwd()
+    local pfx = prefix and fs.join(prefix, "lua_modules") or "lua_modules"
     local ver = get_lua_version()
     return concat(varg.reduce(function (t, n)
-      return push(t, join(wd, pfx, sformat(n, ver)))
+      return push(t, fs.join(wd, pfx, sformat(n, ver)))
     end, {}, ...), ";")
   end
 
@@ -225,12 +218,12 @@ local function init (opts)
   end
 
   local function get_files (dir)
-    if not exists(dir) then
+    if not fs.exists(dir) then
       return {}
     end
     return collect(filter(function (fp)
       return get_action(fp) ~= "ignore"
-    end, files(dir, true)))
+    end, fs.files(dir, true)))
   end
 
   local base_server_libs = get_files("server/lib")
@@ -251,12 +244,11 @@ local function init (opts)
   local base_client_libs = get_files("client/lib")
   local base_client_bins = get_files("client/bin")
   local base_client_res = get_files("client/res")
-  local base_client_res_templated = get_files("client/res/templated")
   local base_client_lua_modules_ok = "lua_modules.ok"
   local base_client_lua_modules_deps_ok = "lua_modules.deps.ok"
 
   local base_client_pages = collect(map(function (fp)
-    return stripparts(stripexts(fp) .. ".js", 2)
+    return fs.stripparts(fs.stripextensions(fp) .. ".js", 2)
   end, ivals(base_client_bins)))
 
   local base_client_public = extend({},
@@ -284,7 +276,7 @@ local function init (opts)
   end
 
   local base_env = {
-    root_dir = cwd(),
+    root_dir = fs.cwd(),
     profile = opts.profile,
     skip_coverage = opts.skip_coverage,
     var = function (n)
@@ -298,10 +290,10 @@ local function init (opts)
     component = "server",
     background = opts.background,
     libs = base_server_libs,
-    dist_dir = absolute(dist_dir()),
-    openresty_dir = absolute(opts.openresty_dir),
-    lua_modules = absolute(dist_dir(base_server_lua_modules)),
-    luarocks_cfg = absolute(server_dir(base_server_luarocks_cfg)),
+    dist_dir = fs.absolute(dist_dir()),
+    openresty_dir = fs.absolute(opts.openresty_dir),
+    lua_modules = fs.absolute(dist_dir(base_server_lua_modules)),
+    luarocks_cfg = fs.absolute(server_dir(base_server_luarocks_cfg)),
   }
 
   local server_daemon_env = {
@@ -313,14 +305,14 @@ local function init (opts)
     component = "server",
     background = opts.background,
     libs = base_server_libs,
-    dist_dir = absolute(test_dist_dir()),
-    openresty_dir = absolute(opts.openresty_dir),
-    luarocks_cfg = absolute(test_server_dir(base_server_luarocks_cfg)),
-    luacov_config = absolute(test_server_dir("build", "default", "test", "luacov.lua")),
+    dist_dir = fs.absolute(test_dist_dir()),
+    openresty_dir = fs.absolute(opts.openresty_dir),
+    luarocks_cfg = fs.absolute(test_server_dir(base_server_luarocks_cfg)),
+    luacov_config = fs.absolute(test_server_dir("build", "default", "test", "luacov.lua")),
     lua = env.interpreter()[1],
     lua_path = get_lua_path(test_dist_dir()),
     lua_cpath = get_lua_cpath(test_dist_dir()),
-    lua_modules = absolute(test_dist_dir(base_server_lua_modules)),
+    lua_modules = fs.absolute(test_dist_dir(base_server_lua_modules)),
   }
 
   local test_server_daemon_env = {
@@ -330,7 +322,7 @@ local function init (opts)
   local client_env = {
     environment = "main",
     component = "client",
-    dist_dir = absolute(dist_dir()),
+    dist_dir = fs.absolute(dist_dir()),
     public_files = base_client_public,
     lua_path = get_lua_path(client_dir("build", "default-wasm", "build")),
     lua_cpath = get_lua_cpath(client_dir("build", "default-wasm", "build")),
@@ -339,7 +331,7 @@ local function init (opts)
   local test_client_env = {
     environment = "test",
     component = "client",
-    dist_dir = absolute(test_dist_dir()),
+    dist_dir = fs.absolute(test_dist_dir()),
     public_files = base_client_public,
     lua_path = get_lua_path(test_client_dir("build", "default-wasm", "build")),
     lua_cpath = get_lua_cpath(test_client_dir("build", "default-wasm", "build")),
@@ -436,14 +428,14 @@ local function init (opts)
     "profile", "skip_coverage"
   }) do
     local fp = work_dir(flag .. ".flag")
-    mkdirp(dirname(fp))
+    fs.mkdirp(fs.dirname(fp))
     local strval = tostring(opts[flag])
-    if not exists(fp) then
-      writefile(fp, strval)
+    if not fs.exists(fp) then
+      fs.writefile(fp, strval)
     else
-      local val = readfile(fp)
+      local val = fs.readfile(fp)
       if val ~= strval then
-        writefile(fp, strval)
+        fs.writefile(fp, strval)
       end
     end
   end
@@ -453,23 +445,23 @@ local function init (opts)
     amap({ "profile.flag", "skip_coverage.flag" }, work_dir))
 
   for fp in ivals(base_server_libs) do
-    add_templated_target(server_dir_stripped(fp), fp, server_env)
+    add_file_target(server_dir_stripped(remove_tk(fp)), fp, server_env)
   end
 
   for fp in ivals(base_server_libs) do
-    add_templated_target(test_server_dir_stripped(fp), fp, test_server_env)
+    add_file_target(test_server_dir_stripped(remove_tk(fp)), fp, test_server_env)
   end
 
   for fp in ivals(base_server_deps) do
-    add_templated_target(server_dir_stripped(fp), fp, server_env)
+    add_file_target(server_dir_stripped(remove_tk(fp)), fp, server_env)
   end
 
   for fp in ivals(base_server_deps) do
-    add_templated_target(test_server_dir_stripped(fp), fp, test_server_env)
+    add_file_target(test_server_dir_stripped(remove_tk(fp)), fp, test_server_env)
   end
 
   for fp in ivals(base_server_test_specs) do
-    add_templated_target(test_server_dir_stripped(fp), fp, test_server_env)
+    add_file_target(test_server_dir_stripped(remove_tk(fp)), fp, test_server_env)
   end
 
   for ddir, ddir_stripped, cdir, cdir_stripped, env in map(spread, ivals({
@@ -479,16 +471,16 @@ local function init (opts)
       test_client_dir, test_client_dir_stripped, test_client_env }
   })) do
 
-    mkdirp(ddir())
-    mkdirp(cdir())
+    fs.mkdirp(ddir())
+    fs.mkdirp(cdir())
 
     for fp in ivals(base_client_assets) do
-      add_copied_target(ddir_stripped(fp), fp)
+      add_copied_target(ddir_stripped(remove_tk(fp)), fp)
     end
 
     for fp in ivals(base_client_static) do
-      add_templated_target(cdir(fp), fp, env)
-      add_copied_target(ddir_stripped(fp), cdir(fp))
+      add_file_target(cdir_stripped(fp), fp, env)
+      add_copied_target(ddir_stripped(remove_tk(fp)), cdir_stripped(fp))
     end
 
     for fp in ivals(base_client_deps) do
@@ -504,19 +496,14 @@ local function init (opts)
     end
 
     for fp in ivals(base_client_res) do
-      add_copied_target(cdir_stripped(fp), fp)
-    end
-
-    for fp in ivals(base_client_res_templated) do
-      add_templated_target(cdir_stripped("build", "default-wasm", "build", fp), fp, env,
-        { cdir(base_client_lua_modules_deps_ok) })
+      add_copied_target(cdir_stripped(fp), fp, amap(extend({}, base_client_static, base_client_assets), cdir_stripped))
     end
 
     for fp in ivals(base_client_pages) do
-      local pre = absolute(cdir("build", "default-wasm", "build", "bin", stripexts(fp)) .. ".lua")
-      local post = absolute(cdir("bundler-post", stripexts(fp)))
+      local pre = fs.absolute(cdir("build", "default-wasm", "build", "bin", fs.stripextensions(fp)) .. ".lua")
+      local post = fs.absolute(cdir("bundler-post", fs.stripextensions(fp)))
       local deps = { cdir(base_client_lua_modules_ok), pre }
-      local wd = cwd()
+      local wd = fs.cwd()
       local extra_flags = it.reduce(function (a, k, v)
         if str.find(post, k) then
           if v.cxxflags then
@@ -529,17 +516,17 @@ local function init (opts)
         return a
       end, {}, it.pairs(tbl.get(env, "rules") or {}))
       target({ post }, deps, function ()
-        mkdirp(cdir("build", "default-wasm", "build"))
-        pushd(cdir("build", "default-wasm", "build"), function ()
-          bundle(pre, dirname(post), {
+        fs.mkdirp(cdir("build", "default-wasm", "build"))
+        fs.pushd(cdir("build", "default-wasm", "build"), function ()
+          bundle(pre, fs.dirname(post), {
             cc = "emcc",
             ignores = { "debug" },
             path = get_lua_path(nil, fs.join(wd, cdir("build", "default-wasm", "build"))),
             cpath = get_lua_cpath(nil, fs.join(wd, cdir("build", "default-wasm", "build"))),
             flags = extend({
               "-sASSERTIONS", "-sSINGLE_FILE", "-sALLOW_MEMORY_GROWTH",
-              "-I" .. join(wd, cdir("build", "default-wasm", "build", "lua-5.1.5"), "include"),
-              "-L" .. join(wd, cdir("build", "default-wasm", "build", "lua-5.1.5"), "lib"),
+              "-I" .. fs.join(wd, cdir("build", "default-wasm", "build", "lua-5.1.5"), "include"),
+              "-L" .. fs.join(wd, cdir("build", "default-wasm", "build", "lua-5.1.5"), "lib"),
               "-llua", "-lm",
             }, extra_flags,
               tbl.get(env, "cxxflags") or {},
@@ -554,7 +541,7 @@ local function init (opts)
       { cdir(base_client_lua_modules_deps_ok) },
       { opts.config_file },
       function ()
-        local config_file = absolute(opts.config_file)
+        local config_file = fs.absolute(opts.config_file)
         local config = {
           type = "lib",
           env = tbl.merge({
@@ -562,8 +549,8 @@ local function init (opts)
             version = opts.config.env.version,
           }, env)
         }
-        mkdirp(cdir())
-        return pushd(cdir(), function ()
+        fs.mkdirp(cdir())
+        return fs.pushd(cdir(), function ()
           require("santoku.make.project").init({
             config_file = config_file,
             config = config,
@@ -577,19 +564,16 @@ local function init (opts)
           if post_make then
             post_make(env)
           end
-          touch(base_client_lua_modules_deps_ok)
+          fs.touch(base_client_lua_modules_deps_ok)
         end)
       end)
 
     target(
       { cdir(base_client_lua_modules_ok) },
       extend({ opts.config_file },
-        amap(extend({}, base_client_res_templated), function (fp)
-          return cdir_stripped("build", "default-wasm", "build", fp)
-        end),
         amap(extend({}, base_client_bins, base_client_libs, base_client_deps, base_client_res), cdir_stripped)),
       function ()
-        local config_file = absolute(opts.config_file)
+        local config_file = fs.absolute(opts.config_file)
         local config = {
           type = "lib",
           env = tbl.merge({
@@ -597,8 +581,8 @@ local function init (opts)
             version = opts.config.env.version,
           }, env)
         }
-        mkdirp(cdir())
-        return pushd(cdir(), function ()
+        fs.mkdirp(cdir())
+        return fs.pushd(cdir(), function ()
           require("santoku.make.project").init({
             config_file = config_file,
             config = config,
@@ -612,7 +596,7 @@ local function init (opts)
           if post_make then
             post_make(env)
           end
-          touch(base_client_lua_modules_ok)
+          fs.touch(base_client_lua_modules_ok)
         end)
       end)
 
@@ -621,10 +605,10 @@ local function init (opts)
   target(
     { server_dir(base_server_lua_modules_ok) },
     extend({ server_dir(base_server_luarocks_cfg) },
-      amap(extend({}, base_server_libs, base_server_deps), server_dir_stripped)),
+      amap(amap(extend({}, base_server_libs, base_server_deps), server_dir_stripped), remove_tk)),
     function ()
 
-      local config_file = absolute(opts.config_file)
+      local config_file = fs.absolute(opts.config_file)
 
       local config = {
         type = "lib",
@@ -634,12 +618,12 @@ local function init (opts)
         })
       }
 
-      mkdirp(server_dir())
-      return pushd(server_dir(), function ()
+      fs.mkdirp(server_dir())
+      return fs.pushd(server_dir(), function ()
 
         require("santoku.make.project").init({
           config_file = config_file,
-          luarocks_config = absolute(base_server_luarocks_cfg),
+          luarocks_config = fs.absolute(base_server_luarocks_cfg),
           config = config,
           single = opts.single,
           profile = opts.profile,
@@ -653,7 +637,7 @@ local function init (opts)
           post_make(server_env)
         end
 
-        touch(base_server_lua_modules_ok)
+        fs.touch(base_server_lua_modules_ok)
 
       end)
     end)
@@ -661,10 +645,10 @@ local function init (opts)
   target(
     { test_server_dir(base_server_lua_modules_ok) },
     extend({ test_server_dir(base_server_luarocks_cfg) },
-      amap(extend({}, base_server_libs, base_server_deps), test_server_dir_stripped)),
+      amap(amap(extend({}, base_server_libs, base_server_deps), test_server_dir_stripped), remove_tk)),
     function ()
 
-      local config_file = absolute(opts.config_file)
+      local config_file = fs.absolute(opts.config_file)
 
       local config = {
         type = "lib",
@@ -674,12 +658,12 @@ local function init (opts)
         })
       }
 
-      mkdirp(test_server_dir())
-      return pushd(test_server_dir(), function ()
+      fs.mkdirp(test_server_dir())
+      return fs.pushd(test_server_dir(), function ()
 
         require("santoku.make.project").init({
           config_file = config_file,
-          luarocks_config = absolute(base_server_luarocks_cfg),
+          luarocks_config = fs.absolute(base_server_luarocks_cfg),
           config = config,
           single = opts.single,
           profile = opts.profile,
@@ -696,7 +680,7 @@ local function init (opts)
           post_make(test_server_env)
         end
 
-        touch(base_server_lua_modules_ok)
+        fs.touch(base_server_lua_modules_ok)
 
       end)
     end)
@@ -709,12 +693,12 @@ local function init (opts)
       dist_dir(base_server_nginx_daemon_cfg),
       server_dir(base_server_lua_modules_ok),
       client_dir(base_client_lua_modules_ok) },
-      amap(extend({},
+      amap(amap(extend({},
         base_client_static, base_client_assets),
-      dist_dir_client_stripped),
-      amap(extend({},
+        dist_dir_client_stripped), remove_tk),
+      amap(amap(extend({},
         base_client_pages),
-      dist_dir_client)), true)
+        dist_dir_client), remove_tk)), true)
 
   target(
     { "test-build" },
@@ -724,19 +708,19 @@ local function init (opts)
       test_dist_dir(base_server_nginx_daemon_cfg),
       test_server_dir(base_server_lua_modules_ok),
       test_client_dir(base_client_lua_modules_ok) },
-      amap(extend({},
+      amap(amap(extend({},
         base_client_static, base_client_assets),
-      test_dist_dir_client_stripped),
-      amap(extend({},
+        test_dist_dir_client_stripped), remove_tk),
+      amap(amap(extend({},
         base_client_pages),
-      test_dist_dir_client)), true)
+        test_dist_dir_client), remove_tk)), true)
 
   target(
     { "start" },
     { "build" },
     function (_, _, background)
-      mkdirp(dist_dir())
-      return pushd(dist_dir(), function ()
+      fs.mkdirp(dist_dir())
+      return fs.pushd(dist_dir(), function ()
         sys.execute({
           "sh", "run.sh",
           env = {
@@ -750,8 +734,8 @@ local function init (opts)
     { "test-start" },
     { "test-build" },
     function (_, _, background)
-      mkdirp(test_dist_dir())
-      return pushd(test_dist_dir(), function ()
+      fs.mkdirp(test_dist_dir())
+      return fs.pushd(test_dist_dir(), function ()
         sys.execute({
           "sh", "run.sh",
           env = {
@@ -763,13 +747,13 @@ local function init (opts)
 
   target(
     { "test" },
-    amap(extend({}, base_server_test_specs), test_server_dir_stripped),
+    amap(amap(extend({}, base_server_test_specs), test_server_dir_stripped), remove_tk),
     function (_, _, iterating)
 
       build({ "stop", "test-stop" }, opts.verbosity)
       build({ "test-start" }, opts.verbosity, true)
 
-      local config_file = absolute(opts.config_file)
+      local config_file = fs.absolute(opts.config_file)
 
       local client_config = {
         type = "lib",
@@ -778,8 +762,8 @@ local function init (opts)
           version = opts.config.env.version,
         }, test_client_env)
       }
-      mkdirp(test_client_dir())
-      pushd(test_client_dir(), function ()
+      fs.mkdirp(test_client_dir())
+      fs.pushd(test_client_dir(), function ()
         require("santoku.make.project").init({
           config_file = config_file,
           config = client_config,
@@ -797,11 +781,11 @@ local function init (opts)
           version = opts.config.env.version,
         })
       }
-      mkdirp(test_server_dir())
-      pushd(test_server_dir(), function ()
+      fs.mkdirp(test_server_dir())
+      fs.pushd(test_server_dir(), function ()
         local lib = require("santoku.make.project").init({
           config_file = config_file,
-          luarocks_config = absolute(base_server_luarocks_cfg),
+          luarocks_config = fs.absolute(base_server_luarocks_cfg),
           config = server_config,
           single = opts.single,
           profile = opts.profile,
@@ -844,8 +828,8 @@ local function init (opts)
         "-e", "close_write", "-e", "modify",
         "-e", "move", "-e", "create", "-e", "delete",
         spread(collect(filter(function (fp)
-          return exists(fp)
-        end, chain(files("."), ivals({ "client", "server" })))))
+          return fs.exists(fp)
+        end, chain(fs.files("."), ivals({ "client", "server" })))))
       })
 
     end
@@ -853,22 +837,22 @@ local function init (opts)
   end)
 
   target({ "stop" }, {}, function ()
-    mkdirp(dist_dir())
-    return pushd(dist_dir(), function ()
-      if exists("server.pid") then
+    fs.mkdirp(dist_dir())
+    return fs.pushd(dist_dir(), function ()
+      if fs.exists("server.pid") then
         pcall(function ()
-          sys.execute({ "kill", smatch(readfile("server.pid"), "(%d+)") })
+          sys.execute({ "kill", smatch(fs.readfile("server.pid"), "(%d+)") })
         end)
       end
     end)
   end)
 
   target({ "test-stop" }, {}, function (_, _)
-    mkdirp(test_dist_dir())
-    return pushd(test_dist_dir(), function ()
-      if exists("server.pid") then
+    fs.mkdirp(test_dist_dir())
+    return fs.pushd(test_dist_dir(), function ()
+      if fs.exists("server.pid") then
         pcall(function ()
-          sys.execute({ "kill", smatch(readfile("server.pid"), "(%d+)") })
+          sys.execute({ "kill", smatch(fs.readfile("server.pid"), "(%d+)") })
         end)
       end
     end)
