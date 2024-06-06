@@ -308,9 +308,15 @@ local function init (opts)
 
           sys.execute({ "tar", "xf", "lua-5.1.5.tar.gz" })
           fs.cd("lua-5.1.5")
-          sys.execute({ "emmake", "sh", "-c",
-            "make generic CC=\"$CC\" LD=\"$LD\" AR=\"$AR rcu\"" ..
-            "  RANLIB=\"$RANLIB\" MYLDFLAGS=\"-sSINGLE_FILE -sEXIT_RUNTIME=1 -lnodefs.js -lnoderawfs.js\"" })
+          sys.execute({ "emmake", "sh", "-c", arr.concat({
+            "make", "generic",
+            "CC=\"$CC\"",
+            "LD=\"$LD\"",
+            "AR=\"$AR rcu\"",
+            "RANLIB=\"$RANLIB\"",
+            "CFLAGS=\"-flto -Oz\"",
+            "MYLDFLAGS=\"-flto -Oz --closure 1\""
+          }, " ") })
           sys.execute({ "make", "local" })
           fs.cd("bin")
           sys.execute({ "mv", "lua", "lua.js" })

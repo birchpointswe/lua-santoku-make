@@ -1,5 +1,8 @@
 # Now
 
+- Allow users to specify compilation flags for lua
+- Allow shared common lib for multiple generated .js files
+
 - struct stat doesn't have st_mtim property on mac, replace this with something
   POSIX compliant if possible, if not use include guards
 
