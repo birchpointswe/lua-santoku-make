@@ -1,5 +1,6 @@
 # Now
 
+- Support gzipped responses and static files
 - Allow users to specify compilation flags for lua
 - Allow shared common lib for multiple generated .js files
 
