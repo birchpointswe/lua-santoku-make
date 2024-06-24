@@ -244,6 +244,7 @@ local function init (opts)
   local base_client_libs = get_files("client/lib")
   local base_client_bins = get_files("client/bin")
   local base_client_res = get_files("client/res")
+  local base_client_pre_make_ok = "pre_make.ok"
   local base_client_lua_modules_ok = "lua_modules.ok"
   local base_client_lua_modules_deps_ok = "lua_modules.deps.ok"
 
@@ -600,6 +601,20 @@ local function init (opts)
         end)
       end)
 
+    target(
+      { cdir(base_client_pre_make_ok) },
+      { opts.config_file },
+      function ()
+        fs.mkdirp(cdir())
+        return fs.pushd(cdir(), function ()
+          local pre_make = tbl.get(env, "hooks", "pre_make")
+          if pre_make then
+            pre_make(env)
+          end
+          fs.touch(base_client_pre_make_ok)
+        end)
+      end)
+
   end
 
   target(
@@ -688,6 +703,7 @@ local function init (opts)
   target(
     { "build" },
     extend({
+      client_dir(base_client_pre_make_ok),
       dist_dir(base_server_run_sh),
       dist_dir(base_server_nginx_cfg),
       dist_dir(base_server_nginx_daemon_cfg),
@@ -703,6 +719,7 @@ local function init (opts)
   target(
     { "test-build" },
     extend({
+      test_client_dir(base_client_pre_make_ok),
       test_dist_dir(base_server_run_sh),
       test_dist_dir(base_server_nginx_cfg),
       test_dist_dir(base_server_nginx_daemon_cfg),
