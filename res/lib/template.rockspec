@@ -32,10 +32,7 @@ description = {
 }
 
 dependencies = {
-  <%
-    print(environment, require("santoku.serialize")(dependencies))
-    print(environment, require("santoku.serialize")(test))
-    return concat(collect(map(squote, flatten(map(ivals, ivals({
+  <% return concat(collect(map(squote, flatten(map(ivals, ivals({
       dependencies or {},
       environment == "test" and get(test or {}, "dependencies") or {},
       environment == "test" and wasm and get(test or {}, "wasm", "dependencies") or {},
