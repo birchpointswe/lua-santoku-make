@@ -254,7 +254,7 @@ local function init (opts)
   }
 
   local test_env = {
-    environment = "test",
+    environment = opts.environment or "test",
     lua = opts.lua or env.interpreter()[1],
     lua_path = opts.lua_path or get_lua_path(test_dir()),
     lua_cpath = opts.lua_cpath or get_lua_cpath(test_dir()),
@@ -273,7 +273,7 @@ local function init (opts)
   end
 
   local build_env = {
-    environment = "build",
+    environment = opts.environment or "build",
     lua_modules = opts.wasm and fs.absolute(build_dir(base_lua_modules)) or nil,
   }
 
