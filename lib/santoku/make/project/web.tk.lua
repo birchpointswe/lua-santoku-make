@@ -637,6 +637,7 @@ local function init (opts)
       return fs.pushd(server_dir(), function ()
 
         require("santoku.make.project").init({
+          environment = "build",
           config_file = config_file,
           luarocks_config = fs.absolute(base_server_luarocks_cfg),
           config = config,
@@ -677,6 +678,7 @@ local function init (opts)
       return fs.pushd(test_server_dir(), function ()
 
         require("santoku.make.project").init({
+          environment = "test",
           config_file = config_file,
           luarocks_config = fs.absolute(base_server_luarocks_cfg),
           config = config,
