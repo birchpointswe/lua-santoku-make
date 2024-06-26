@@ -476,28 +476,35 @@ local function init (opts)
     fs.mkdirp(cdir())
 
     for fp in ivals(base_client_assets) do
-      add_copied_target(ddir_stripped(remove_tk(fp)), fp)
+      add_copied_target(ddir_stripped(remove_tk(fp)), fp,
+        { cdir(base_client_lua_modules_deps_ok) })
     end
 
     for fp in ivals(base_client_static) do
-      add_file_target(cdir_stripped(fp), fp, env)
-      add_copied_target(ddir_stripped(remove_tk(fp)), cdir_stripped(fp))
+      add_copied_target(cdir_stripped(fp), fp)
+      add_file_target(ddir_stripped(remove_tk(fp)), cdir_stripped(fp), env,
+        { cdir(base_client_lua_modules_deps_ok) })
     end
 
     for fp in ivals(base_client_deps) do
-      add_copied_target(cdir_stripped(fp), fp)
+      add_copied_target(cdir_stripped(fp), fp,
+        { cdir(base_client_lua_modules_deps_ok) })
     end
 
     for fp in ivals(base_client_libs) do
-      add_copied_target(cdir_stripped(fp), fp)
+      add_copied_target(cdir_stripped(fp), fp,
+        { cdir(base_client_lua_modules_deps_ok) })
     end
 
     for fp in ivals(base_client_bins) do
-      add_copied_target(cdir_stripped(fp), fp)
+      add_copied_target(cdir_stripped(fp), fp,
+        { cdir(base_client_lua_modules_deps_ok) })
     end
 
     for fp in ivals(base_client_res) do
-      add_copied_target(cdir_stripped(fp), fp, amap(extend({}, base_client_static, base_client_assets), cdir_stripped))
+      add_copied_target(cdir_stripped(fp), fp,
+        amap(extend({}, base_client_static), cdir_stripped),
+        { cdir(base_client_lua_modules_deps_ok) })
     end
 
     for fp in ivals(base_client_pages) do
