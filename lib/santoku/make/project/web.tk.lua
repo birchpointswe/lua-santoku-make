@@ -217,12 +217,12 @@ local function init (opts)
       "lib/lua/%s/loadall.so")
   end
 
-  local function get_files (dir)
+  local function get_files (dir, check)
     if not fs.exists(dir) then
       return {}
     end
     return collect(filter(function (fp)
-      return get_action(fp) ~= "ignore"
+      return (not check or check(fp)) and get_action(fp) ~= "ignore"
     end, fs.files(dir, true)))
   end
 
@@ -243,7 +243,10 @@ local function init (opts)
   local base_client_deps = get_files("client/deps")
   local base_client_libs = get_files("client/lib")
   local base_client_bins = get_files("client/bin")
-  local base_client_res = get_files("client/res")
+  local base_client_res = get_files("client/res", function (fp)
+    return not str.startswith(fp, "client/res/templated")
+  end)
+  local base_client_res_templated = get_files("client/res/templated")
   local base_client_pre_make_ok = "pre_make.ok"
   local base_client_lua_modules_ok = "lua_modules.ok"
   local base_client_lua_modules_deps_ok = "lua_modules.deps.ok"
@@ -507,6 +510,12 @@ local function init (opts)
         { cdir(base_client_lua_modules_deps_ok) })
     end
 
+    for fp in ivals(base_client_res_templated) do
+      add_file_target(cdir_stripped(remove_tk(fp)), fp, env,
+        extend({ cdir(base_client_lua_modules_deps_ok) },
+          amap(extend({}, base_client_static), cdir_stripped)))
+    end
+
     for fp in ivals(base_client_pages) do
       local pre = fs.absolute(cdir("build", "default-wasm", "build", "bin", fs.stripextensions(fp)) .. ".lua")
       local post = fs.absolute(cdir("bundler-post", fs.stripextensions(fp)))
@@ -579,7 +588,11 @@ local function init (opts)
     target(
       { cdir(base_client_lua_modules_ok) },
       extend({ opts.config_file },
-        amap(extend({}, base_client_bins, base_client_libs, base_client_deps, base_client_res), cdir_stripped)),
+        amap(extend({},
+          base_client_bins, base_client_libs,
+          base_client_deps, base_client_res,
+          amap(extend({},
+            base_client_res_templated), remove_tk)), cdir_stripped)),
       function ()
         local config_file = fs.absolute(opts.config_file)
         local config = {

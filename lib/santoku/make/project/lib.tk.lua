@@ -174,6 +174,7 @@ local function init (opts)
 
   local base_bins = get_files("bin")
   local base_libs = get_files("lib")
+  local base_res = get_files("res")
   local base_deps = get_files("deps")
 
   local base_rockspec = sinterp("%s#(name)-%s#(version).rockspec", opts.config.env)
@@ -198,7 +199,7 @@ local function init (opts)
 
   local test_all_base = extend({},
     base_bins, base_libs, base_deps,
-    base_test_deps, base_test_res)
+    base_test_deps, base_res, base_test_res)
 
   if opts.wasm then
     extend(test_all_base, collect(map(fs.stripextension, ivals(base_test_specs))))
@@ -220,7 +221,7 @@ local function init (opts)
     base_check_sh), test_dir), remove_tk)
 
   local build_all = amap(amap(push(extend({},
-    base_bins, base_libs, base_deps, opts.wasm and { base_luarocks_cfg } or {}),
+    base_bins, base_libs, base_res, base_deps, opts.wasm and { base_luarocks_cfg } or {}),
     base_rockspec, base_makefile), build_dir), remove_tk)
 
   if #base_libs > 0 then
@@ -401,8 +402,16 @@ local function init (opts)
 
   end
 
+  for fp in ivals(base_res) do
+    add_file_target(build_dir(remove_tk(fp)), fp, build_env)
+  end
+
+  for fp in ivals(base_res) do
+    add_file_target(test_dir(remove_tk(fp)), fp, test_env)
+  end
+
   for fp in ivals(base_test_res) do
-    add_copied_target(test_dir(fp), fp, test_env)
+    add_file_target(test_dir(remove_tk(fp)), fp, test_env)
   end
 
   add_templated_target_base64(build_dir(base_rockspec),
