@@ -403,15 +403,15 @@ local function init (opts)
   end
 
   for fp in ivals(base_res) do
-    add_file_target(build_dir(remove_tk(fp)), fp, build_env)
+    add_copied_target(build_dir(remove_tk(fp)), fp, build_env)
   end
 
   for fp in ivals(base_res) do
-    add_file_target(test_dir(remove_tk(fp)), fp, test_env)
+    add_copied_target(test_dir(remove_tk(fp)), fp, test_env)
   end
 
   for fp in ivals(base_test_res) do
-    add_file_target(test_dir(remove_tk(fp)), fp, test_env)
+    add_copied_target(test_dir(remove_tk(fp)), fp, test_env)
   end
 
   add_templated_target_base64(build_dir(base_rockspec),
