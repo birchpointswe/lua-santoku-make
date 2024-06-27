@@ -260,7 +260,7 @@ local function init (opts)
       return fs.stripparts(fp, 2)
     end),
     amap(extend({}, base_client_static), function (fp)
-      return fs.stripparts(fp, 2)
+      return fs.stripparts(remove_tk(fp), 2)
     end),
     base_client_pages)
 
