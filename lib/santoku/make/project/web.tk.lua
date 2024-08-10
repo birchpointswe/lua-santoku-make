@@ -558,8 +558,7 @@ local function init (opts)
     target(
       { cdir(base_client_lua_modules_deps_ok) },
       extend({ opts.config_file },
-        amap(extend({}, base_client_res,
-          amap(extend({}, base_client_res_templated), remove_tk)), cdir_stripped)),
+        amap(extend({}, base_client_res), cdir_stripped)),
       function ()
         local config_file = fs.absolute(opts.config_file)
         local config = {
@@ -591,7 +590,8 @@ local function init (opts)
     target(
       { cdir(base_client_lua_modules_ok) },
       extend({ opts.config_file, cdir(base_client_lua_modules_deps_ok) },
-        amap(extend({}, base_client_bins, base_client_libs, base_client_deps), cdir_stripped)),
+        amap(extend({}, base_client_bins, base_client_libs, base_client_deps,
+          amap(extend({}, base_client_res_templated), remove_tk)), cdir_stripped)),
       -- NOTE: base_client_res(_templated) deps handled by lua_modules_deps_ok
       function ()
         local config_file = fs.absolute(opts.config_file)
