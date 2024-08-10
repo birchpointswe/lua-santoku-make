@@ -366,21 +366,21 @@ local function init (opts)
     <% return squote(to_base64(readfile("res/web/run.sh"))) %>, test_server_env) -- luacheck: ignore
 
   add_templated_target_base64(server_dir(base_server_nginx_cfg),
-    <% return squote(to_base64(readfile("res/web/nginx.conf"))) %>, server_env, -- luacheck: ignore
+    <% return squote(to_base64(readfile("res/web/nginx.tk.conf"))) %>, server_env, -- luacheck: ignore
     { server_dir(base_server_lua_modules_ok) })
 
   add_templated_target_base64(test_server_dir(base_server_nginx_cfg),
-    <% return squote(to_base64(readfile("res/web/nginx.conf"))) %>, test_server_env, -- luacheck: ignore
+    <% return squote(to_base64(readfile("res/web/nginx.tk.conf"))) %>, test_server_env, -- luacheck: ignore
     { test_server_dir(base_server_lua_modules_ok),
       test_server_dir(base_server_init_test_lua),
       test_server_dir(base_server_init_worker_test_lua) })
 
   add_templated_target_base64(server_dir(base_server_nginx_daemon_cfg),
-    <% return squote(to_base64(readfile("res/web/nginx.conf"))) %>, server_daemon_env, -- luacheck: ignore
+    <% return squote(to_base64(readfile("res/web/nginx.tk.conf"))) %>, server_daemon_env, -- luacheck: ignore
     { server_dir(base_server_lua_modules_ok) })
 
   add_templated_target_base64(test_server_dir(base_server_nginx_daemon_cfg),
-    <% return squote(to_base64(readfile("res/web/nginx.conf"))) %>, test_server_daemon_env, -- luacheck: ignore
+    <% return squote(to_base64(readfile("res/web/nginx.tk.conf"))) %>, test_server_daemon_env, -- luacheck: ignore
     { test_server_dir(base_server_lua_modules_ok),
       test_server_dir(base_server_init_test_lua),
       test_server_dir(base_server_init_worker_test_lua) })
