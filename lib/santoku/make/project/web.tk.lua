@@ -487,8 +487,10 @@ local function init (opts)
 
     for fp in ivals(base_client_static) do
       add_copied_target(cdir_stripped(fp), fp)
-      add_file_target(ddir_stripped(remove_tk(fp)), cdir_stripped(fp), env,
+      add_file_target(cdir(remove_tk(fp)), cdir_stripped(fp), env,
         { cdir(base_client_lua_modules_deps_ok) })
+      add_copied_target(ddir_stripped(remove_tk(fp)),
+        cdir(remove_tk(fp)))
     end
 
     for fp in ivals(base_client_deps) do
