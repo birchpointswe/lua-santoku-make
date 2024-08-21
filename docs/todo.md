@@ -1,5 +1,10 @@
 # Now
 
+- Replace rules matching strings & functions with callbacks to retrieve flags/etc
+  per file
+- Instead of hokes.pre_make/etc, expose underlying make interface so user hooks
+  can be added as phony dependencies on files or other phony targets
+
 - Support gzipped responses and static files
 - Allow users to specify compilation flags for lua
 - Allow shared common lib for multiple generated .js files
