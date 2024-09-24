@@ -208,9 +208,9 @@ local function init (opts)
   end
 
   local test_all = amap(amap(extend({},
-    test_all_base, base_rockspec, base_makefile,
+    test_all_base, { base_rockspec, base_makefile,
     base_luarocks_cfg, base_luacheck_cfg, base_luacov_cfg,
-    base_run_sh, base_check_sh), test_dir), remove_tk)
+    base_run_sh, base_check_sh }), test_dir), remove_tk)
 
   local test_srcs = amap(amap(extend({},
     base_bins, base_libs, base_deps, base_test_deps), test_dir), remove_tk)
