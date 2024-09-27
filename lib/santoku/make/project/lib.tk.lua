@@ -316,7 +316,7 @@ local function init (opts)
             "AR=\"$AR rcu\"",
             "RANLIB=\"$RANLIB\"",
             "CFLAGS=\"-flto -Oz\"",
-            "MYLDFLAGS=\"-flto -Oz --closure 1\""
+            "MYLDFLAGS=\"-flto -Oz\""
           }, " ") })
           sys.execute({ "make", "local" })
           fs.cd("bin")
