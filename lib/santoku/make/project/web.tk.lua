@@ -229,6 +229,7 @@ local function init (opts)
   local base_server_libs = get_files("server/lib")
   local base_server_deps = get_files("server/deps")
   local base_server_test_specs = get_files("server/test/spec")
+  local base_server_test_res = get_files("server/test/res")
   local base_server_run_sh = "run.sh"
   local base_server_nginx_cfg = "nginx.conf"
   local base_server_nginx_daemon_cfg = "nginx-daemon.conf"
@@ -467,6 +468,10 @@ local function init (opts)
   end
 
   for fp in ivals(base_server_test_specs) do
+    add_file_target(test_server_dir_stripped(remove_tk(fp)), fp, test_server_env)
+  end
+
+  for fp in ivals(base_server_test_res) do
     add_file_target(test_server_dir_stripped(remove_tk(fp)), fp, test_server_env)
   end
 
@@ -788,7 +793,7 @@ local function init (opts)
 
   target(
     { "test" },
-    amap(amap(extend({}, base_server_test_specs), test_server_dir_stripped), remove_tk),
+    amap(amap(extend({}, base_server_test_specs, base_server_test_res), test_server_dir_stripped), remove_tk),
     function (_, _, iterating)
 
       build({ "stop", "test-stop" }, opts.verbosity)
