@@ -1,5 +1,10 @@
 # Now
 
+- Changes to make.*.lua files don't trigger rebuilds
+
+- Web test --iterate doesn't work without at least one test. Without any tests,
+  it should just reload the server
+
 - Replace rules matching strings & functions with callbacks to retrieve flags/etc
   per file
 - Instead of hokes.pre_make/etc, expose underlying make interface so user hooks
