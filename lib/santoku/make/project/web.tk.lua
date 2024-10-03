@@ -530,7 +530,7 @@ local function init (opts)
       local deps = { cdir(base_client_lua_modules_ok), pre }
       local wd = fs.cwd()
       local extra_flags = it.reduce(function (a, k, v)
-        if type(k) == "string" and str.find(post, k) or k(post) then
+        if (type(k) == "string" and str.find(post, k)) or (type(k) == "function" and k(post)) then
           if v.cxxflags then
             arr.extend(a, v.cxxflags)
           end
