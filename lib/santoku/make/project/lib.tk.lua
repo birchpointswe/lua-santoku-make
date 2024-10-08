@@ -60,6 +60,7 @@ local function init (opts)
   err.assert(vdt.istable(opts))
   err.assert(vdt.istable(opts.config))
 
+  opts.skip_check = opts.skip_check or nil
   opts.skip_coverage = opts.profile or opts.skip_coverage or nil
 
   local function work_dir (...)
@@ -243,6 +244,7 @@ local function init (opts)
     wasm = opts.wasm,
     sanitize = opts.sanitize,
     profile = opts.profile,
+    skip_check = opts.skip_check,
     skip_coverage = opts.skip_coverage,
     single = opts.single,
     bins = base_bins,
@@ -460,7 +462,7 @@ local function init (opts)
 
   for flag in ivals({
     "sanitize", "profile", "single",
-    "skip_coverage", "lua", "lua_path_extra", "lua_cpath_extra"
+    "skip_coverage", "skip_check", "lua", "lua_path_extra", "lua_cpath_extra"
   }) do
     local fp = work_dir(flag .. ".flag")
     fs.mkdirp(fs.dirname(fp))
@@ -478,7 +480,7 @@ local function init (opts)
   target(
     amap({ base_run_sh, base_check_sh }, test_dir),
     amap({
-      "skip_coverage.flag", "single.flag", "profile.flag", "sanitize.flag",
+      "skip_coverage.flag", "skip_check.flag", "single.flag", "profile.flag", "sanitize.flag",
       "lua.flag", "lua_path_extra.flag", "lua_cpath_extra.flag" }, work_dir))
 
   target(
@@ -624,10 +626,12 @@ local function init (opts)
   end)
 
   target({ "check" }, { "test-deps" }, function ()
-    fs.mkdirp(test_dir())
-    return fs.pushd(test_dir(), function ()
-      sys.execute({ "sh", "check.sh" })
-    end)
+    if not opts.skip_check then
+      fs.mkdirp(test_dir())
+      return fs.pushd(test_dir(), function ()
+        sys.execute({ "sh", "check.sh" })
+      end)
+    end
   end)
 
   target({ "exec" }, { "test-deps" }, function (_, _, args)

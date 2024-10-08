@@ -1,5 +1,7 @@
 # Now
 
+- Source maps
+
 - Changes to make.*.lua files don't trigger rebuilds
 
 - Web test --iterate doesn't work without at least one test. Without any tests,
