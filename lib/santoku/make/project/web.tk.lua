@@ -245,10 +245,7 @@ local function init (opts)
   local base_client_deps = get_files("client/deps")
   local base_client_libs = get_files("client/lib")
   local base_client_bins = get_files("client/bin")
-  local base_client_res = get_files("client/res", function (fp)
-    return not str.startswith(fp, "client/res/templated")
-  end)
-  local base_client_res_templated = get_files("client/res/templated")
+  local base_client_res = get_files("client/res")
   local base_client_pre_make_ok = "pre_make.ok"
   local base_client_lua_modules_ok = "lua_modules.ok"
   local base_client_lua_modules_deps_ok = "lua_modules.deps.ok"
@@ -520,12 +517,6 @@ local function init (opts)
         amap(extend({}, base_client_static), cdir_stripped))
     end
 
-    for fp in ivals(base_client_res_templated) do
-      add_file_target(cdir_stripped(remove_tk(fp)), fp, env,
-        extend({ cdir(base_client_lua_modules_deps_ok) },
-          amap(extend({}, base_client_res), cdir_stripped)))
-    end
-
     for fp in ivals(base_client_pages) do
       local pre = fs.absolute(cdir("build", "default-wasm", "build", "bin", fs.stripextensions(fp)) .. ".lua")
       local post = fs.absolute(cdir("bundler-post", fs.stripextensions(fp)))
@@ -600,9 +591,7 @@ local function init (opts)
     target(
       { cdir(base_client_lua_modules_ok) },
       extend({ opts.config_file, cdir(base_client_lua_modules_deps_ok) },
-        amap(extend({}, base_client_bins, base_client_libs, base_client_deps,
-          amap(extend({}, base_client_res_templated), remove_tk)), cdir_stripped)),
-      -- NOTE: base_client_res(_templated) deps handled by lua_modules_deps_ok
+        amap(extend({}, base_client_bins, base_client_libs, base_client_deps), cdir_stripped)),
       function ()
         local config_file = fs.absolute(opts.config_file)
         local config = {
