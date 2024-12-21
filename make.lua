@@ -1,19 +1,18 @@
 local env = {
 
   name = "santoku-make",
-  version = "0.0.89-1",
+  version = "0.0.90-1",
   variable_prefix = "TK_MAKE",
   license = "MIT",
   public = true,
 
   dependencies = {
     "lua >= 5.1",
-    "santoku >= 0.0.212-1",
+    "santoku >= 0.0.216-1",
     "santoku-fs >= 0.0.32-1",
     "santoku-system >= 0.0.27-1",
     "santoku-template >= 0.0.26-1",
     "santoku-bundle >= 0.0.30-1",
-    "basexx >= 0.4.1-1"
   },
 
   test = {

@@ -1,9 +1,7 @@
 <%
   str = require("santoku.string")
   squote = str.quote
-
-  basexx = require("basexx")
-  to_base64 = basexx.to_base64
+  to_base64 = str.to_base64
 %>
 
 local basexx = require("basexx")
@@ -471,7 +469,7 @@ local function init (opts)
   end
 
   for fp in ivals(base_server_test_res) do
-    add_file_target(test_server_dir_stripped(remove_tk(fp)), fp, test_server_env)
+    add_copied_target(test_server_dir_stripped(fp), fp, test_server_env)
   end
 
   for ddir, ddir_stripped, cdir, cdir_stripped, env in map(spread, ivals({
@@ -788,7 +786,9 @@ local function init (opts)
 
   target(
     { "test" },
-    amap(amap(extend({}, base_server_test_specs, base_server_test_res), test_server_dir_stripped), remove_tk),
+    amap(extend({},
+      amap(extend({}, base_server_test_specs), remove_tk),
+      base_server_test_res), test_server_dir_stripped),
     function (_, _, iterating)
 
       build({ "stop", "test-stop" }, opts.verbosity)
