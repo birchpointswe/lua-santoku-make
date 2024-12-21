@@ -88,7 +88,6 @@
   write it (this will prevent needless re-builds)
 
 - Support luarocks' built in external dependencies functionality
-- Remove basexx dependency
 - Template file overrides
 
 - Save specify openresty_dir in a local .env.lua file

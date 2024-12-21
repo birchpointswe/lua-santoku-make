@@ -1,12 +1,9 @@
 <%
   str = require("santoku.string")
   squote = str.quote
-
-  basexx = require("basexx")
-  to_base64 = basexx.to_base64
+  to_base64 = str.to_base64
 %>
 
-local basexx = require("basexx")
 local bundle = require("santoku.bundle")
 local env = require("santoku.env")
 local fs = require("santoku.fs")
@@ -45,6 +42,7 @@ local sformat = str.format
 local smatch = str.match
 local gsub = str.gsub
 local ssub = str.sub
+local from_base64 = str.from_base64
 
 local function create ()
   err.error("create lib not yet implemented")
@@ -131,7 +129,7 @@ local function init (opts)
   local function add_templated_target_base64 (dest, data, env)
     target({ dest }, { opts.config_file }, function ()
       fs.mkdirp(fs.dirname(dest))
-      local t, ds = tmpl.render(basexx.from_base64(data), env, _G)
+      local t, ds = tmpl.render(from_base64(data), env, _G)
       fs.writefile(dest, t)
       fs.writefile(dest .. ".d", tmpl.serialize_deps(dest, opts.config_file, ds))
     end)
@@ -221,9 +219,11 @@ local function init (opts)
     base_luacheck_cfg, base_luacov_cfg, base_run_sh,
     base_check_sh), test_dir), remove_tk)
 
-  local build_all = amap(amap(push(extend({},
-    base_bins, base_libs, base_res, base_deps, opts.wasm and { base_luarocks_cfg } or {}),
-    base_rockspec, base_makefile), build_dir), remove_tk)
+  local build_all = amap(extend({},
+    amap(push(extend({},
+      base_bins, base_libs, base_deps, opts.wasm and { base_luarocks_cfg } or {}),
+      base_rockspec, base_makefile), remove_tk),
+    base_res), build_dir)
 
   if #base_libs > 0 then
     push(test_all, test_dir(base_lib_makefile))
@@ -405,15 +405,15 @@ local function init (opts)
   end
 
   for fp in ivals(base_res) do
-    add_copied_target(build_dir(remove_tk(fp)), fp, build_env)
+    add_copied_target(build_dir(fp), fp, build_env)
   end
 
   for fp in ivals(base_res) do
-    add_copied_target(test_dir(remove_tk(fp)), fp, test_env)
+    add_copied_target(test_dir(fp), fp, test_env)
   end
 
   for fp in ivals(base_test_res) do
-    add_copied_target(test_dir(remove_tk(fp)), fp, test_env)
+    add_copied_target(test_dir(fp), fp, test_env)
   end
 
   add_templated_target_base64(build_dir(base_rockspec),
