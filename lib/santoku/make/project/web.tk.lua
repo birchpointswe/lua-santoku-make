@@ -33,6 +33,7 @@ local filter = it.filter
 local map = it.map
 
 local str = require("santoku.string")
+local from_base64 = str.from_base64
 local stripprefix = str.stripprefix
 local supper = string.upper
 local sformat = string.format
