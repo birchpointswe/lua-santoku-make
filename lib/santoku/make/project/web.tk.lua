@@ -4,7 +4,6 @@
   to_base64 = str.to_base64
 %>
 
-local basexx = require("basexx")
 local bundle = require("santoku.bundle")
 local env = require("santoku.env")
 local fun = require("santoku.functional")
@@ -183,7 +182,7 @@ local function init (opts)
     extra_srcs = extra_srcs or {}
     target({ dest }, extend({ opts.config_file }, extra_srcs), function ()
       fs.mkdirp(fs.dirname(dest))
-      local t, ds = tmpl.render(basexx.from_base64(data), env, _G)
+      local t, ds = tmpl.render(from_base64(data), env, _G)
       fs.writefile(dest, t)
       fs.writefile(dest .. ".d", tmpl.serialize_deps(dest, opts.config_file, ds))
     end)
