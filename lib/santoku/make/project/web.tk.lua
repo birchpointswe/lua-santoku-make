@@ -151,7 +151,7 @@ local function init (opts)
 
   local function force_template (fp)
     local match_fp = fun.bind(smatch, fp)
-    return find(match_fp, ivals(tbl.get(opts, "rules", "template") or {}))
+    return find(match_fp, ivals(tbl.get(opts.config, "rules", "template") or {}))
   end
 
   local function remove_tk (fp)
@@ -505,24 +505,28 @@ local function init (opts)
     for fp in ivals(base_client_static) do
       add_copied_target(cdir_stripped(fp), fp)
       add_file_target(cdir(remove_tk(fp)), cdir_stripped(fp), env,
-        { cdir(base_client_lua_modules_deps_ok) })
+        extend({ cdir(base_client_lua_modules_deps_ok) },
+          amap(extend({}, base_client_res_templated), fun.compose(remove_tk, cdir_stripped))))
       add_copied_target(ddir_stripped(remove_tk(fp)),
         cdir(remove_tk(fp)))
     end
 
     for fp in ivals(base_client_deps) do
       add_copied_target(cdir_stripped(fp), fp,
-        { cdir(base_client_lua_modules_deps_ok) })
+        extend({ cdir(base_client_lua_modules_deps_ok) },
+          amap(extend({}, base_client_res_templated), fun.compose(remove_tk, cdir_stripped))))
     end
 
     for fp in ivals(base_client_libs) do
       add_copied_target(cdir_stripped(fp), fp,
-        { cdir(base_client_lua_modules_deps_ok) })
+        extend({ cdir(base_client_lua_modules_deps_ok) },
+          amap(extend({}, base_client_res_templated), fun.compose(remove_tk, cdir_stripped))))
     end
 
     for fp in ivals(base_client_bins) do
       add_copied_target(cdir_stripped(fp), fp,
-        { cdir(base_client_lua_modules_deps_ok) })
+        extend({ cdir(base_client_lua_modules_deps_ok) },
+          amap(extend({}, base_client_res_templated), fun.compose(remove_tk, cdir_stripped))))
     end
 
     for fp in ivals(base_client_res) do
@@ -576,9 +580,7 @@ local function init (opts)
     target(
       { cdir(base_client_lua_modules_deps_ok) },
       extend({ opts.config_file },
-        amap(extend({},
-          base_client_res,
-          amap(extend({}, base_client_res_templated), remove_tk)), cdir_stripped)),
+        amap(extend({}, base_client_res), cdir_stripped)),
       function ()
         local config_file = fs.absolute(opts.config_file)
         local config = {
