@@ -1,7 +1,7 @@
 local env = {
 
   name = "santoku-make",
-  version = "0.0.91-1",
+  version = "0.0.92-1",
   variable_prefix = "TK_MAKE",
   license = "MIT",
   public = true,
@@ -29,5 +29,5 @@ env.download = env.homepage .. "/releases/download/" .. env.version .. "/" .. en
 
 return {
   type = "lib",
-  env = env
+  env = env,
 }

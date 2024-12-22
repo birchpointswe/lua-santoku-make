@@ -86,13 +86,19 @@ local function init (opts)
         find(match_fp, ivals(tbl.get(opts.config, "rules", "exclude") or {}))
     then
       return "ignore"
-    elseif find(match_fp, ivals(tbl.get(opts.config, "rules", "copy") or {})) or
-      not (str.find(fp, "%.tk$") or str.find(fp, "%.tk%."))
+    elseif find(match_fp, ivals(tbl.get(opts.config, "rules", "copy") or {}))
+      or not (str.find(fp, "%.tk$") or
+              str.find(fp, "%.tk%."))
     then
       return "copy"
     else
       return "template"
     end
+  end
+
+  local function force_template (fp)
+    local match_fp = fun.bind(smatch, fp)
+    return find(match_fp, ivals(tbl.get(opts.config, "rules", "template") or {}))
   end
 
   local function remove_tk (fp)
@@ -162,18 +168,23 @@ local function init (opts)
       "lib/lua/%s/loadall.so")
   end
 
-  local function get_files (dir)
+  local function get_files (dir, check_tpl)
+    local tpl = check_tpl and {} or nil
     if not fs.exists(dir) then
-      return {}
+      return {}, tpl
     end
     return collect(filter(function (fp)
+      if check_tpl and force_template(fp) then
+        push(tpl, fp)
+        return false
+      end
       return get_action(fp) ~= "ignore"
-    end, fs.files(dir, true)))
+    end, fs.files(dir, true))), tpl
   end
 
   local base_bins = get_files("bin")
   local base_libs = get_files("lib")
-  local base_res = get_files("res")
+  local base_res, base_res_templated = get_files("res", true)
   local base_deps = get_files("deps")
 
   local base_rockspec = sinterp("%s#(name)-%s#(version).rockspec", opts.config.env)
@@ -194,22 +205,28 @@ local function init (opts)
   local base_test_specs = opts.single and { opts.single } or get_files("test/spec")
 
   local base_test_deps = get_files("test/deps")
-  local base_test_res = get_files("test/res")
+  local base_test_res, base_test_res_templated = get_files("test/res", true)
 
-  local test_all_base = extend({},
+  local test_all_base_templated = extend({},
     base_bins, base_libs, base_deps,
-    base_test_deps, base_res, base_test_res)
+    base_test_deps, base_res_templated, base_test_res_templated)
+
+  local test_all_base_copied = extend({},
+    base_res, base_test_res)
 
   if opts.wasm then
-    extend(test_all_base, collect(map(fs.stripextension, ivals(base_test_specs))))
+    extend(test_all_base_templated, collect(map(fs.stripextension, ivals(base_test_specs))))
   else
-    extend(test_all_base, base_test_specs)
+    extend(test_all_base_templated, base_test_specs)
   end
 
-  local test_all = amap(amap(extend({},
-    test_all_base, { base_rockspec, base_makefile,
-    base_luarocks_cfg, base_luacheck_cfg, base_luacov_cfg,
-    base_run_sh, base_check_sh }), test_dir), remove_tk)
+  local test_all = amap(extend({},
+    amap(extend({},
+      test_all_base_templated,
+      { base_rockspec, base_makefile,
+        base_luarocks_cfg, base_luacheck_cfg, base_luacov_cfg,
+        base_run_sh, base_check_sh }), remove_tk),
+    test_all_base_copied), test_dir)
 
   local test_srcs = amap(amap(extend({},
     base_bins, base_libs, base_deps, base_test_deps), test_dir), remove_tk)
@@ -221,7 +238,8 @@ local function init (opts)
 
   local build_all = amap(extend({},
     amap(push(extend({},
-      base_bins, base_libs, base_deps, opts.wasm and { base_luarocks_cfg } or {}),
+      base_bins, base_libs, base_deps, opts.wasm and { base_luarocks_cfg } or {},
+      base_res_templated),
       base_rockspec, base_makefile), remove_tk),
     base_res), build_dir)
 
@@ -238,7 +256,6 @@ local function init (opts)
   end
 
   push(test_all, test_dir(base_lua_modules_ok))
-  amap(test_all, remove_tk)
 
   local base_env = {
     wasm = opts.wasm,
@@ -342,23 +359,23 @@ local function init (opts)
     supper((gsub(opts.config.env.name, "%W+", "_")))
 
   for fp in flatten(map(ivals, ivals({ base_libs, base_bins, base_deps }))) do
-    add_file_target(build_dir(fp), fp, build_env)
+    add_file_target(build_dir(remove_tk(fp)), fp, build_env)
   end
 
   for fp in flatten(map(ivals, ivals({ base_libs, base_bins, base_deps, base_test_deps }))) do
-    add_file_target(test_dir(fp), fp, test_env)
+    add_file_target(test_dir(remove_tk(fp)), fp, test_env)
   end
 
   if not opts.wasm then
 
     for fp in ivals(base_test_specs) do
-      add_file_target(test_dir(fp), fp, test_env)
+      add_file_target(test_dir(remove_tk(fp)), fp, test_env)
     end
 
   else
 
     for fp in ivals(base_test_specs) do
-      add_file_target(test_dir("bundler-pre", fp), fp, test_env)
+      add_file_target(test_dir("bundler-pre", remove_tk(fp)), fp, test_env)
     end
 
     for fp in ivals(base_test_specs) do
@@ -398,22 +415,34 @@ local function init (opts)
     end
 
     for fp in ivals(base_test_specs) do
-      add_copied_target(test_dir(fs.stripextension(fp)),
+      add_file_target(test_dir(fs.stripextension(remove_tk(fp))),
         test_dir("bundler-post", fs.stripextension(fp)), test_env)
     end
 
   end
 
   for fp in ivals(base_res) do
-    add_copied_target(build_dir(fp), fp, build_env)
+    add_copied_target(build_dir(fp), fp)
+  end
+
+  for fp in ivals(base_res_templated) do
+    add_file_target(build_dir(remove_tk(fp)), fp, build_env)
   end
 
   for fp in ivals(base_res) do
-    add_copied_target(test_dir(fp), fp, test_env)
+    add_copied_target(test_dir(fp), fp)
+  end
+
+  for fp in ivals(base_res_templated) do
+    add_file_target(test_dir(remove_tk(fp)), fp, test_env)
   end
 
   for fp in ivals(base_test_res) do
-    add_copied_target(test_dir(fp), fp, test_env)
+    add_copied_target(test_dir(fp), fp)
+  end
+
+  for fp in ivals(base_test_res_templated) do
+    add_file_target(test_dir(remove_tk(fp)), fp, test_env)
   end
 
   add_templated_target_base64(build_dir(base_rockspec),

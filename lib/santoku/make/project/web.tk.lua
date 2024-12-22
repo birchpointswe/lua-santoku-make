@@ -140,12 +140,18 @@ local function init (opts)
     then
       return "ignore"
     elseif find(match_fp, ivals(tbl.get(opts, "rules", "copy") or {}))
-      or not (str.find(fp, "%.tk$") or str.find(fp, "%.tk%."))
+      or not (str.find(fp, "%.tk$") or
+              str.find(fp, "%.tk%."))
     then
       return "copy"
     else
       return "template"
     end
+  end
+
+  local function force_template (fp)
+    local match_fp = fun.bind(smatch, fp)
+    return find(match_fp, ivals(tbl.get(opts, "rules", "template") or {}))
   end
 
   local function remove_tk (fp)
@@ -216,19 +222,24 @@ local function init (opts)
       "lib/lua/%s/loadall.so")
   end
 
-  local function get_files (dir, check)
+  local function get_files (dir, check_tpl)
+    local tpl = check_tpl and {} or nil
     if not fs.exists(dir) then
-      return {}
+      return {}, tpl
     end
     return collect(filter(function (fp)
-      return (not check or check(fp)) and get_action(fp) ~= "ignore"
-    end, fs.files(dir, true)))
+      if check_tpl and force_template(fp) then
+        push(tpl, fp)
+        return false
+      end
+      return get_action(fp) ~= "ignore"
+    end, fs.files(dir, true))), tpl
   end
 
   local base_server_libs = get_files("server/lib")
   local base_server_deps = get_files("server/deps")
   local base_server_test_specs = get_files("server/test/spec")
-  local base_server_test_res = get_files("server/test/res")
+  local base_server_test_res, base_server_test_res_templated = get_files("server/test/res", true)
   local base_server_run_sh = "run.sh"
   local base_server_nginx_cfg = "nginx.conf"
   local base_server_nginx_daemon_cfg = "nginx-daemon.conf"
@@ -243,7 +254,7 @@ local function init (opts)
   local base_client_deps = get_files("client/deps")
   local base_client_libs = get_files("client/lib")
   local base_client_bins = get_files("client/bin")
-  local base_client_res = get_files("client/res")
+  local base_client_res, base_client_res_templated = get_files("client/res", true)
   local base_client_pre_make_ok = "pre_make.ok"
   local base_client_lua_modules_ok = "lua_modules.ok"
   local base_client_lua_modules_deps_ok = "lua_modules.deps.ok"
@@ -469,7 +480,11 @@ local function init (opts)
   end
 
   for fp in ivals(base_server_test_res) do
-    add_copied_target(test_server_dir_stripped(fp), fp, test_server_env)
+    add_copied_target(test_server_dir_stripped(fp), fp)
+  end
+
+  for fp in ivals(base_server_test_res_templated) do
+    add_file_target(test_server_dir_stripped(remove_tk(fp)), fp, test_server_env)
   end
 
   for ddir, ddir_stripped, cdir, cdir_stripped, env in map(spread, ivals({
@@ -515,6 +530,11 @@ local function init (opts)
         amap(extend({}, base_client_static), cdir_stripped))
     end
 
+    for fp in ivals(base_client_res_templated) do
+      add_file_target(cdir_stripped(remove_tk(fp)), fp, env,
+        amap(extend({}, base_client_static), cdir_stripped))
+    end
+
     for fp in ivals(base_client_pages) do
       local pre = fs.absolute(cdir("build", "default-wasm", "build", "bin", fs.stripextensions(fp)) .. ".lua")
       local post = fs.absolute(cdir("bundler-post", fs.stripextensions(fp)))
@@ -556,7 +576,9 @@ local function init (opts)
     target(
       { cdir(base_client_lua_modules_deps_ok) },
       extend({ opts.config_file },
-        amap(extend({}, base_client_res), cdir_stripped)),
+        amap(extend({},
+          base_client_res,
+          amap(extend({}, base_client_res_templated), remove_tk)), cdir_stripped)),
       function ()
         local config_file = fs.absolute(opts.config_file)
         local config = {
@@ -564,7 +586,8 @@ local function init (opts)
           env = tbl.merge({
             name = opts.config.env.name .. "-client",
             version = opts.config.env.version,
-          }, env)
+          }, env),
+          rules = tbl.get(opts, "config", "rules", "client"),
         }
         fs.mkdirp(cdir())
         return fs.pushd(cdir(), function ()
@@ -597,7 +620,8 @@ local function init (opts)
           env = tbl.merge({
             name = opts.config.env.name .. "-client",
             version = opts.config.env.version,
-          }, env)
+          }, env),
+          rules = tbl.get(opts, "config", "rules", "client"),
         }
         fs.mkdirp(cdir())
         return fs.pushd(cdir(), function ()
@@ -648,7 +672,8 @@ local function init (opts)
         env = tbl.assign(opts.config.env.server, {
           name = opts.config.env.name .. "-server",
           version = opts.config.env.version,
-        })
+        }),
+        rules = tbl.get(opts, "config", "rules", "server"),
       }
 
       fs.mkdirp(server_dir())
@@ -690,7 +715,8 @@ local function init (opts)
         env = tbl.assign(opts.config.env.server, {
           name = opts.config.env.name .. "-server",
           version = opts.config.env.version,
-        })
+        }),
+        rules = tbl.get(opts, "config", "rules", "server"),
       }
 
       fs.mkdirp(test_server_dir())
@@ -787,7 +813,7 @@ local function init (opts)
   target(
     { "test" },
     amap(extend({},
-      amap(extend({}, base_server_test_specs), remove_tk),
+      amap(extend({}, base_server_test_specs, base_server_test_res_templated), remove_tk),
       base_server_test_res), test_server_dir_stripped),
     function (_, _, iterating)
 
@@ -801,7 +827,8 @@ local function init (opts)
         env = tbl.merge({
           name = opts.config.env.name .. "-client",
           version = opts.config.env.version,
-        }, test_client_env)
+        }, test_client_env),
+        rules = tbl.get(opts, "config", "rules", "client"),
       }
       fs.mkdirp(test_client_dir())
       fs.pushd(test_client_dir(), function ()
@@ -821,7 +848,8 @@ local function init (opts)
         env = tbl.assign(opts.config.env.server, {
           name = opts.config.env.name .. "-server",
           version = opts.config.env.version,
-        })
+        }),
+        rules = tbl.get(opts, "config", "rules", "server"),
       }
       fs.mkdirp(test_server_dir())
       fs.pushd(test_server_dir(), function ()
