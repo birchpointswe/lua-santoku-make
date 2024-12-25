@@ -275,6 +275,8 @@ local function init (opts)
     return fs.stripparts(fs.stripextensions(fp) .. ".js", 2)
   end, ivals(base_client_bins)))
 
+  -- TODO: Consider having the user pass these in. We don't know if they're
+  -- using santoku.web.spa, and we shouldn't assume these assets.
   local base_client_public = extend({},
     amap(extend({}, base_client_assets), function (fp)
       return fs.stripparts(fp, 2)
