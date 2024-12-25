@@ -282,7 +282,14 @@ local function init (opts)
     amap(extend({}, base_client_static), function (fp)
       return fs.stripparts(remove_tk(fp), 2)
     end),
-    base_client_pages)
+    base_client_pages,
+    varg.filter(fun.id,
+      tbl.get(opts, "config", "env", "client", "opts", "base_icon"),
+      tbl.get(opts, "config", "env", "client", "opts", "favicon_svg"),
+      tbl.get(opts, "config", "env", "client", "opts", "favicon_ico")),
+    it.collect(it.map(function (o)
+      return o.src
+    end, it.vals(tbl.get(opts, "config", "env", "client", "opts", "icons") or {}))))
 
   local function wrap_require (env)
     env = env or {}
