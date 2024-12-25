@@ -275,6 +275,8 @@ local function init (opts)
     return fs.stripparts(fs.stripextensions(fp) .. ".js", 2)
   end, ivals(base_client_bins)))
 
+
+
   local base_client_public = extend({},
     amap(extend({}, base_client_assets), function (fp)
       return fs.stripparts(fp, 2)
