@@ -939,7 +939,7 @@ local function init (opts)
     fs.mkdirp(dist_dir())
     return fs.pushd(dist_dir(), function ()
       if fs.exists("server.pid") then
-        pcall(function ()
+        err.pcall(function ()
           sys.execute({ "kill", smatch(fs.readfile("server.pid"), "(%d+)") })
         end)
       end
@@ -950,7 +950,7 @@ local function init (opts)
     fs.mkdirp(test_dist_dir())
     return fs.pushd(test_dist_dir(), function ()
       if fs.exists("server.pid") then
-        pcall(function ()
+        err.pcall(function ()
           sys.execute({ "kill", smatch(fs.readfile("server.pid"), "(%d+)") })
         end)
       end
