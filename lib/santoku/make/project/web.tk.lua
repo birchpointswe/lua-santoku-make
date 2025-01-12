@@ -275,24 +275,6 @@ local function init (opts)
     return fs.stripparts(fs.stripextensions(fp) .. ".js", 2)
   end, ivals(base_client_bins)))
 
-  -- TODO: Consider having the user pass these in. We don't know if they're
-  -- using santoku.web.spa, and we shouldn't assume these assets.
-  local base_client_public = extend({},
-    amap(extend({}, base_client_assets), function (fp)
-      return fs.stripparts(fp, 2)
-    end),
-    amap(extend({}, base_client_static), function (fp)
-      return fs.stripparts(remove_tk(fp), 2)
-    end),
-    base_client_pages,
-    varg.filter(fun.id,
-      tbl.get(opts, "config", "env", "client", "opts", "base_icon"),
-      tbl.get(opts, "config", "env", "client", "opts", "favicon_svg"),
-      tbl.get(opts, "config", "env", "client", "opts", "favicon_ico")),
-    it.collect(it.map(function (o)
-      return o.src
-    end, it.vals(tbl.get(opts, "config", "env", "client", "opts", "icons") or {}))))
-
   local function wrap_require (env)
     env = env or {}
     return function (mod)
@@ -358,7 +340,6 @@ local function init (opts)
     component = "client",
     dist_dir = fs.absolute(dist_dir()),
     build_dir = fs.absolute(client_dir("build", "default-wasm", "build")),
-    public_files = base_client_public,
     lua_path = get_lua_path(client_dir("build", "default-wasm", "build")),
     lua_cpath = get_lua_cpath(client_dir("build", "default-wasm", "build")),
   }
@@ -368,7 +349,6 @@ local function init (opts)
     component = "client",
     dist_dir = fs.absolute(test_dist_dir()),
     build_dir = fs.absolute(test_client_dir("build", "default-wasm", "build")),
-    public_files = base_client_public,
     lua_path = get_lua_path(test_client_dir("build", "default-wasm", "build")),
     lua_cpath = get_lua_cpath(test_client_dir("build", "default-wasm", "build")),
   }
