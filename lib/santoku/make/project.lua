@@ -23,7 +23,7 @@ local function init (opts)
   opts = opts or {}
   assert(hasindex(opts))
   opts.env = opts.env or "default"
-  opts.dir = opts.dir or "build"
+  opts.dir = opts.dir or fs.absolute("build")
   if not istable(opts.config) and not opts.config_file then
     opts.config = opts.config or ((opts.env ~= "default")
       and sformat("make.%s.lua", opts.env)

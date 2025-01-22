@@ -25,10 +25,10 @@ local push = arr.push
 local concat = arr.concat
 
 local iter = require("santoku.iter")
+local ivals = iter.ivals
 local pairs = iter.pairs
 local find = iter.find
 local chain = iter.chain
-local ivals = iter.ivals
 local map = iter.map
 local collect = iter.collect
 local filter = iter.filter
@@ -148,9 +148,8 @@ local function init (opts)
   local function get_require_paths (prefix, ...)
     local pfx = prefix and fs.join(prefix, "lua_modules") or "lua_modules"
     local ver = get_lua_version()
-    local cwd = fs.cwd()
     return concat(varg.reduce(function (t, n)
-      return push(t, fs.join(cwd, pfx, sformat(n, ver)))
+      return push(t, fs.join(pfx, sformat(n, ver)))
     end, {}, ...), ";")
   end
 
@@ -267,6 +266,7 @@ local function init (opts)
     bins = base_bins,
     libs = base_libs,
     root_dir = fs.cwd(),
+    work_dir = opts.dir,
     var = function (n)
       err.assert(vdt.isstring(n))
       return concat({ opts.config.env.variable_prefix, "_", n })
@@ -278,10 +278,10 @@ local function init (opts)
     lua = opts.lua or env.interpreter()[1],
     lua_path = opts.lua_path or get_lua_path(test_dir()),
     lua_cpath = opts.lua_cpath or get_lua_cpath(test_dir()),
-    lua_modules = fs.absolute(test_dir(base_lua_modules)),
-    luarocks_config = fs.absolute(test_dir(base_luarocks_cfg)),
-    luacov_stats_file = fs.absolute(test_dir(base_luacov_stats_file)),
-    luacov_report_file = fs.absolute(test_dir(base_luacov_report_file))
+    lua_modules = test_dir(base_lua_modules),
+    luarocks_config = test_dir(base_luarocks_cfg),
+    luacov_stats_file = test_dir(base_luacov_stats_file),
+    luacov_report_file = test_dir(base_luacov_report_file)
   }
 
   if opts.lua_path_extra then
@@ -294,7 +294,7 @@ local function init (opts)
 
   local build_env = {
     environment = opts.environment or "build",
-    lua_modules = opts.wasm and fs.absolute(build_dir(base_lua_modules)) or nil,
+    lua_modules = opts.wasm and build_dir(base_lua_modules) or nil,
   }
 
   tbl.merge(test_env, opts.config.env, base_env)
@@ -306,26 +306,19 @@ local function init (opts)
       { test_dir, test_all, test_env },
       { build_dir, build_all, build_env }
     })) do
-
-      local client_lua_dir = fs.absolute(dir(base_lua_dir))
+      local client_lua_dir = dir(base_lua_dir)
       local client_lua_ok = client_lua_dir .. ".ok"
-
       env.client_lua_dir = client_lua_dir
-
       tbl.insert(all, 1, client_lua_ok)
-
       target({ client_lua_ok }, {}, function ()
         fs.mkdirp(dir())
         return fs.pushd(dir(), function ()
-
           if not fs.exists("lua-5.1.5.tar.gz") then
             sys.execute({ "wget", "https://www.lua.org/ftp/lua-5.1.5.tar.gz" })
           end
-
           if fs.exists("lua-5.1.5") then
             sys.execute({ "rm", "-rf", "lua-5.1.5" }) -- TODO: use fs.rm(x, { recurse = true })
           end
-
           sys.execute({ "tar", "xf", "lua-5.1.5.tar.gz" })
           fs.cd("lua-5.1.5")
           sys.execute({ "emmake", "sh", "-c", arr.concat({
@@ -346,10 +339,8 @@ local function init (opts)
           sys.execute({ "chmod", "+x", "lua" })
           sys.execute({ "chmod", "+x", "luac" })
           fs.touch(client_lua_ok)
-
         end)
       end)
-
     end
 
   end
@@ -393,7 +384,7 @@ local function init (opts)
               { base_env.var("WASM"), "1" },
               { base_env.var("PROFILE"), opts.profile and "1" or "" },
               { base_env.var("SANITIZE"), opts.sanitize and "1" or "" },
-              { "LUACOV_CONFIG", fs.absolute(test_dir(base_luacov_cfg)) }
+              { "LUACOV_CONFIG", test_dir(base_luacov_cfg) }
             },
             path = get_lua_path(test_dir()),
             cpath = get_lua_cpath(test_dir()),
@@ -524,7 +515,6 @@ local function init (opts)
     function ()
       fs.mkdirp(test_dir())
       return fs.pushd(test_dir(), function ()
-
         -- TODO: It would be nice if santoku ivals returned an empty iterator
         -- for nil instead of erroring. It would allow omitting the {} below
         local vars = collect(map(fun.bind(sformat, "%s=%s"), flatten(map(pairs, ivals({
@@ -533,22 +523,13 @@ local function init (opts)
           opts.wasm and tbl.get(test_env, "test", "wasm", "luarocks", "env_vars") or {},
           not opts.wasm and tbl.get(test_env, "test", "native", "luarocks", "env_vars") or {},
         })))))
-
         sys.execute(extend({
           "luarocks", "make", fs.basename(base_rockspec),
           env = {
             LUAROCKS_CONFIG = opts.luarocks_config or base_luarocks_cfg
           }
         }, vars))
-
-        local post_make = tbl.get(test_env, "test", "hooks", "post_make")
-
-        if post_make then
-          post_make(test_env)
-        end
-
         fs.touch(base_lua_modules_ok)
-
       end)
     end)
 
@@ -562,42 +543,36 @@ local function init (opts)
   target({ "install" }, install_release_deps, function ()
     fs.mkdirp(build_dir())
     return fs.pushd(build_dir(), function ()
-
       local vars = collect(map(fun.bind(sformat, "%s=%s"), flatten(map(pairs, ivals({
         tbl.get(build_env, "luarocks", "env_vars") or {},
         tbl.get(build_env, "build", "luarocks", "env_vars") or {},
         opts.wasm and tbl.get(build_env, "build", "wasm", "luarocks", "env_vars") or {},
         not opts.wasm and tbl.get(build_env, "build", "native", "luarocks", "env_vars") or {}
       })))))
-
       sys.execute(extend({
         "luarocks", "make", base_rockspec,
         env = {
           LUAROCKS_CONFIG = opts.luarocks_config or (opts.wasm and base_luarocks_cfg) or nil
         },
       }, vars))
-
     end)
   end)
 
   target({ "install-deps" }, install_release_deps, function ()
     fs.mkdirp(build_dir())
     return fs.pushd(build_dir(), function ()
-
       local vars = collect(map(fun.bind(sformat, "%s=%s"), flatten(map(pairs, ivals({
         tbl.get(build_env, "luarocks", "env_vars") or {},
         tbl.get(build_env, "build", "luarocks", "env_vars") or {},
         opts.wasm and tbl.get(build_env, "build", "wasm", "luarocks", "env_vars") or {},
         not opts.wasm and tbl.get(build_env, "build", "native", "luarocks", "env_vars") or {}
       })))))
-
       sys.execute(extend({
         "luarocks", "make", "--deps-only", base_rockspec,
         env = {
           LUAROCKS_CONFIG = opts.luarocks_config or (opts.wasm and base_luarocks_cfg) or nil
         },
       }, vars))
-
     end)
   end)
 
@@ -619,19 +594,15 @@ local function init (opts)
     target({ "release" }, install_release_deps, function ()
       fs.mkdirp(build_dir())
       return fs.pushd(build_dir(), function ()
-
         varg.tup(function (ok, ...)
           if not ok then
             err.error("Commit your changes first", ...)
           end
         end, err.pcall(sys.execute, { "git", "diff", "--quiet" }))
-
         local api_key = opts.luarocks_api_key or env.var("LUAROCKS_API_KEY")
-
         if fs.exists(release_tarball) then
           fs.rm(release_tarball)
         end
-
         sys.execute({ "git", "tag", opts.config.env.version })
         sys.execute({ "git", "push", "--tags" })
         sys.execute({ "git", "push" })
@@ -641,7 +612,6 @@ local function init (opts)
         sys.execute({ "gh", "release", "create", "--generate-notes",
           opts.config.env.version, release_tarball, base_rockspec })
         sys.execute({ "luarocks", "upload", "--skip-pack", "--api-key", api_key, base_rockspec })
-
       end)
     end)
 
@@ -676,25 +646,17 @@ local function init (opts)
   end)
 
   target({ "iterate" }, {}, function ()
-
     varg.tup(function (ok, ...)
-
       if not ok then
         err.error("inotify not found", ...)
       end
-
     end, err.pcall(sys.execute, { "sh", "-c", "type inotifywait >/dev/null 2>/dev/null" }))
-
     while true do
-
       varg.tup(function (ok, ...)
-
         if not ok then
           print(...)
         end
-
       end, err.pcall(build, { "test", "check" }, opts.verbosity))
-
       sys.execute({
         "inotifywait", "-qr",
         "-e", "close_write", "-e", "modify",
@@ -703,9 +665,7 @@ local function init (opts)
           return fs.exists(fp)
         end, chain(fs.files("."), ivals({ "lib", "bin", "test", "res" })))))
       })
-
     end
-
   end)
 
   for fp in ivals(targets) do
@@ -718,10 +678,14 @@ local function init (opts)
     end
   end
 
+  local configure = tbl.get(opts, "config", "env", "configure")
+  if configure then
+    configure(submake, build_env)
+    configure(submake, test_env)
+  end
+
   return {
-
     config = opts.config,
-
     test = function (opts)
       opts = opts or {}
       build(tbl.assign({ "test" }, opts), opts.verbosity)
@@ -729,37 +693,30 @@ local function init (opts)
         build(tbl.assign({ "check" }, opts), opts.verbosity)
       end
     end,
-
     check = function (opts)
       opts = opts or {}
       build(tbl.assign({ "check" }, opts), opts.verbosity)
     end,
-
     iterate = function (opts)
       opts = opts or {}
       build(tbl.assign({ "iterate" }, opts), opts.verbosity)
     end,
-
     install = function (opts)
       opts = opts or {}
       build(tbl.assign({ "install" }, opts), opts.verbosity)
     end,
-
     install_deps = function (opts)
       opts = opts or {}
       build(tbl.assign({ "install-deps" }, opts), opts.verbosity)
     end,
-
     release = not opts.wasm and function (opts)
       opts = opts or {}
       build(tbl.assign({ "release" }, opts), opts.verbosity)
     end,
-
     exec = not opts.wasm and function (opts)
       opts = opts or {}
       build(tbl.assign({ "exec" }), opts.verbosity, opts)
     end,
-
   }
 
 end
