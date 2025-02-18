@@ -350,6 +350,7 @@ local function init (opts)
     build_dir = client_dir("build", "default-wasm", "build"),
     lua_path = get_lua_path(client_dir("build", "default-wasm", "build")),
     lua_cpath = get_lua_cpath(client_dir("build", "default-wasm", "build")),
+    luarocks_cfg = client_dir("build", "default-wasm", "build", base_server_luarocks_cfg),
   }
 
   local test_client_env = {
@@ -363,6 +364,7 @@ local function init (opts)
     build_dir = test_client_dir("build", "default-wasm", "build"),
     lua_path = get_lua_path(test_client_dir("build", "default-wasm", "build")),
     lua_cpath = get_lua_cpath(test_client_dir("build", "default-wasm", "build")),
+    luarocks_cfg = test_client_dir("build", "default-wasm", "build", base_server_luarocks_cfg),
   }
 
   -- TODO: Expose both require_client and require_server to both client and
