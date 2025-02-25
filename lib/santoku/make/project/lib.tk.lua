@@ -280,8 +280,10 @@ local function init (opts)
     lua_cpath = opts.lua_cpath or get_lua_cpath(test_dir()),
     lua_modules = test_dir(base_lua_modules),
     luarocks_config = test_dir(base_luarocks_cfg),
+    luarocks_cfg = test_dir(base_luarocks_cfg),
     luacov_stats_file = test_dir(base_luacov_stats_file),
-    luacov_report_file = test_dir(base_luacov_report_file)
+    luacov_report_file = test_dir(base_luacov_report_file),
+    target = "test-deps",
   }
 
   if opts.lua_path_extra then
@@ -295,6 +297,7 @@ local function init (opts)
   local build_env = {
     environment = opts.environment or "build",
     lua_modules = opts.wasm and build_dir(base_lua_modules) or nil,
+    target = "build",
   }
 
   tbl.merge(test_env, opts.config.env, base_env)
