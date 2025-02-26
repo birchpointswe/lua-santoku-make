@@ -668,7 +668,7 @@ local function init (opts)
           return fs.exists(fp)
         end, chain(fs.files("."), ivals({ "lib", "bin", "test", "res" })))))
       })
-      sys.sleep(250)
+      sys.sleep(.25)
     end
   end)
 
