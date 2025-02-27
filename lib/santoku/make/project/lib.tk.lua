@@ -383,7 +383,7 @@ local function init (opts)
             mods = extend({},
               opts.skip_coverage and {} or { "luacov", "luacov.hook", "luacov.tick" },
               opts.profile and { "santoku.profile" } or {},
-              opts.profile and { "santoku.trace" } or {}),
+              opts.trace and { "santoku.trace" } or {}),
             ignores = { "debug" },
             env = {
               { base_env.var("WASM"), "1" },
