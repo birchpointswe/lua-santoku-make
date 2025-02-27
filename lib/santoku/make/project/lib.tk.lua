@@ -59,7 +59,7 @@ local function init (opts)
   err.assert(vdt.istable(opts.config))
 
   opts.skip_check = opts.skip_check or nil
-  opts.skip_coverage = opts.profile or opts.skip_coverage or nil
+  opts.skip_coverage = opts.profile or opts.trace or opts.skip_coverage or nil
 
   local function work_dir (...)
     if opts.wasm then
@@ -260,6 +260,7 @@ local function init (opts)
     wasm = opts.wasm,
     sanitize = opts.sanitize,
     profile = opts.profile,
+    trace = opts.trace,
     skip_check = opts.skip_check,
     skip_coverage = opts.skip_coverage,
     single = opts.single,
@@ -381,11 +382,13 @@ local function init (opts)
             cc = "emcc",
             mods = extend({},
               opts.skip_coverage and {} or { "luacov", "luacov.hook", "luacov.tick" },
-              opts.profile and { "santoku.profile" } or {}),
+              opts.profile and { "santoku.profile" } or {},
+              opts.profile and { "santoku.trace" } or {}),
             ignores = { "debug" },
             env = {
               { base_env.var("WASM"), "1" },
               { base_env.var("PROFILE"), opts.profile and "1" or "" },
+              { base_env.var("TRACE"), opts.trace and "1" or "" },
               { base_env.var("SANITIZE"), opts.sanitize and "1" or "" },
               { "LUACOV_CONFIG", test_dir(base_luacov_cfg) }
             },
@@ -484,7 +487,7 @@ local function init (opts)
     <% return squote(to_base64(readfile("res/lib/test-check.sh"))) %>, test_env) -- luacheck: ignore
 
   for flag in ivals({
-    "sanitize", "profile", "single",
+    "sanitize", "profile", "trace", "single",
     "skip_coverage", "skip_check", "lua", "lua_path_extra", "lua_cpath_extra"
   }) do
     local fp = work_dir(flag .. ".flag")
@@ -503,8 +506,9 @@ local function init (opts)
   target(
     amap({ base_run_sh, base_check_sh }, test_dir),
     amap({
-      "skip_coverage.flag", "skip_check.flag", "single.flag", "profile.flag", "sanitize.flag",
-      "lua.flag", "lua_path_extra.flag", "lua_cpath_extra.flag" }, work_dir))
+      "skip_coverage.flag", "skip_check.flag", "single.flag", "profile.flag",
+      "trace.flag,", "sanitize.flag", "lua.flag", "lua_path_extra.flag",
+      "lua_cpath_extra.flag" }, work_dir))
 
   target(
     amap(amap(extend({ base_run_sh, base_check_sh }, base_libs), test_dir), remove_tk),

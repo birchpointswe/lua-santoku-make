@@ -9,6 +9,8 @@
 require("luacov")
 <% pop() push(profile) %>
 require("santoku.profile")
+<% pop() push(trace) %>
+require("santoku.trace")
 <% pop() %>
 
 <% push(init) %>

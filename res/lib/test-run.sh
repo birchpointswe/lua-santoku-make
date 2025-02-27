@@ -65,6 +65,10 @@ MODS="$MODS -l luacov"
 MODS="$MODS -l santoku.profile"
 <% pop() %>
 
+<% push(trace) %>
+MODS="$MODS -l santoku.trace"
+<% pop() %>
+
 <% push(single) %>
 toku test -s -i "$LUA $MODS" "<% return single %>"
 status_tst=$?
