@@ -507,7 +507,7 @@ local function init (opts)
     amap({ base_run_sh, base_check_sh }, test_dir),
     amap({
       "skip_coverage.flag", "skip_check.flag", "single.flag", "profile.flag",
-      "trace.flag,", "sanitize.flag", "lua.flag", "lua_path_extra.flag",
+      "trace.flag", "sanitize.flag", "lua.flag", "lua_path_extra.flag",
       "lua_cpath_extra.flag" }, work_dir))
 
   target(
