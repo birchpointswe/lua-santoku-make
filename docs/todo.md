@@ -1,5 +1,9 @@
 # Now
 
+- Prevent old modules from hanging around (e.g. if lib x has x.y in version 1,
+  but not 2, when we update the lib, x.y should fail to bundle. It doesn't
+  currently fail.)
+
 - Source maps
 
 - Changes to make.*.lua files don't trigger rebuilds
