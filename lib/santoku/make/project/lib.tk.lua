@@ -188,6 +188,7 @@ local function init (opts)
 
   local base_rockspec = sinterp("%s#(name)-%s#(version).rockspec", opts.config.env)
   local base_makefile = "Makefile"
+  local base_license = "LICENSE"
   local base_lib_makefile = "lib/Makefile"
   local base_bin_makefile = "bin/Makefile"
   local base_luarocks_cfg = "luarocks.lua"
@@ -596,6 +597,10 @@ local function init (opts)
 
     if #base_bins > 0 then
       push(release_tarball_contents, base_bin_makefile)
+    end
+
+    if fs.exists(base_license) then
+      push(release_tarball_contents, base_license)
     end
 
     target({ "release" }, install_release_deps, function ()
