@@ -419,6 +419,11 @@ local function init (opts)
 
   end
 
+  if fs.exists(base_license) then
+    add_copied_target(build_dir(base_license), base_license)
+    push(build_all, build_dir(base_license))
+  end
+
   for fp in ivals(base_res) do
     add_copied_target(build_dir(fp), fp)
   end
