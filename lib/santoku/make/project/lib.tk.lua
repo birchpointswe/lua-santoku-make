@@ -536,10 +536,12 @@ local function init (opts)
           opts.wasm and tbl.get(test_env, "test", "wasm", "luarocks", "env_vars") or {},
           not opts.wasm and tbl.get(test_env, "test", "native", "luarocks", "env_vars") or {},
         })))))
+        local lcfg = opts.luarocks_config or base_luarocks_cfg
+        lcfg = lcfg and fs.absolute(lcfg) or nil
         sys.execute(extend({
           "luarocks", "make", fs.basename(base_rockspec),
           env = {
-            LUAROCKS_CONFIG = opts.luarocks_config or base_luarocks_cfg
+            LUAROCKS_CONFIG = lcfg
           }
         }, vars))
         fs.touch(base_lua_modules_ok)
@@ -562,10 +564,12 @@ local function init (opts)
         opts.wasm and tbl.get(build_env, "build", "wasm", "luarocks", "env_vars") or {},
         not opts.wasm and tbl.get(build_env, "build", "native", "luarocks", "env_vars") or {}
       })))))
+      local lcfg = opts.luarocks_config or (opts.wasm and base_luarocks_cfg) or nil
+      lcfg = lcfg and fs.absolute(lcfg) or nil
       sys.execute(extend({
         "luarocks", "make", base_rockspec,
         env = {
-          LUAROCKS_CONFIG = opts.luarocks_config or (opts.wasm and base_luarocks_cfg) or nil
+          LUAROCKS_CONFIG = lcfg
         },
       }, vars))
     end)
@@ -580,10 +584,12 @@ local function init (opts)
         opts.wasm and tbl.get(build_env, "build", "wasm", "luarocks", "env_vars") or {},
         not opts.wasm and tbl.get(build_env, "build", "native", "luarocks", "env_vars") or {}
       })))))
+      local lcfg = opts.luarocks_config or (opts.wasm and base_luarocks_cfg) or nil
+      lcfg = lcfg and fs.absolute(lcfg) or nil
       sys.execute(extend({
         "luarocks", "make", "--deps-only", base_rockspec,
         env = {
-          LUAROCKS_CONFIG = opts.luarocks_config or (opts.wasm and base_luarocks_cfg) or nil
+          LUAROCKS_CONFIG = lcfg
         },
       }, vars))
     end)
