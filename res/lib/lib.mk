@@ -92,9 +92,9 @@ LIB_CFLAGS += <% return arr.concat(tbl.get(test or {}, "wasm", "cflags") or {}, 
 LIB_CXXFLAGS += <% return arr.concat(tbl.get(test or {}, "wasm", "cxxflags") or {}, " ") %>
 LIB_LDFLAGS += <% return arr.concat(tbl.get(test or {}, "wasm", "ldflags") or {}, " ") %>
 <% pop() push(environment == "test" and sanitize) %>
-LIB_CFLAGS := -fsanitize=address $(LIB_CFLAGS)
-LIB_CXXFLAGS := -fsanitize=address $(LIB_CXXFLAGS)
-LIB_LDFLAGS := -fsanitize=address $(LIB_LDFLAGS)
+LIB_CFLAGS := -fsanitize=address $(LIB_CFLAGS) -fno-omit-frame-pointer -g3 -O1
+LIB_CXXFLAGS := -fsanitize=address $(LIB_CXXFLAGS) -fno-omit-frame-pointer -g3 -O1
+LIB_LDFLAGS := -fsanitize=address $(LIB_LDFLAGS) -fno-omit-frame-pointer -g3 -O1
 LIB_CFLAGS += <% return arr.concat(tbl.get(test or {}, "sanitize", "cflags") or {}, " ") %>
 LIB_CXXFLAGS += <% return arr.concat(tbl.get(test or {}, "sanitize", "cxxflags") or {}, " ") %>
 LIB_LDFLAGS += <% return arr.concat(tbl.get(test or {}, "sanitize", "ldflags") or {}, " ") %>
