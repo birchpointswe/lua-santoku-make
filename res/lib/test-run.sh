@@ -26,6 +26,8 @@ export LUA_CPATH='<% return lua_cpath %>'
 
 <% push(sanitize and not wasm) %>
 LUA="env LD_PRELOAD=$(cc -print-file-name=libasan.so) $LUA"
+export ASAN_OPTIONS="fast_unwind_on_malloc=0:symbolize=1:detect_leaks=1"
+export ASAN_SYMBOLIZER_PATH="$(which llvm-symbolizer)"
 <% pop() %>
 
 <% return concat(collect(map(function (k, v)
