@@ -1,5 +1,13 @@
 # Now
 
+- Revise backlog
+- Generalize profiles (e.g. replace --sanitize, test, build with user-defined
+  profiles). toku lib test, build, test --iterate, etc can use any profile
+    - Do we already have this with --env? Can we simply delete the whole
+      test/build/sanitize concept in favor of --env?
+
+# Backlog
+
 - Prevent old modules from hanging around (e.g. if lib x has x.y in version 1,
   but not 2, when we update the lib, x.y should fail to bundle. It doesn't
   currently fail.)
