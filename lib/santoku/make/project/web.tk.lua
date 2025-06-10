@@ -55,7 +55,6 @@ local function init (opts)
 
   opts.single = opts.single and opts.single:gsub("^[^/]+/", "") or nil
   opts.skip_check = opts.skip_check or nil
-  opts.skip_coverage = opts.profile or opts.trace or opts.skip_coverage or nil
   opts.openresty_dir = opts.openresty_dir or opts.config.openresty_dir or env.var("OPENRESTY_DIR")
 
   local function work_dir (...)
@@ -293,7 +292,7 @@ local function init (opts)
     profile = opts.profile,
     trace = opts.trace,
     skip_check = opts.skip_check,
-    skip_coverage = opts.skip_coverage,
+    coverage = opts.coverage,
     var = function (n)
       err.assert(vdt.isstring(n))
       return concat({ opts.config.env.variable_prefix, "_", n })
@@ -456,7 +455,7 @@ local function init (opts)
     test_server_dir(base_server_nginx_daemon_cfg))
 
   for flag in ivals({
-    "profile", "trace", "skip_coverage", "skip_check"
+    "profile", "trace", "coverage", "skip_check"
   }) do
     local fp = work_dir(flag .. ".flag")
     fs.mkdirp(fs.dirname(fp))
@@ -473,7 +472,7 @@ local function init (opts)
 
   target(
     amap({ base_server_init_test_lua, base_server_init_worker_test_lua }, test_server_dir),
-    amap({ "profile.flag", "trace.flag", "skip_coverage.flag", "skip_check.flag" }, work_dir))
+    amap({ "profile.flag", "trace.flag", "coverage.flag", "skip_check.flag" }, work_dir))
 
   for fp in ivals(base_server_libs) do
     add_file_target(server_dir_stripped(remove_tk(fp)), fp, server_env)
@@ -620,7 +619,7 @@ local function init (opts)
             profile = opts.profile,
             trace = opts.trace,
             skip_check = opts.skip_check,
-            skip_coverage = opts.skip_coverage,
+            coverage = opts.coverage,
             wasm = true,
             skip_tests = true,
             dir = cdir("build"),
@@ -652,7 +651,7 @@ local function init (opts)
             profile = opts.profile,
             trace = opts.trace,
             skip_check = opts.skip_check,
-            skip_coverage = opts.skip_coverage,
+            coverage = opts.coverage,
             wasm = true,
             skip_tests = true,
             dir = cdir("build"),
@@ -688,7 +687,7 @@ local function init (opts)
           profile = opts.profile,
           trace = opts.trace,
           skip_check = opts.skip_check,
-          skip_coverage = opts.skip_coverage,
+          coverage = opts.coverage,
           skip_tests = true,
           dir = server_dir(),
         }).install()
@@ -721,7 +720,7 @@ local function init (opts)
           profile = opts.profile,
           trace = opts.trace,
           skip_check = opts.skip_check,
-          skip_coverage = opts.skip_coverage,
+          coverage = opts.coverage,
           skip_tests = true,
           lua = test_server_env.lua,
           lua_path = test_server_env.lua_path,
@@ -818,7 +817,7 @@ local function init (opts)
           profile = opts.profile,
           trace = opts.trace,
           skip_check = opts.skip_check,
-          skip_coverage = opts.skip_coverage,
+          coverage = opts.coverage,
           wasm = true,
           dir = test_client_dir(),
         }).test()
@@ -841,7 +840,7 @@ local function init (opts)
           profile = opts.profile,
           trace = opts.trace,
           skip_check = opts.skip_check,
-          skip_coverage = opts.skip_coverage,
+          coverage = opts.coverage,
           lua = test_server_env.lua,
           lua_path = test_server_env.lua_path,
           lua_cpath = test_server_env.lua_cpath,

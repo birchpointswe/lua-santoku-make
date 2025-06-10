@@ -59,7 +59,6 @@ local function init (opts)
   err.assert(vdt.istable(opts.config))
 
   opts.skip_check = opts.skip_check or nil
-  opts.skip_coverage = opts.profile or opts.trace or opts.skip_coverage or nil
 
   local function work_dir (...)
     if opts.wasm then
@@ -263,7 +262,7 @@ local function init (opts)
     profile = opts.profile,
     trace = opts.trace,
     skip_check = opts.skip_check,
-    skip_coverage = opts.skip_coverage,
+    coverage = opts.coverage,
     single = opts.single,
     bins = base_bins,
     libs = base_libs,
@@ -382,7 +381,7 @@ local function init (opts)
           bundle(test_dir("bundler-pre", fp), test_dir("bundler-post", fs.dirname(fp)), {
             cc = "emcc",
             mods = extend({},
-              opts.skip_coverage and {} or { "luacov", "luacov.hook", "luacov.tick" },
+              opts.coverage and {} or { "luacov", "luacov.hook", "luacov.tick" },
               opts.profile and { "santoku.profile" } or {},
               opts.trace and { "santoku.trace" } or {}),
             ignores = { "debug" },
@@ -494,7 +493,7 @@ local function init (opts)
 
   for flag in ivals({
     "sanitize", "profile", "trace", "single",
-    "skip_coverage", "skip_check", "lua", "lua_path_extra", "lua_cpath_extra"
+    "coverage", "skip_check", "lua", "lua_path_extra", "lua_cpath_extra"
   }) do
     local fp = work_dir(flag .. ".flag")
     fs.mkdirp(fs.dirname(fp))
@@ -512,7 +511,7 @@ local function init (opts)
   target(
     amap({ base_run_sh, base_check_sh }, test_dir),
     amap({
-      "skip_coverage.flag", "skip_check.flag", "single.flag", "profile.flag",
+      "coverage.flag", "skip_check.flag", "single.flag", "profile.flag",
       "trace.flag", "sanitize.flag", "lua.flag", "lua_path_extra.flag",
       "lua_cpath_extra.flag" }, work_dir))
 
