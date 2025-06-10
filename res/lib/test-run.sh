@@ -59,7 +59,7 @@ status_tst=$?
 
 MODS=""
 
-<% push(not skip_coverage) %>
+<% push(coverage) %>
 MODS="$MODS -l luacov"
 <% pop() %>
 

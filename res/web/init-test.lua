@@ -5,7 +5,7 @@
   err = require("santoku.error")
 %>
 
-<% push(not skip_coverage) %>
+<% push(coverage) %>
 require("luacov")
 <% pop() push(profile) %>
 require("santoku.profile")
