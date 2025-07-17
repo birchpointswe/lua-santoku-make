@@ -263,7 +263,7 @@ local function init (opts)
     trace = opts.trace,
     skip_check = opts.skip_check,
     coverage = opts.coverage,
-    single = opts.single,
+    single = opts.single and remove_tk(opts.single) or nil,
     bins = base_bins,
     libs = base_libs,
     root_dir = fs.cwd(),
