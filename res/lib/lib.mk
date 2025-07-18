@@ -62,9 +62,9 @@ LIBFLAG = -shared
 end %>
 
 <% -- flags for all environments %>
-LIB_CFLAGS += -Wall -I. $(addprefix -I, $(LUA_INCDIR)) $(<% return var("CFLAGS") %>) <% return arr.concat(cflags or {}, " ") %>
-LIB_CXXFLAGS += -Wall -I. $(addprefix -I, $(LUA_INCDIR)) $(<% return var("CXXFLAGS") %>) <% return arr.concat(cxxflags or {}, " ") %>
-LIB_LDFLAGS += -Wall $(addprefix -L, $(LUA_LIBDIR)) $(<% return var("LDFLAGS") %>) <% return arr.concat(ldflags or {}, " ") %>
+LIB_CFLAGS := -Wall -I. $(addprefix -I, $(LUA_INCDIR)) <% return arr.concat(cflags or {}, " ") %> $(<% return var("CFLAGS") %>) $(LIB_CFLAGS)
+LIB_CXXFLAGS := -Wall -I. $(addprefix -I, $(LUA_INCDIR)) <% return arr.concat(cxxflags or {}, " ") %> $(<% return var("CXXFLAGS") %>) $(LIB_CXXFLAGS)
+LIB_LDFLAGS := -Wall $(addprefix -L, $(LUA_LIBDIR)) <% return arr.concat(ldflags or {}, " ") %> $(<% return var("LDFLAGS") %>) $(LIB_LDFLAGS)
 
 <% -- flags for build environments %>
 <% push(environment == "build") %>
@@ -91,13 +91,6 @@ LIB_LDFLAGS += <% return arr.concat(tbl.get(test or {}, "native", "ldflags") or 
 LIB_CFLAGS += <% return arr.concat(tbl.get(test or {}, "wasm", "cflags") or {}, " ") %>
 LIB_CXXFLAGS += <% return arr.concat(tbl.get(test or {}, "wasm", "cxxflags") or {}, " ") %>
 LIB_LDFLAGS += <% return arr.concat(tbl.get(test or {}, "wasm", "ldflags") or {}, " ") %>
-<% pop() push(environment == "test" and sanitize) %>
-LIB_CFLAGS := -fsanitize=address,undefined $(LIB_CFLAGS) -fno-omit-frame-pointer -g3 -O1
-LIB_CXXFLAGS := -fsanitize=address,undefined $(LIB_CXXFLAGS) -fno-omit-frame-pointer -g3 -O1
-LIB_LDFLAGS := -fsanitize=address,undefined $(LIB_LDFLAGS) -fno-omit-frame-pointer -g3 -O1
-LIB_CFLAGS += <% return arr.concat(tbl.get(test or {}, "sanitize", "cflags") or {}, " ") %>
-LIB_CXXFLAGS += <% return arr.concat(tbl.get(test or {}, "sanitize", "cxxflags") or {}, " ") %>
-LIB_LDFLAGS += <% return arr.concat(tbl.get(test or {}, "sanitize", "ldflags") or {}, " ") %>
 <% pop() %>
 
 all: $(LIB_O) $(LIB_SO)
@@ -115,8 +108,6 @@ all: $(LIB_O) $(LIB_SO)
 <% return inject_flags(tbl.get(test or {}, "native", "rules")) %>
 <% pop() push(environment == "test" and wasm) %>
 <% return inject_flags(tbl.get(test or {}, "wasm", "rules")) %>
-<% pop() push(environment == "test" and sanitize) %>
-<% return inject_flags(tbl.get(test or {}, "sanitize", "rules")) %>
 <% pop() %>
 
 %.o: %.c

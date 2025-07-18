@@ -258,7 +258,6 @@ local function init (opts)
 
   local base_env = {
     wasm = opts.wasm,
-    sanitize = opts.sanitize,
     profile = opts.profile,
     trace = opts.trace,
     skip_check = opts.skip_check,
@@ -389,13 +388,11 @@ local function init (opts)
               { base_env.var("WASM"), "1" },
               { base_env.var("PROFILE"), opts.profile and "1" or "" },
               { base_env.var("TRACE"), opts.trace and "1" or "" },
-              { base_env.var("SANITIZE"), opts.sanitize and "1" or "" },
               { "LUACOV_CONFIG", test_dir(base_luacov_cfg) }
             },
             path = get_lua_path(test_dir()),
             cpath = get_lua_cpath(test_dir()),
             flags = extend({
-              opts.sanitize and "-fsanitize=address" or "",
               "-sASSERTIONS", "-sSINGLE_FILE", "-sALLOW_MEMORY_GROWTH",
               "-I" .. fs.join(test_env.client_lua_dir, "include"),
               "-L" .. fs.join(test_env.client_lua_dir, "lib"),
@@ -404,9 +401,7 @@ local function init (opts)
             tbl.get(test_env, "test", "cflags") or {},
             tbl.get(test_env, "test", "ldflags") or {},
             tbl.get(test_env, "test", "wasm", "cflags") or {},
-            tbl.get(test_env, "test", "wasm", "ldflags") or {},
-            tbl.get(test_env, "test", "sanitize", "wasm", "cflags") or {},
-            tbl.get(test_env, "test", "sanitize", "wasm", "ldflags") or {})
+            tbl.get(test_env, "test", "wasm", "ldflags") or {})
           })
         end)
     end
@@ -492,8 +487,8 @@ local function init (opts)
     <% return squote(to_base64(readfile("res/lib/test-check.sh"))) %>, test_env) -- luacheck: ignore
 
   for flag in ivals({
-    "sanitize", "profile", "trace", "single",
-    "coverage", "skip_check", "lua", "lua_path_extra", "lua_cpath_extra"
+    "profile", "trace", "single", "coverage", "skip_check", "lua",
+    "lua_path_extra", "lua_cpath_extra"
   }) do
     local fp = work_dir(flag .. ".flag")
     fs.mkdirp(fs.dirname(fp))
@@ -512,18 +507,13 @@ local function init (opts)
     amap({ base_run_sh, base_check_sh }, test_dir),
     amap({
       "coverage.flag", "skip_check.flag", "single.flag", "profile.flag",
-      "trace.flag", "sanitize.flag", "lua.flag", "lua_path_extra.flag",
-      "lua_cpath_extra.flag" }, work_dir))
-
-  target(
-    amap(amap(extend({ base_run_sh, base_check_sh }, base_libs), test_dir), remove_tk),
-    amap({ "sanitize.flag" }, work_dir))
+      "trace.flag", "lua.flag", "lua_path_extra.flag", "lua_cpath_extra.flag" },
+      work_dir))
 
   target(
     amap({ base_lua_modules_ok }, test_dir),
     push(extend({}, test_srcs, test_cfgs),
-      test_dir(base_luarocks_cfg),
-      work_dir("sanitize.flag")),
+      test_dir(base_luarocks_cfg)),
     function ()
       fs.mkdirp(test_dir())
       return fs.pushd(test_dir(), function ()
