@@ -1,10 +1,9 @@
 # Now
 
 - Revise backlog
-- Generalize profiles (e.g. replace --sanitize, test, build with user-defined
-  profiles). toku lib test, build, test --iterate, etc can use any profile
-    - Do we already have this with --env? Can we simply delete the whole
-      test/build/sanitize concept in favor of --env?
+- Generalize profiles
+  - Sanitize replaced with user-defined sanitize profile
+  - Can/should we do the same with other things? wasm even?
 
 # Backlog
 
