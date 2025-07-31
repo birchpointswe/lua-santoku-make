@@ -250,7 +250,6 @@ local function init (opts)
   local base_server_test_res, base_server_test_res_templated = get_files("server/test/res", true)
   local base_server_run_sh = "run.sh"
   local base_server_nginx_cfg = "nginx.conf"
-  local base_server_nginx_daemon_cfg = "nginx-daemon.conf"
   local base_server_init_test_lua = "init-test.lua"
   local base_server_init_worker_test_lua = "init-worker-test.lua"
   local base_server_luarocks_cfg = "luarocks.lua"
@@ -303,7 +302,6 @@ local function init (opts)
     environment = "main",
     component = "server",
     target = "build",
-    background = opts.background,
     libs = base_server_libs,
     dist_dir = dist_dir(),
     public_dir = dist_dir_client(),
@@ -313,15 +311,10 @@ local function init (opts)
     luarocks_cfg = server_dir(base_server_luarocks_cfg),
   }
 
-  local server_daemon_env = {
-    background = true
-  }
-
   local test_server_env = {
     environment = "test",
     component = "server",
     target = "test-build",
-    background = opts.background,
     libs = base_server_libs,
     dist_dir = test_dist_dir(),
     public_dir = test_dist_dir_client(),
@@ -333,10 +326,6 @@ local function init (opts)
     lua_path = get_lua_path(test_dist_dir()),
     lua_cpath = get_lua_cpath(test_dist_dir()),
     lua_modules = test_dist_dir(base_server_lua_modules),
-  }
-
-  local test_server_daemon_env = {
-    background = true
   }
 
   local client_env = {
@@ -373,9 +362,7 @@ local function init (opts)
   test_client_env.require_client = wrap_require(test_client_env)
 
   tbl.merge(server_env, base_env, opts.config.env.server)
-  tbl.merge(server_daemon_env, server_env)
   tbl.merge(test_server_env, base_env, opts.config.env.server)
-  tbl.merge(test_server_daemon_env, test_server_env)
   tbl.merge(client_env, base_env, opts.config.env.client)
   tbl.merge(test_client_env, base_env, opts.config.env.client)
 
@@ -395,16 +382,6 @@ local function init (opts)
 
   add_templated_target_base64(test_server_dir(base_server_nginx_cfg),
     <% return squote(to_base64(readfile("res/web/nginx.tk.conf"))) %>, test_server_env, -- luacheck: ignore
-    { test_server_dir(base_server_lua_modules_ok),
-      test_server_dir(base_server_init_test_lua),
-      test_server_dir(base_server_init_worker_test_lua) })
-
-  add_templated_target_base64(server_dir(base_server_nginx_daemon_cfg),
-    <% return squote(to_base64(readfile("res/web/nginx.tk.conf"))) %>, server_daemon_env, -- luacheck: ignore
-    { server_dir(base_server_lua_modules_ok) })
-
-  add_templated_target_base64(test_server_dir(base_server_nginx_daemon_cfg),
-    <% return squote(to_base64(readfile("res/web/nginx.tk.conf"))) %>, test_server_daemon_env, -- luacheck: ignore
     { test_server_dir(base_server_lua_modules_ok),
       test_server_dir(base_server_init_test_lua),
       test_server_dir(base_server_init_worker_test_lua) })
@@ -430,10 +407,6 @@ local function init (opts)
     server_dir(base_server_nginx_cfg))
 
   add_copied_target(
-    dist_dir(base_server_nginx_daemon_cfg),
-    server_dir(base_server_nginx_daemon_cfg))
-
-  add_copied_target(
     test_dist_dir(base_server_init_test_lua),
     test_server_dir(base_server_init_test_lua))
 
@@ -449,10 +422,6 @@ local function init (opts)
     test_dist_dir(base_server_nginx_cfg),
     test_server_dir(base_server_nginx_cfg),
     { test_dist_dir(base_server_init_test_lua), test_dist_dir(base_server_init_worker_test_lua) })
-
-  add_copied_target(
-    test_dist_dir(base_server_nginx_daemon_cfg),
-    test_server_dir(base_server_nginx_daemon_cfg))
 
   for flag in ivals({
     "profile", "trace", "coverage", "skip_check"
@@ -736,7 +705,6 @@ local function init (opts)
     extend({
       dist_dir(base_server_run_sh),
       dist_dir(base_server_nginx_cfg),
-      dist_dir(base_server_nginx_daemon_cfg),
       server_dir(base_server_lua_modules_ok),
       client_dir(base_client_lua_modules_ok) },
       amap(amap(extend({},
@@ -751,7 +719,6 @@ local function init (opts)
     extend({
       test_dist_dir(base_server_run_sh),
       test_dist_dir(base_server_nginx_cfg),
-      test_dist_dir(base_server_nginx_daemon_cfg),
       test_server_dir(base_server_lua_modules_ok),
       test_client_dir(base_client_lua_modules_ok) },
       amap(amap(extend({},
@@ -764,30 +731,20 @@ local function init (opts)
   target(
     { "start" },
     { "build" },
-    function (_, _, background)
+    function ()
       fs.mkdirp(dist_dir())
       return fs.pushd(dist_dir(), function ()
-        sys.execute({
-          "sh", "run.sh",
-          env = {
-            [base_env.var("BACKGROUND")] = (background or opts.background) and "1" or "0"
-          },
-        })
+        sys.execute({ "sh", "-c", "sh run.sh &" })
       end)
     end)
 
   target(
     { "test-start" },
     { "test-build" },
-    function (_, _, background)
+    function ()
       fs.mkdirp(test_dist_dir())
       return fs.pushd(test_dist_dir(), function ()
-        sys.execute({
-          "sh", "run.sh",
-          env = {
-            [base_env.var("BACKGROUND")] = (background or opts.background) and "1" or "0"
-          },
-        })
+        sys.execute({ "sh", "-c", "sh run.sh &" })
       end)
     end)
 
@@ -798,7 +755,7 @@ local function init (opts)
       base_server_test_res), test_server_dir_stripped),
     function (_, _, iterating)
       build({ "stop", "test-stop" }, opts.verbosity)
-      build({ "test-start" }, opts.verbosity, true)
+      build({ "test-start" }, opts.verbosity)
       local config_file = fs.absolute(opts.config_file)
       local client_config = {
         type = "lib",
@@ -883,7 +840,7 @@ local function init (opts)
     return fs.pushd(dist_dir(), function ()
       if fs.exists("server.pid") then
         err.pcall(function ()
-          sys.execute({ "kill", smatch(fs.readfile("server.pid"), "(%d+)") })
+          sys.execute({ "kill", "-15", smatch(fs.readfile("server.pid"), "(%d+)") })
         end)
       end
     end)
@@ -894,7 +851,7 @@ local function init (opts)
     return fs.pushd(test_dist_dir(), function ()
       if fs.exists("server.pid") then
         err.pcall(function ()
-          sys.execute({ "kill", smatch(fs.readfile("server.pid"), "(%d+)") })
+          sys.execute({ "kill", "-15", smatch(fs.readfile("server.pid"), "(%d+)") })
         end)
       end
     end)

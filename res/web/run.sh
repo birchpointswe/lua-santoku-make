@@ -28,8 +28,4 @@ mkdir -p logs
 touch logs/access.log logs/error.log
 ln -sf /dev/stdout logs/stdout
 
-if [ "$<% return var('BACKGROUND') %>" = "1" ]; then
-  openresty -p "$PWD" -c nginx-daemon.conf
-else
-  exec openresty -p "$PWD" -c nginx.conf
-fi
+exec openresty -p "$PWD" -c nginx-daemon.conf
