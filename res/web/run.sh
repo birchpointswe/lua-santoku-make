@@ -26,6 +26,5 @@ end, it.ivals(run_env_scripts or {})))), "\n") %>
 
 mkdir -p logs
 touch logs/access.log logs/error.log
-ln -sf /dev/stdout logs/stdout
 
-exec openresty -p "$PWD" -c nginx-daemon.conf
+exec openresty -p "$PWD" -c nginx.conf
