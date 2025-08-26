@@ -1,5 +1,9 @@
 # Now
 
+- Remove nginx.conf, init-test.lua, init-worker-test.lua, from templated files
+  - User must specify nginx.conf location instead
+  - Templated nginx.conf accomplished in a similar manner to SPA html/worker/etc
+- Add support for fully bundled fat binaries
 - Revise backlog
 - Generalize profiles
   - Sanitize replaced with user-defined sanitize profile
