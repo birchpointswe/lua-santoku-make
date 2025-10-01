@@ -283,6 +283,7 @@ local function init (opts)
     luarocks_cfg = test_dir(base_luarocks_cfg),
     luacov_stats_file = test_dir(base_luacov_stats_file),
     luacov_report_file = test_dir(base_luacov_report_file),
+    build_dir = test_dir(),
     target = "test-deps",
   }
 
@@ -297,6 +298,7 @@ local function init (opts)
   local build_env = {
     environment = opts.environment or "build",
     lua_modules = opts.wasm and build_dir(base_lua_modules) or nil,
+    build_dir = build_dir(),
     target = "build",
   }
 
