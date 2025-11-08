@@ -2,6 +2,8 @@
   str = require("santoku.string")
   squote = str.quote
   to_base64 = str.to_base64
+  fs = require("santoku.fs")
+  readfile = fs.readfile
 %>
 
 local bundle = require("santoku.bundle")
@@ -44,8 +46,56 @@ local gsub = str.gsub
 local ssub = str.sub
 local from_base64 = str.from_base64
 
-local function create ()
-  err.error("create lib not yet implemented")
+-- Embedded templates for lib init
+local init_templates = {
+  make_lua = from_base64(<% return squote(to_base64(readfile("res/init/lib/make.lua"))) %>), -- luacheck: ignore
+  lib_lua = from_base64(<% return squote(to_base64(readfile("res/init/lib/lib.lua"))) %>), -- luacheck: ignore
+  test_spec_lua = from_base64(<% return squote(to_base64(readfile("res/init/lib/test-spec.lua"))) %>), -- luacheck: ignore
+  gitignore = from_base64(<% return squote(to_base64(readfile("res/init/lib/gitignore"))) %>), -- luacheck: ignore
+}
+
+local function create (opts)
+  err.assert(vdt.istable(opts), "opts must be a table")
+  err.assert(vdt.isstring(opts.name), "opts.name is required")
+
+  local name = opts.name
+  local dir = opts.dir or name
+
+  -- Validate name format
+  if not smatch(name, "^[a-z][a-z0-9%-]*$") then
+    err.error("Invalid name: must start with lowercase letter and contain only lowercase letters, numbers, and hyphens")
+  end
+
+  -- Create environment for template evaluation
+  local template_env = setmetatable({
+    name = name,
+  }, { __index = _G })
+
+  -- Evaluate templates
+  local files = {
+    ["make.lua"] = tmpl.render(init_templates.make_lua, template_env),
+    [fs.join("lib", name .. ".lua")] = tmpl.render(init_templates.lib_lua, template_env),
+    [fs.join("test/spec", name .. ".lua")] = tmpl.render(init_templates.test_spec_lua, template_env),
+    [".gitignore"] = init_templates.gitignore,
+  }
+
+  -- Create directories and write files
+  for fpath, content in pairs(files) do
+    local full_path = fs.join(dir, fpath)
+    fs.mkdirp(fs.dirname(full_path))
+    fs.writefile(full_path, content)
+  end
+
+  -- Initialize git if requested
+  if opts.git ~= false then
+    sys.execute({ "git", "init", dir })
+  end
+
+  io.stdout:write("Created library project: " .. name .. "\n")
+  io.stdout:write("\nNext steps:\n")
+  io.stdout:write("  cd " .. dir .. "\n")
+  io.stdout:write("  toku lib test        # Run tests\n")
+  io.stdout:write("  toku lib install     # Install locally\n")
 end
 
 local function init (opts)
