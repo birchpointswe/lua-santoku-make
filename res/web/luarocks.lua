@@ -2,6 +2,7 @@
 
 lua_interpreter = "luajit"
 lua_version = "5.1"
+rocks_provided = { lua = "5.1" }
 
 rocks_trees = {
   { name = "system",
@@ -23,6 +24,7 @@ variables = {
 
 lua_interpreter = "lua"
 lua_version = "5.1"
+rocks_provided = { lua = "5.1" }
 
 rocks_trees = {
   { name = "system",
