@@ -732,7 +732,7 @@ local function init (opts)
       opts = opts or {}
       build(tbl.assign({ "install-deps" }, opts), opts.verbosity)
     end,
-    release = not opts.wasm and function (opts)
+    release = not opts.wasm and opts.config.env.public and function (opts)
       opts = opts or {}
       build(tbl.assign({ "release" }, opts), opts.verbosity)
     end,
