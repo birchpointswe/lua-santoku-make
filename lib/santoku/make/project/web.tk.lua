@@ -11,7 +11,6 @@ local env = require("santoku.env")
 local make = require("santoku.make")
 local sys = require("santoku.system")
 local tbl = require("santoku.table")
-local tmpl = require("santoku.template")
 local varg = require("santoku.varg")
 local vdt = require("santoku.validate")
 local err = require("santoku.error")
@@ -34,68 +33,10 @@ local filter = it.filter
 local map = it.map
 
 local str = require("santoku.string")
-local from_base64 = str.from_base64
 local stripprefix = str.stripprefix
 local supper = string.upper
 local smatch = string.match
 local gsub = string.gsub
-
--- Embedded templates for web init
-local init_templates = {
-  make_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/make.lua"))) %>), -- luacheck: ignore
-  client_bin_main_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-bin-main.tk.lua"))) %>), -- luacheck: ignore
-  server_lib_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib.lua"))) %>), -- luacheck: ignore
-  server_lib_init_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib-init.lua"))) %>), -- luacheck: ignore
-  test_spec_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/test-spec.lua"))) %>), -- luacheck: ignore
-  gitignore = from_base64(<% return squote(to_base64(readfile("res/init/web/gitignore"))) %>), -- luacheck: ignore
-}
-
-local function create (opts)
-  err.assert(vdt.istable(opts), "opts must be a table")
-  err.assert(vdt.isstring(opts.name), "opts.name is required")
-
-  local name = opts.name
-  local dir = opts.dir or name
-
-  -- Validate name format
-  if not smatch(name, "^[a-z][a-z0-9%-]*$") then
-    err.error("Invalid name: must start with lowercase letter and contain only lowercase letters, numbers, and hyphens")
-  end
-
-  -- Create environment for template evaluation
-  local template_env = setmetatable({
-    name = name,
-  }, { __index = _G })
-
-  -- Evaluate templates
-  local files = {
-    ["make.lua"] = tmpl.render(init_templates.make_lua, template_env),
-    [fs.join("client/bin", "main.tk.lua")] = tmpl.render(init_templates.client_bin_main_lua, template_env),
-    [fs.join("server/lib", name .. ".lua")] = tmpl.render(init_templates.server_lib_lua, template_env),
-    [fs.join("server/lib", name, "init.lua")] = tmpl.render(init_templates.server_lib_init_lua, template_env),
-    [fs.join("server/test/spec", name .. ".lua")] = tmpl.render(init_templates.test_spec_lua, template_env),
-    [".gitignore"] = init_templates.gitignore,
-  }
-
-  -- Create directories and write files
-  local pairs = it.pairs
-  for fpath, content in pairs(files) do
-    local full_path = fs.join(dir, fpath)
-    fs.mkdirp(fs.dirname(full_path))
-    fs.writefile(full_path, content)
-  end
-
-  -- Initialize git if requested
-  if opts.git ~= false then
-    sys.execute({ "git", "init", dir })
-  end
-
-  io.stdout:write("Created web project: " .. name .. "\n")
-  io.stdout:write("\nNext steps:\n")
-  io.stdout:write("  cd " .. dir .. "\n")
-  io.stdout:write("  toku web test-build  # Build for testing\n")
-  io.stdout:write("  toku web test-start  # Start development server\n")
-end
 
 local function init (opts)
 
@@ -845,5 +786,4 @@ end
 
 return {
   init = init,
-  create = create,
 }
