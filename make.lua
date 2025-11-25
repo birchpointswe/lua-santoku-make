@@ -1,6 +1,6 @@
 local env = {
   name = "santoku-make",
-  version = "0.0.128-1",
+  version = "0.0.129-1",
   variable_prefix = "TK_MAKE",
   license = "MIT",
   public = true,
@@ -18,7 +18,4 @@ env.homepage = "https://github.com/treadwelllane/lua-" .. env.name
 env.tarball = env.name .. "-" .. env.version .. ".tar.gz"
 env.download = env.homepage .. "/releases/download/" .. env.version .. "/" .. env.tarball
 
-return {
-  type = "lib",
-  env = env,
-}
+return { env = env }
