@@ -55,7 +55,6 @@ Library project type supporting Lua module builds with template processing.
 | `release` | `[options]` | `-` | Creates release tarball |
 | `install` | `[options]` | `-` | Installs to lua_modules |
 | `check` | `[options]` | `-` | Runs luacheck |
-| `coverage` | `[options]` | `-` | Generates coverage report |
 
 ### `santoku.make.project.web`
 
@@ -100,12 +99,6 @@ return {
     dependencies = {
       "lua >= 5.1",
       "santoku >= 0.0.279-1"
-    },
-
-    test = {
-      dependencies = {
-        "luacov >= 0.15.0-1"
-      }
     },
 
     -- Optional C compilation flags

@@ -2,18 +2,15 @@ local fs = require("santoku.fs")
 local runfile = fs.runfile
 
 local err = require("santoku.error")
-local error = err.error
 local assert = err.assert
 
 local validate = require("santoku.validate")
 local hasindex = validate.hasindex
 local istable = validate.istable
 
+local unified = require("santoku.make.project.unified")
 local lib = require("santoku.make.project.lib")
-local lib_init = lib.init
-
 local web = require("santoku.make.project.web")
-local web_init = web.init
 
 local sformat = string.format
 
@@ -31,15 +28,8 @@ local function init (opts)
     opts.config_file = opts.config
     opts.config = runfile(opts.config, setmetatable({}, run_env))
   end
-  if not istable(opts.config) then
-    error("config is not a table", opts.config)
-  elseif opts.config.type == "lib" then
-    return lib_init(opts)
-  elseif opts.config.type == "web" then
-    return web_init(opts)
-  else
-    return error("unexpected project type", opts.config.type)
-  end
+  assert(istable(opts.config), "config is not a table")
+  return unified.init(opts)
 end
 
 return {

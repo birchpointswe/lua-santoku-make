@@ -34,8 +34,6 @@ export LUA_CPATH='<% return lua_cpath %>'
     return not sisempty(e)
   end, ivals(get(test or {}, "env_scripts") or {})))), "\n") %>
 
-rm -f <% return luacov_stats_file %> <% return luacov_report_file %> || true
-
 echo
 
 <% push(wasm) %>
@@ -52,10 +50,6 @@ status_tst=$?
 <% pop() push(not wasm) %>
 
 MODS=""
-
-<% push(coverage) %>
-MODS="$MODS -l luacov"
-<% pop() %>
 
 <% push(profile) %>
 MODS="$MODS -l santoku.profile"
