@@ -9,7 +9,6 @@
 local bundle = require("santoku.bundle")
 local env = require("santoku.env")
 local fs = require("santoku.fs")
-local fun = require("santoku.functional")
 local make = require("santoku.make")
 local sys = require("santoku.system")
 local tbl = require("santoku.table")
@@ -17,11 +16,13 @@ local tmpl = require("santoku.template")
 local varg = require("santoku.varg")
 local vdt = require("santoku.validate")
 local err = require("santoku.error")
+local fun = require("santoku.functional")
+local common = require("santoku.make.common")
+local wasm = require("santoku.make.wasm")
 
 local arr = require("santoku.array")
 local amap = arr.map
 local spread = arr.spread
-local aincludes = arr.includes
 local extend = arr.extend
 local push = arr.push
 local concat = arr.concat
@@ -29,7 +30,6 @@ local concat = arr.concat
 local iter = require("santoku.iter")
 local ivals = iter.ivals
 local pairs = iter.pairs
-local find = iter.find
 local chain = iter.chain
 local map = iter.map
 local collect = iter.collect
@@ -126,108 +126,32 @@ local function init (opts)
     return work_dir("test", ...)
   end
 
-  -- TODO: It would be nice if santoku ivals returned an empty iterator for
-  -- nil instead of erroring. It would allow omitting the {} below
-  local function get_action (fp)
-    local ext = fs.extension(fp)
-    local match_fp = fun.bind(smatch, fp)
-    if (opts.exts and not aincludes(opts.config.exts or {}, ext)) or
-        find(match_fp, ivals(tbl.get(opts.config, "rules", "exclude") or {}))
-    then
-      return "ignore"
-    elseif find(match_fp, ivals(tbl.get(opts.config, "rules", "copy") or {}))
-      or not (str.find(fp, "%.tk$") or
-              str.find(fp, "%.tk%."))
-    then
-      return "copy"
-    else
-      return "template"
-    end
+  local function remove_tk(fp)
+    return common.remove_tk(fp, opts.config)
   end
 
-  local function force_template (fp)
-    local match_fp = fun.bind(smatch, fp)
-    return find(match_fp, ivals(tbl.get(opts.config, "rules", "template") or {}))
+  local function add_copied_target(dest, src, extra_srcs)
+    return common.add_copied_target(target, dest, src, extra_srcs)
   end
 
-  local function remove_tk (fp)
-    return get_action(fp) == "template"
-      and str.gsub(fp, "%.tk", "")
-      or fp
+  local function add_file_target(dest, src, env, extra_srcs)
+    return common.add_file_target(target, dest, src, env, opts.config, opts.config_file, extra_srcs)
   end
 
-  -- TODO: use fs.copy
-  local function add_copied_target (dest, src, extra_srcs)
-    extra_srcs = extra_srcs or {}
-    target({ dest }, extend({ src }, extra_srcs), function ()
-      fs.mkdirp(fs.dirname(dest))
-      fs.writefile(dest, fs.readfile(src))
-    end)
+  local function add_templated_target_base64(dest, data, env, extra_srcs)
+    return common.add_templated_target_base64(target, dest, data, env, opts.config_file, extra_srcs)
   end
 
-  local function add_file_target (dest, src, env, extra_srcs)
-    extra_srcs = extra_srcs or {}
-    local action = get_action(src, opts.config)
-    if action == "copy" then
-      return add_copied_target(dest, src, extra_srcs)
-    elseif action == "template" then
-      dest = str.gsub(dest, "%.tk", "")
-      target({ dest }, extend({ src, opts.config_file }, extra_srcs), function ()
-        fs.mkdirp(fs.dirname(dest))
-        local t, ds = tmpl.renderfile(src, env, _G)
-        fs.writefile(dest, t)
-        fs.writefile(dest .. ".d", tmpl.serialize_deps(src, dest, ds))
-      end)
-    end
+  local function get_lua_path(prefix)
+    return common.get_lua_path(prefix)
   end
 
-  local function add_templated_target_base64 (dest, data, env)
-    target({ dest }, { opts.config_file }, function ()
-      fs.mkdirp(fs.dirname(dest))
-      local t, ds = tmpl.render(from_base64(data), env, _G)
-      fs.writefile(dest, t)
-      fs.writefile(dest .. ".d", tmpl.serialize_deps(dest, opts.config_file, ds))
-    end)
+  local function get_lua_cpath(prefix)
+    return common.get_lua_cpath(prefix)
   end
 
-  local function get_lua_version ()
-    return (smatch(_VERSION, "(%d+.%d+)"))
-  end
-
-  local function get_require_paths (prefix, ...)
-    local pfx = prefix and fs.join(prefix, "lua_modules") or "lua_modules"
-    local ver = get_lua_version()
-    return concat(varg.reduce(function (t, n)
-      return push(t, fs.join(pfx, sformat(n, ver)))
-    end, {}, ...), ";")
-  end
-
-  local function get_lua_path (prefix)
-    return get_require_paths(prefix,
-      "share/lua/%s/?.lua",
-      "share/lua/%s/?/init.lua",
-      "lib/lua/%s/?.lua",
-      "lib/lua/%s/?/init.lua")
-  end
-
-  local function get_lua_cpath (prefix)
-    return get_require_paths(prefix,
-      "lib/lua/%s/?.so",
-      "lib/lua/%s/loadall.so")
-  end
-
-  local function get_files (dir, check_tpl)
-    local tpl = check_tpl and {} or nil
-    if not fs.exists(dir) then
-      return {}, tpl
-    end
-    return collect(filter(function (fp)
-      if check_tpl and force_template(fp) then
-        push(tpl, fp)
-        return false
-      end
-      return get_action(fp) ~= "ignore"
-    end, fs.files(dir, true))), tpl
+  local function get_files(dir, check_tpl)
+    return common.get_files(dir, opts.config, check_tpl, false)
   end
 
   local base_bins = get_files("bin")
@@ -244,12 +168,8 @@ local function init (opts)
   local base_lua_modules = "lua_modules"
   local base_lua_modules_ok = "lua_modules.ok"
   local base_luacheck_cfg = "luacheck.lua"
-  local base_luacov_cfg = "luacov.lua"
   local base_run_sh = "run.sh"
   local base_check_sh = "check.sh"
-  local base_luacov_stats_file = "luacov.stats.out"
-  local base_luacov_report_file = "luacov.report.out"
-  local base_lua_dir = "lua-5.1.5"
 
   local base_test_specs = opts.single and { opts.single } or get_files("test/spec")
 
@@ -273,7 +193,7 @@ local function init (opts)
     amap(extend({},
       test_all_base_templated,
       { base_rockspec, base_makefile,
-        base_luarocks_cfg, base_luacheck_cfg, base_luacov_cfg,
+        base_luarocks_cfg, base_luacheck_cfg,
         base_run_sh, base_check_sh }), remove_tk),
     test_all_base_copied), test_dir)
 
@@ -282,7 +202,7 @@ local function init (opts)
 
   local test_cfgs = amap(amap(push({},
     base_rockspec, base_makefile, base_luarocks_cfg,
-    base_luacheck_cfg, base_luacov_cfg, base_run_sh,
+    base_luacheck_cfg, base_run_sh,
     base_check_sh), test_dir), remove_tk)
 
   local build_all = amap(extend({},
@@ -311,7 +231,6 @@ local function init (opts)
     profile = opts.profile,
     trace = opts.trace,
     skip_check = opts.skip_check,
-    coverage = opts.coverage,
     single = opts.single and remove_tk(opts.single) or nil,
     bins = base_bins,
     libs = base_libs,
@@ -331,8 +250,6 @@ local function init (opts)
     lua_modules = test_dir(base_lua_modules),
     luarocks_config = test_dir(base_luarocks_cfg),
     luarocks_cfg = test_dir(base_luarocks_cfg),
-    luacov_stats_file = test_dir(base_luacov_stats_file),
-    luacov_report_file = test_dir(base_luacov_report_file),
     build_dir = test_dir(),
     target = "test-deps",
   }
@@ -356,48 +273,14 @@ local function init (opts)
   tbl.merge(build_env, opts.config.env, base_env)
 
   if opts.wasm then
-
-    for dir, all, env in map(spread, ivals({
+    for dir_fn, all, env in map(spread, ivals({
       { test_dir, test_all, test_env },
       { build_dir, build_all, build_env }
     })) do
-      local client_lua_dir = dir(base_lua_dir)
-      local client_lua_ok = client_lua_dir .. ".ok"
-      env.client_lua_dir = client_lua_dir
-      tbl.insert(all, 1, client_lua_ok)
-      target({ client_lua_ok }, {}, function ()
-        fs.mkdirp(dir())
-        return fs.pushd(dir(), function ()
-          if not fs.exists("lua-5.1.5.tar.gz") then
-            sys.execute({ "wget", "https://www.lua.org/ftp/lua-5.1.5.tar.gz" })
-          end
-          if fs.exists("lua-5.1.5") then
-            sys.execute({ "rm", "-rf", "lua-5.1.5" }) -- TODO: use fs.rm(x, { recurse = true })
-          end
-          sys.execute({ "tar", "xf", "lua-5.1.5.tar.gz" })
-          fs.cd("lua-5.1.5")
-          sys.execute({ "emmake", "sh", "-c", arr.concat({
-            "make", "generic",
-            "CC=\"$CC\"",
-            "LD=\"$LD\"",
-            "AR=\"$AR rcu\"",
-            "RANLIB=\"$RANLIB\"",
-            "CFLAGS=\"-flto -Oz\"",
-            "MYLDFLAGS=\"-flto -Oz\""
-          }, " ") })
-          sys.execute({ "make", "local" })
-          fs.cd("bin")
-          sys.execute({ "mv", "lua", "lua.js" })
-          sys.execute({ "mv", "luac", "luac.js" })
-          fs.writefile("lua", "#!/bin/sh\nnode \"$(dirname $0)/lua.js\" \"$@\"\n")
-          fs.writefile("luac", "#!/bin/sh\nnode \"$(dirname $0)/luac.js\" \"$@\"\n")
-          sys.execute({ "chmod", "+x", "lua" })
-          sys.execute({ "chmod", "+x", "luac" })
-          fs.touch(client_lua_ok)
-        end)
-      end)
+      local lua_dir, lua_ok = wasm.setup_lua(target, dir_fn())
+      env.client_lua_dir = lua_dir
+      tbl.insert(all, 1, lua_ok)
     end
-
   end
 
   opts.config.env.variable_prefix =
@@ -429,10 +312,15 @@ local function init (opts)
         push(extend({ test_dir("bundler-pre", fp) },
           test_cfgs), test_dir(base_lua_modules_ok)),
         function ()
+          local extra_cflags = extend({},
+            tbl.get(test_env, "test", "cflags") or {},
+            tbl.get(test_env, "test", "wasm", "cflags") or {})
+          local extra_ldflags = extend({},
+            tbl.get(test_env, "test", "ldflags") or {},
+            tbl.get(test_env, "test", "wasm", "ldflags") or {})
           bundle(test_dir("bundler-pre", fp), test_dir("bundler-post", fs.dirname(fp)), {
             cc = "emcc",
             mods = extend({},
-              opts.coverage and {} or { "luacov", "luacov.hook", "luacov.tick" },
               opts.profile and { "santoku.profile" } or {},
               opts.trace and { "santoku.trace" } or {}),
             ignores = { "debug" },
@@ -440,20 +328,10 @@ local function init (opts)
               { base_env.var("WASM"), "1" },
               { base_env.var("PROFILE"), opts.profile and "1" or "" },
               { base_env.var("TRACE"), opts.trace and "1" or "" },
-              { "LUACOV_CONFIG", test_dir(base_luacov_cfg) }
             },
             path = get_lua_path(test_dir()),
             cpath = get_lua_cpath(test_dir()),
-            flags = extend({
-              "-sASSERTIONS", "-sSINGLE_FILE", "-sALLOW_MEMORY_GROWTH",
-              "-I" .. fs.join(test_env.client_lua_dir, "include"),
-              "-L" .. fs.join(test_env.client_lua_dir, "lib"),
-              "-lnodefs.js", "-lnoderawfs.js", "-llua", "-lm",
-            },
-            tbl.get(test_env, "test", "cflags") or {},
-            tbl.get(test_env, "test", "ldflags") or {},
-            tbl.get(test_env, "test", "wasm", "cflags") or {},
-            tbl.get(test_env, "test", "wasm", "ldflags") or {})
+            flags = wasm.get_bundle_flags(test_env.client_lua_dir, "test", extra_cflags, extra_ldflags)
           })
         end)
     end
@@ -529,9 +407,6 @@ local function init (opts)
   add_templated_target_base64(test_dir(base_luacheck_cfg),
     <% return squote(to_base64(readfile("res/lib/luacheck.lua"))) %>, test_env) -- luacheck: ignore
 
-  add_templated_target_base64(test_dir(base_luacov_cfg),
-    <% return squote(to_base64(readfile("res/lib/luacov.lua"))) %>, test_env) -- luacheck: ignore
-
   add_templated_target_base64(test_dir(base_run_sh),
     <% return squote(to_base64(readfile("res/lib/test-run.sh"))) %>, test_env) -- luacheck: ignore
 
@@ -539,7 +414,7 @@ local function init (opts)
     <% return squote(to_base64(readfile("res/lib/test-check.sh"))) %>, test_env) -- luacheck: ignore
 
   for flag in ivals({
-    "profile", "trace", "single", "coverage", "skip_check", "lua",
+    "profile", "trace", "single", "skip_check", "lua",
     "lua_path_extra", "lua_cpath_extra"
   }) do
     local fp = work_dir(flag .. ".flag")
@@ -558,7 +433,7 @@ local function init (opts)
   target(
     amap({ base_run_sh, base_check_sh }, test_dir),
     amap({
-      "coverage.flag", "skip_check.flag", "single.flag", "profile.flag",
+      "skip_check.flag", "single.flag", "profile.flag",
       "trace.flag", "lua.flag", "lua_path_extra.flag", "lua_cpath_extra.flag" },
       work_dir))
 
@@ -766,9 +641,92 @@ local function init (opts)
       opts = opts or {}
       build(tbl.assign({ "iterate" }, opts), opts.verbosity)
     end,
-    install = function (opts)
-      opts = opts or {}
-      build(tbl.assign({ "install" }, opts), opts.verbosity)
+    install = function (install_opts)
+      install_opts = install_opts or {}
+      if install_opts.bundled then
+        -- Bundled install: compile bin/*.lua to standalone executables
+        build(tbl.assign({ "install-deps" }, install_opts), install_opts.verbosity)
+
+        local bin_dir = "bin"
+        if not fs.exists(bin_dir) then
+          err.error("No bin/ directory found for bundled install")
+        end
+
+        local prefix = install_opts.prefix or env.var("PREFIX", fs.join(env.var("HOME", "/tmp"), ".local"))
+        local bin_prefix = fs.join(prefix, "bin")
+        fs.mkdirp(bin_prefix)
+
+        local bundle_dir = build_dir("bundled")
+        fs.mkdirp(bundle_dir)
+
+        -- Determine compiler and flags
+        local cc = install_opts.bundle_cc
+        local bundle_flags = {}
+        local bundle_mods = {}
+        local bundle_ignores = { "debug" }
+
+        if install_opts.bundle_flags then
+          for flag in str.splits(install_opts.bundle_flags, "%s+") do
+            push(bundle_flags, flag)
+          end
+        end
+
+        if install_opts.bundle_mods then
+          for mod in str.splits(install_opts.bundle_mods, ",") do
+            push(bundle_mods, str.match(mod, "^%s*(.-)%s*$"))
+          end
+        end
+
+        if install_opts.bundle_ignores then
+          for mod in str.splits(install_opts.bundle_ignores, ",") do
+            push(bundle_ignores, str.match(mod, "^%s*(.-)%s*$"))
+          end
+        end
+
+        if install_opts.wasm then
+          cc = cc or "emcc"
+          -- For WASM, use wasm module flags if not specified
+          if #bundle_flags == 0 then
+            local lua_dir = build_dir("lua-5.1.5")
+            bundle_flags = wasm.get_bundle_flags(lua_dir, "build", {}, {})
+          end
+        else
+          cc = cc or env.var("CC", "cc")
+        end
+
+        -- Bundle each executable in bin/
+        for fp in fs.files(bin_dir) do
+          if str.match(fp, "%.lua$") then
+            local basename = fs.stripextensions(fs.basename(fp))
+            bundle(fp, bundle_dir, {
+              cc = cc,
+              mods = bundle_mods,
+              ignores = bundle_ignores,
+              path = get_lua_path(build_dir()),
+              cpath = get_lua_cpath(build_dir()),
+              flags = bundle_flags,
+              outprefix = basename,
+            })
+
+            -- Copy to prefix
+            if install_opts.wasm then
+              local js_file = fs.join(bundle_dir, basename .. ".js")
+              local dest_js = fs.join(bin_prefix, basename .. ".js")
+              local dest_wrapper = fs.join(bin_prefix, basename)
+              fs.writefile(dest_js, fs.readfile(js_file))
+              wasm.create_node_wrapper(dest_wrapper, dest_js)
+            else
+              local exe_file = fs.join(bundle_dir, basename)
+              local dest_exe = fs.join(bin_prefix, basename)
+              fs.writefile(dest_exe, fs.readfile(exe_file))
+              sys.execute({ "chmod", "+x", dest_exe })
+            end
+          end
+        end
+      else
+        -- Regular luarocks install
+        build(tbl.assign({ "install" }, install_opts), install_opts.verbosity)
+      end
     end,
     install_deps = function (opts)
       opts = opts or {}

@@ -1,0 +1,149 @@
+-- Common utilities shared between lib and web project builders
+
+local fs = require("santoku.fs")
+local fun = require("santoku.functional")
+local tmpl = require("santoku.template")
+local str = require("santoku.string")
+local tbl = require("santoku.table")
+local varg = require("santoku.varg")
+local arr = require("santoku.array")
+local iter = require("santoku.iter")
+
+-- Determine action for a file: "copy", "template", or "ignore"
+local function get_action(fp, config)
+  config = config or {}
+  local match_fp = fun.bind(str.match, fp)
+  local rules = config.rules or {}
+  if iter.find(match_fp, iter.ivals(tbl.get(rules, "exclude") or {})) then
+    return "ignore"
+  elseif iter.find(match_fp, iter.ivals(tbl.get(rules, "copy") or {}))
+    or not (str.find(fp, "%.tk$") or str.find(fp, "%.tk%."))
+  then
+    return "copy"
+  else
+    return "template"
+  end
+end
+
+-- Check if file matches rules.template pattern
+local function force_template(fp, config)
+  config = config or {}
+  local match_fp = fun.bind(str.match, fp)
+  return iter.find(match_fp, iter.ivals(tbl.get(config, "rules", "template") or {}))
+end
+
+-- Check if file matches rules.template_client pattern (web projects)
+local function force_template_client(fp, config)
+  config = config or {}
+  local match_fp = fun.bind(str.match, fp)
+  return iter.find(match_fp, iter.ivals(tbl.get(config, "rules", "template_client") or {}))
+end
+
+-- Remove .tk extension from template files
+local function remove_tk(fp, config)
+  return get_action(fp, config) == "template"
+    and str.gsub(fp, "%.tk", "")
+    or fp
+end
+
+-- Create a target that copies a file
+local function add_copied_target(target_fn, dest, src, extra_srcs)
+  extra_srcs = extra_srcs or {}
+  target_fn({ dest }, arr.extend({ src }, extra_srcs), function ()
+    fs.mkdirp(fs.dirname(dest))
+    fs.writefile(dest, fs.readfile(src))
+  end)
+end
+
+-- Create a target that processes a file (copy or template)
+local function add_file_target(target_fn, dest, src, env, config, config_file, extra_srcs)
+  extra_srcs = extra_srcs or {}
+  local action = get_action(src, config)
+  if action == "copy" then
+    return add_copied_target(target_fn, dest, src, extra_srcs)
+  elseif action == "template" then
+    dest = str.gsub(dest, "%.tk", "")
+    target_fn({ dest }, arr.extend({ src, config_file }, extra_srcs), function ()
+      fs.mkdirp(fs.dirname(dest))
+      local t, ds = tmpl.renderfile(src, env, _G)
+      fs.writefile(dest, t)
+      fs.writefile(dest .. ".d", tmpl.serialize_deps(src, dest, ds))
+    end)
+  end
+end
+
+-- Create a target from base64-encoded template data
+local function add_templated_target_base64(target_fn, dest, data, env, config_file, extra_srcs)
+  extra_srcs = extra_srcs or {}
+  target_fn({ dest }, arr.extend({ config_file }, extra_srcs), function ()
+    fs.mkdirp(fs.dirname(dest))
+    local t, ds = tmpl.render(str.from_base64(data), env, _G)
+    fs.writefile(dest, t)
+    fs.writefile(dest .. ".d", tmpl.serialize_deps(dest, config_file, ds))
+  end)
+end
+
+-- Get Lua version from _VERSION global
+local function get_lua_version()
+  return (str.match(_VERSION, "(%d+.%d+)"))
+end
+
+-- Build require paths for lua_modules
+local function get_require_paths(prefix, ...)
+  local pfx = prefix and fs.join(prefix, "lua_modules") or "lua_modules"
+  local ver = get_lua_version()
+  return arr.concat(varg.reduce(function (t, n)
+    return arr.push(t, fs.join(pfx, str.format(n, ver)))
+  end, {}, ...), ";")
+end
+
+-- Get LUA_PATH for a prefix
+local function get_lua_path(prefix)
+  return get_require_paths(prefix,
+    "share/lua/%s/?.lua",
+    "share/lua/%s/?/init.lua",
+    "lib/lua/%s/?.lua",
+    "lib/lua/%s/?/init.lua")
+end
+
+-- Get LUA_CPATH for a prefix
+local function get_lua_cpath(prefix)
+  return get_require_paths(prefix,
+    "lib/lua/%s/?.so",
+    "lib/lua/%s/loadall.so")
+end
+
+-- Scan directory for files, optionally checking for template patterns
+local function get_files(dir, config, check_tpl, check_tpl_client)
+  local tpl = check_tpl and {} or nil
+  local tpl_client = check_tpl_client and {} or nil
+  if not fs.exists(dir) then
+    return {}, tpl, tpl_client
+  end
+  return iter.collect(iter.filter(function (fp)
+    if check_tpl and force_template(fp, config) then
+      arr.push(tpl, fp)
+      return false
+    end
+    if check_tpl_client and force_template_client(fp, config) then
+      arr.push(tpl_client, fp)
+      return false
+    end
+    return get_action(fp, config) ~= "ignore"
+  end, fs.files(dir, true))), tpl, tpl_client
+end
+
+return {
+  get_action = get_action,
+  force_template = force_template,
+  force_template_client = force_template_client,
+  remove_tk = remove_tk,
+  add_copied_target = add_copied_target,
+  add_file_target = add_file_target,
+  add_templated_target_base64 = add_templated_target_base64,
+  get_lua_version = get_lua_version,
+  get_require_paths = get_require_paths,
+  get_lua_path = get_lua_path,
+  get_lua_cpath = get_lua_cpath,
+  get_files = get_files,
+}

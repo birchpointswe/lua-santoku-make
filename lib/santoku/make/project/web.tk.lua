@@ -8,7 +8,6 @@
 
 local bundle = require("santoku.bundle")
 local env = require("santoku.env")
-local fun = require("santoku.functional")
 local make = require("santoku.make")
 local sys = require("santoku.system")
 local tbl = require("santoku.table")
@@ -16,18 +15,18 @@ local tmpl = require("santoku.template")
 local varg = require("santoku.varg")
 local vdt = require("santoku.validate")
 local err = require("santoku.error")
+local fun = require("santoku.functional")
 local fs = require("santoku.fs")
+local common = require("santoku.make.common")
+local wasm = require("santoku.make.wasm")
 
 local arr = require("santoku.array")
 local amap = arr.map
 local spread = arr.spread
-local aincludes = arr.includes
 local extend = arr.extend
-local push = arr.push
 local concat = arr.concat
 
 local it = require("santoku.iter")
-local find = it.find
 local chain = it.chain
 local ivals = it.ivals
 local collect = it.collect
@@ -38,7 +37,6 @@ local str = require("santoku.string")
 local from_base64 = str.from_base64
 local stripprefix = str.stripprefix
 local supper = string.upper
-local sformat = string.format
 local smatch = string.match
 local gsub = string.gsub
 
@@ -184,119 +182,32 @@ local function init (opts)
     end, ...))
   end
 
-  -- TODO: It would be nice if santoku ivals returned an empty iterator for
-  -- nil instead of erroring. It would allow omitting the {} below
-  local function get_action (fp)
-    local ext = fs.extension(fp)
-    local match_fp = fun.bind(smatch, fp)
-    if (opts.exts and not aincludes(opts.exts, ext)) or
-        find(match_fp, ivals(tbl.get(opts, "rules", "exclude") or {}))
-    then
-      return "ignore"
-    elseif find(match_fp, ivals(tbl.get(opts, "rules", "copy") or {}))
-      or not (str.find(fp, "%.tk$") or
-              str.find(fp, "%.tk%."))
-    then
-      return "copy"
-    else
-      return "template"
-    end
+  local function remove_tk(fp)
+    return common.remove_tk(fp, opts.config)
   end
 
-  local function force_template (fp)
-    local match_fp = fun.bind(smatch, fp)
-    return find(match_fp, ivals(tbl.get(opts.config, "rules", "template") or {}))
+  local function add_copied_target(dest, src, extra_srcs)
+    return common.add_copied_target(target, dest, src, extra_srcs)
   end
 
-  local function force_template_client (fp)
-    local match_fp = fun.bind(smatch, fp)
-    return find(match_fp, ivals(tbl.get(opts.config, "rules", "template_client") or {}))
+  local function add_file_target(dest, src, env, extra_srcs)
+    return common.add_file_target(target, dest, src, env, opts.config, opts.config_file, extra_srcs)
   end
 
-  local function remove_tk (fp)
-    return get_action(fp) == "template"
-      and str.gsub(fp, "%.tk", "")
-      or fp
+  local function add_templated_target_base64(dest, data, env, extra_srcs)
+    return common.add_templated_target_base64(target, dest, data, env, opts.config_file, extra_srcs)
   end
 
-  -- TODO: use fs.copy
-  local function add_copied_target (dest, src, extra_srcs)
-    extra_srcs = extra_srcs or {}
-    target({ dest }, extend({ src }, extra_srcs), function ()
-      fs.mkdirp(fs.dirname(dest))
-      fs.writefile(dest, fs.readfile(src))
-    end)
+  local function get_lua_path(prefix)
+    return common.get_lua_path(prefix)
   end
 
-  local function add_file_target (dest, src, env, extra_srcs)
-    extra_srcs = extra_srcs or {}
-    local action = get_action(src, opts.config)
-    if action == "copy" then
-      return add_copied_target(dest, src, extra_srcs)
-    elseif action == "template" then
-      dest = str.gsub(dest, "%.tk", "")
-      target({ dest }, extend({ src, opts.config_file }, extra_srcs), function ()
-        fs.mkdirp(fs.dirname(dest))
-        local t, ds = tmpl.renderfile(src, env, _G)
-        fs.writefile(dest, t)
-        fs.writefile(dest .. ".d", tmpl.serialize_deps(src, dest, ds))
-      end)
-    end
+  local function get_lua_cpath(prefix)
+    return common.get_lua_cpath(prefix)
   end
 
-  local function add_templated_target_base64 (dest, data, env, extra_srcs)
-    extra_srcs = extra_srcs or {}
-    target({ dest }, extend({ opts.config_file }, extra_srcs), function ()
-      fs.mkdirp(fs.dirname(dest))
-      local t, ds = tmpl.render(from_base64(data), env, _G)
-      fs.writefile(dest, t)
-      fs.writefile(dest .. ".d", tmpl.serialize_deps(dest, opts.config_file, ds))
-    end)
-  end
-
-  local function get_lua_version ()
-    return (smatch(_VERSION, "(%d+.%d+)"))
-  end
-
-  local function get_require_paths (prefix, ...)
-    local pfx = prefix and fs.join(prefix, "lua_modules") or "lua_modules"
-    local ver = get_lua_version()
-    return concat(varg.reduce(function (t, n)
-      return push(t, fs.join(pfx, sformat(n, ver)))
-    end, {}, ...), ";")
-  end
-
-  local function get_lua_path (prefix)
-    return get_require_paths(prefix,
-      "share/lua/%s/?.lua",
-      "share/lua/%s/?/init.lua",
-      "lib/lua/%s/?.lua",
-      "lib/lua/%s/?/init.lua")
-  end
-
-  local function get_lua_cpath (prefix)
-    return get_require_paths(prefix,
-      "lib/lua/%s/?.so",
-      "lib/lua/%s/loadall.so")
-  end
-
-  local function get_files (dir, check_tpl, check_tpl_client)
-    local tpl = check_tpl and {} or nil
-    local tpl_client = check_tpl_client and {} or nil
-    if not fs.exists(dir) then
-      return {}, tpl, tpl_client
-    end
-    return collect(filter(function (fp)
-      if check_tpl and force_template(fp) then
-        push(tpl, fp)
-        return false
-      end
-      if check_tpl_client and force_template_client(fp) then
-        push(tpl_client, fp)
-        return false
-      end
-      return get_action(fp) ~= "ignore"
-    end, fs.files(dir, true))), tpl, tpl_client
+  local function get_files(dir, check_tpl, check_tpl_client)
+    return common.get_files(dir, opts.config, check_tpl, check_tpl_client)
   end
 
   local base_server_libs = get_files("server/lib")
@@ -346,7 +257,6 @@ local function init (opts)
     profile = opts.profile,
     trace = opts.trace,
     skip_check = opts.skip_check,
-    coverage = opts.coverage,
     var = function (n)
       err.assert(vdt.isstring(n))
       return concat({ opts.config.env.variable_prefix, "_", n })
@@ -376,7 +286,6 @@ local function init (opts)
     work_dir = test_server_dir(),
     openresty_dir = opts.openresty_dir,
     luarocks_cfg = test_server_dir(base_server_luarocks_cfg),
-    luacov_config = test_server_dir("build", "default", "test", "luacov.lua"),
     lua = env.interpreter()[1],
     lua_path = get_lua_path(test_dist_dir()),
     lua_cpath = get_lua_cpath(test_dist_dir()),
@@ -479,7 +388,7 @@ local function init (opts)
     { test_dist_dir(base_server_init_test_lua), test_dist_dir(base_server_init_worker_test_lua) })
 
   for flag in ivals({
-    "profile", "trace", "coverage", "skip_check"
+    "profile", "trace", "skip_check"
   }) do
     local fp = work_dir(flag .. ".flag")
     fs.mkdirp(fs.dirname(fp))
@@ -496,7 +405,7 @@ local function init (opts)
 
   target(
     amap({ base_server_init_test_lua, base_server_init_worker_test_lua }, test_server_dir),
-    amap({ "profile.flag", "trace.flag", "coverage.flag", "skip_check.flag" }, work_dir))
+    amap({ "profile.flag", "trace.flag", "skip_check.flag" }, work_dir))
 
   for fp in ivals(base_server_libs) do
     add_file_target(server_dir_stripped(remove_tk(fp)), fp, server_env)
@@ -601,19 +510,15 @@ local function init (opts)
       target({ post }, deps, function ()
         fs.mkdirp(cdir("build", "default-wasm", "build"))
         fs.pushd(cdir("build", "default-wasm", "build"), function ()
+          local lua_dir = cdir("build", "default-wasm", "build", "lua-5.1.5")
+          local extra_cflags = extend({}, extra_flags, tbl.get(env, "cxxflags") or {})
+          local extra_ldflags = tbl.get(env, "ldflags") or {}
           bundle(pre, fs.dirname(post), {
             cc = "emcc",
             ignores = { "debug" },
             path = get_lua_path(cdir("build", "default-wasm", "build")),
             cpath = get_lua_cpath(cdir("build", "default-wasm", "build")),
-            flags = extend({
-              "-sASSERTIONS", "-sSINGLE_FILE", "-sALLOW_MEMORY_GROWTH",
-              "-I" .. cdir("build", "default-wasm", "build", "lua-5.1.5", "include"),
-              "-L" .. cdir("build", "default-wasm", "build", "lua-5.1.5", "lib"),
-              "-llua", "-lm",
-            }, extra_flags,
-              tbl.get(env, "cxxflags") or {},
-              tbl.get(env, "ldflags") or {})
+            flags = wasm.get_bundle_flags(lua_dir, "build", extra_cflags, extra_ldflags)
           })
         end)
       end)
@@ -643,7 +548,6 @@ local function init (opts)
             profile = opts.profile,
             trace = opts.trace,
             skip_check = opts.skip_check,
-            coverage = opts.coverage,
             wasm = true,
             skip_tests = true,
             dir = cdir("build"),
@@ -675,7 +579,6 @@ local function init (opts)
             profile = opts.profile,
             trace = opts.trace,
             skip_check = opts.skip_check,
-            coverage = opts.coverage,
             wasm = true,
             skip_tests = true,
             dir = cdir("build"),
@@ -711,7 +614,6 @@ local function init (opts)
           profile = opts.profile,
           trace = opts.trace,
           skip_check = opts.skip_check,
-          coverage = opts.coverage,
           skip_tests = true,
           dir = server_dir(),
         }).install()
@@ -744,7 +646,6 @@ local function init (opts)
           profile = opts.profile,
           trace = opts.trace,
           skip_check = opts.skip_check,
-          coverage = opts.coverage,
           skip_tests = true,
           lua = test_server_env.lua,
           lua_path = test_server_env.lua_path,
@@ -829,7 +730,6 @@ local function init (opts)
           profile = opts.profile,
           trace = opts.trace,
           skip_check = opts.skip_check,
-          coverage = opts.coverage,
           wasm = true,
           dir = test_client_dir(),
         }).test()
@@ -852,7 +752,6 @@ local function init (opts)
           profile = opts.profile,
           trace = opts.trace,
           skip_check = opts.skip_check,
-          coverage = opts.coverage,
           lua = test_server_env.lua,
           lua_path = test_server_env.lua_path,
           lua_cpath = test_server_env.lua_cpath,

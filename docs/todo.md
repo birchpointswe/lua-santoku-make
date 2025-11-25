@@ -57,7 +57,6 @@
 # Later
 
 - Server profile doesn't print out as expected
-- Coverage sometimes shows 0%
 
 - res/* arent tracked as dependencies for this project (changing
   template.rockspec doesn't re-build project/lib.lua)
@@ -86,10 +85,6 @@
   would allow build.wasm flags to be used in a release tarball
 
 - Allow library to set default --wasm with --native to revert
-
-- Luacov in WASM doens't work due to bundling as a single chunk in a string, can
-  luacov report on chunks? Can we fake a file? Is it work not bundling lua
-  modules in WASM so coverage is reported?
 
 - toku make bundle to produce bundled executables
     - with --wasm, produce js, use the -wasm directory

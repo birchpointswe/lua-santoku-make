@@ -14,10 +14,6 @@ cd "$(dirname $0)"
   return str.interp("export %1=%2", { k, str.quote(tostring(v)) })
 end, it.pairs(run_env_vars or {}))), "\n") %>
 
-<% push(environment == "test") %>
-export LUACOV_CONFIG="<% return luacov_config %>"
-<% pop() %>
-
 <% return arr.concat(it.collect(it.map(function (env)
   return ". " .. env
 end, it.filter(function (env)

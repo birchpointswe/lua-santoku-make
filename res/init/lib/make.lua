@@ -9,6 +9,5 @@ local env = {
 }
 
 return {
-  type = "lib",
   env = env,
 }

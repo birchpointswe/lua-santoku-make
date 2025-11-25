@@ -5,9 +5,7 @@
   err = require("santoku.error")
 %>
 
-<% push(coverage) %>
-require("luacov")
-<% pop() push(profile) %>
+<% push(profile) %>
 require("santoku.profile")
 <% pop() push(trace) %>
 require("santoku.trace")
