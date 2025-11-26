@@ -10,7 +10,7 @@ local env = {
     "santoku-fs >= 0.0.34-1",
     "santoku-system >= 0.0.56-1",
     "santoku-template >= 0.0.30-1",
-    "santoku-bundle >= 0.0.33-1",
+    "santoku-bundle >= 0.0.34-1",
   },
 }
 
