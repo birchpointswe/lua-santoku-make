@@ -10,6 +10,7 @@ local istable = validate.istable
 
 local unified = require("santoku.make.project.unified")
 local lib = require("santoku.make.project.lib")
+local web = require("santoku.make.project.web")
 
 local sformat = string.format
 
@@ -34,4 +35,6 @@ end
 return {
   init = init,
   create = lib.create,
+  create_lib = lib.create,
+  create_web = web.create,
 }

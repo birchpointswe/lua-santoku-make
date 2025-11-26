@@ -37,6 +37,84 @@ local stripprefix = str.stripprefix
 local supper = string.upper
 local smatch = string.match
 local gsub = string.gsub
+local from_base64 = str.from_base64
+
+local tmpl = require("santoku.template")
+
+-- Embedded templates for web init (reuse lib templates for root level)
+local init_templates = {
+  -- Root level (reuse lib templates)
+  make_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/make.lua"))) %>), -- luacheck: ignore
+  bin_lua = from_base64(<% return squote(to_base64(readfile("res/init/lib/bin.lua"))) %>), -- luacheck: ignore
+  lib_lua = from_base64(<% return squote(to_base64(readfile("res/init/lib/lib.lua"))) %>), -- luacheck: ignore
+  test_spec_lua = from_base64(<% return squote(to_base64(readfile("res/init/lib/test-spec.lua"))) %>), -- luacheck: ignore
+  -- Client
+  client_bin_index_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-bin-index.lua"))) %>), -- luacheck: ignore
+  client_lib_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-lib.lua"))) %>), -- luacheck: ignore
+  client_test_spec_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-test-spec.lua"))) %>), -- luacheck: ignore
+  -- Server
+  server_lib_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib.lua"))) %>), -- luacheck: ignore
+  server_lib_init_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib-init.lua"))) %>), -- luacheck: ignore
+  server_test_spec_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-test-spec.lua"))) %>), -- luacheck: ignore
+  -- Common
+  gitignore = from_base64(<% return squote(to_base64(readfile("res/init/web/gitignore"))) %>), -- luacheck: ignore
+}
+
+local function create (opts)
+  err.assert(vdt.istable(opts), "opts must be a table")
+  err.assert(vdt.isstring(opts.name), "opts.name is required")
+
+  local name = opts.name
+  local dir = opts.dir or name
+
+  -- Validate name format
+  if not smatch(name, "^[a-z][a-z0-9%-]*$") then
+    err.error("Invalid name: must start with lowercase letter and contain only lowercase letters, numbers, and hyphens")
+  end
+
+  -- Create environment for template evaluation
+  local template_env = setmetatable({
+    name = name,
+  }, { __index = _G })
+
+  -- Evaluate templates for trifecta structure
+  local files = {
+    -- Root level
+    ["make.lua"] = tmpl.render(init_templates.make_lua, template_env),
+    [fs.join("bin", name .. ".lua")] = tmpl.render(init_templates.bin_lua, template_env),
+    [fs.join("lib", name .. ".lua")] = tmpl.render(init_templates.lib_lua, template_env),
+    [fs.join("test/spec", name .. ".lua")] = tmpl.render(init_templates.test_spec_lua, template_env),
+    -- Client
+    [fs.join("client/bin", "index.lua")] = tmpl.render(init_templates.client_bin_index_lua, template_env),
+    [fs.join("client/lib", name .. ".lua")] = tmpl.render(init_templates.client_lib_lua, template_env),
+    [fs.join("client/test/spec", name .. ".lua")] = tmpl.render(init_templates.client_test_spec_lua, template_env),
+    -- Server
+    [fs.join("server/lib", name .. ".lua")] = tmpl.render(init_templates.server_lib_lua, template_env),
+    [fs.join("server/lib", name, "init.lua")] = tmpl.render(init_templates.server_lib_init_lua, template_env),
+    [fs.join("server/test/spec", name .. ".lua")] = tmpl.render(init_templates.server_test_spec_lua, template_env),
+    -- Common
+    [".gitignore"] = init_templates.gitignore,
+  }
+
+  -- Create directories and write files
+  local pairs = it.pairs
+  for fpath, content in pairs(files) do
+    local full_path = fs.join(dir, fpath)
+    fs.mkdirp(fs.dirname(full_path))
+    fs.writefile(full_path, content)
+  end
+
+  -- Initialize git if requested
+  if opts.git ~= false then
+    sys.execute({ "git", "init", dir })
+  end
+
+  io.stdout:write("Created web project: " .. name .. "\n")
+  io.stdout:write("\nNext steps:\n")
+  io.stdout:write("  cd " .. dir .. "\n")
+  io.stdout:write("  toku web test-build  # Build for testing\n")
+  io.stdout:write("  toku web test-start  # Start development server\n")
+end
 
 local function init (opts)
 
@@ -170,6 +248,9 @@ local function init (opts)
   local base_client_bins = get_files("client/bin")
   local base_client_res, base_client_res_templated, base_client_res_templated_client
     = get_files("client/res", true, true)
+  local base_client_test_specs = get_files("client/test/spec")
+
+  local base_root_test_specs = get_files("test/spec")
 
   local base_client_lua_modules_ok = "lua_modules.ok"
   local base_client_lua_modules_deps_ok = "lua_modules.deps.ok"
@@ -266,10 +347,10 @@ local function init (opts)
   client_env.require_client = wrap_require(client_env)
   test_client_env.require_client = wrap_require(test_client_env)
 
-  tbl.merge(server_env, base_env, opts.config.env.server)
-  tbl.merge(test_server_env, base_env, opts.config.env.server)
-  tbl.merge(client_env, base_env, opts.config.env.client)
-  tbl.merge(test_client_env, base_env, opts.config.env.client)
+  tbl.merge(server_env, base_env, opts.config.env.server or {})
+  tbl.merge(test_server_env, base_env, opts.config.env.server or {})
+  tbl.merge(client_env, base_env, opts.config.env.client or {})
+  tbl.merge(test_client_env, base_env, opts.config.env.client or {})
 
   opts.config.env.variable_prefix =
     opts.config.env.variable_prefix or
@@ -374,6 +455,10 @@ local function init (opts)
 
   for fp in ivals(base_server_test_res_templated) do
     add_file_target(test_server_dir_stripped(remove_tk(fp)), fp, test_server_env)
+  end
+
+  for fp in ivals(base_client_test_specs) do
+    add_file_target(test_client_dir_stripped(remove_tk(fp)), fp, test_client_env)
   end
 
   for ddir, ddir_stripped, cdir, cdir_stripped, env in map(spread, ivals({
@@ -645,65 +730,130 @@ local function init (opts)
       end)
     end)
 
+  -- Detect which test set --single belongs to based on path
+  local function get_single_target(single)
+    if not single then return nil, nil end
+    if smatch(single, "^client/test/") or smatch(single, "^client/") then
+      return "client", gsub(single, "^client/test/spec/", "test/spec/")
+    elseif smatch(single, "^server/test/") or smatch(single, "^server/") then
+      return "server", gsub(single, "^server/test/spec/", "test/spec/")
+    elseif smatch(single, "^test/") then
+      return "root", single
+    else
+      return nil, single
+    end
+  end
+
+  local single_target, single_path = get_single_target(opts.single)
+
+  -- Determine which test sets to run
+  local run_root = opts.test_root or (not opts.test_client and not opts.test_server and not single_target)
+  local run_client = opts.test_client or (not opts.test_root and not opts.test_server and not single_target)
+  local run_server = opts.test_server or (not opts.test_root and not opts.test_client and not single_target)
+
+  -- If --single specified, only run that target
+  if single_target == "root" then
+    run_root, run_client, run_server = true, false, false
+  elseif single_target == "client" then
+    run_root, run_client, run_server = false, true, false
+  elseif single_target == "server" then
+    run_root, run_client, run_server = false, false, true
+  end
+
   target(
     { "test" },
-    amap(extend({},
-      amap(extend({}, base_server_test_specs, base_server_test_res_templated), remove_tk),
-      base_server_test_res), test_server_dir_stripped),
+    extend(
+      amap(extend({},
+        amap(extend({}, base_server_test_specs, base_server_test_res_templated), remove_tk),
+        base_server_test_res), test_server_dir_stripped),
+      amap(amap(extend({}, base_client_test_specs), remove_tk), test_client_dir_stripped)),
     function (_, _, iterating)
-      build({ "stop", "test-stop" }, opts.verbosity)
-      build({ "test-start" }, opts.verbosity)
+      local needs_server = run_server and #base_server_test_specs > 0
+      if needs_server then
+        build({ "stop", "test-stop" }, opts.verbosity)
+        build({ "test-start" }, opts.verbosity)
+      end
       local config_file = fs.absolute(opts.config_file)
-      local client_config = {
-        type = "lib",
-        env = tbl.merge({
-          name = opts.config.env.name .. "-client",
-          version = opts.config.env.version,
-        }, test_client_env),
-        rules = tbl.get(opts, "config", "rules", "client"),
-      }
-      fs.mkdirp(test_client_dir())
-      fs.pushd(test_client_dir(), function ()
+
+      -- Run root tests
+      if run_root and #base_root_test_specs > 0 then
+        local root_config = {
+          type = "lib",
+          env = tbl.assign({}, opts.config.env, {
+            name = opts.config.env.name,
+            version = opts.config.env.version,
+          }),
+          rules = tbl.get(opts, "config", "rules"),
+        }
         require("santoku.make.project").init({
           config_file = config_file,
-          config = client_config,
-          single = opts.single and remove_tk(opts.single) or nil,
+          config = root_config,
+          single = single_target == "root" and single_path and remove_tk(single_path) or nil,
           profile = opts.profile,
           trace = opts.trace,
           skip_check = opts.skip_check,
-          wasm = true,
-          dir = test_client_dir(),
+          dir = fs.absolute("build"),
         }).test()
-      end)
-      local server_config = {
-        type = "lib",
-        env = tbl.assign(opts.config.env.server, {
-          name = opts.config.env.name .. "-server",
-          version = opts.config.env.version,
-        }),
-        rules = tbl.get(opts, "config", "rules", "server"),
-      }
-      fs.mkdirp(test_server_dir())
-      fs.pushd(test_server_dir(), function ()
-        local lib = require("santoku.make.project").init({
-          config_file = config_file,
-          luarocks_config = fs.absolute(base_server_luarocks_cfg),
-          config = server_config,
-          single = opts.single and remove_tk(opts.single) or nil,
-          profile = opts.profile,
-          trace = opts.trace,
-          skip_check = opts.skip_check,
-          lua = test_server_env.lua,
-          lua_path = test_server_env.lua_path,
-          lua_cpath = test_server_env.lua_cpath,
-          dir = test_server_dir(),
-        })
-        lib.test({ skip_check = true })
-        if not iterating then
-          build({ "test-stop" }, opts.verbosity)
-        end
-        lib.check()
-      end)
+      end
+
+      -- Run client tests
+      if run_client and #base_client_test_specs > 0 then
+        local client_config = {
+          type = "lib",
+          env = tbl.merge({
+            name = opts.config.env.name .. "-client",
+            version = opts.config.env.version,
+          }, test_client_env),
+          rules = tbl.get(opts, "config", "rules", "client"),
+        }
+        fs.mkdirp(test_client_dir())
+        fs.pushd(test_client_dir(), function ()
+          require("santoku.make.project").init({
+            config_file = config_file,
+            config = client_config,
+            single = single_target == "client" and single_path and remove_tk(single_path) or nil,
+            profile = opts.profile,
+            trace = opts.trace,
+            skip_check = opts.skip_check,
+            wasm = true,
+            dir = test_client_dir(),
+          }).test()
+        end)
+      end
+
+      -- Run server tests
+      if run_server and #base_server_test_specs > 0 then
+        local server_config = {
+          type = "lib",
+          env = tbl.assign(opts.config.env.server, {
+            name = opts.config.env.name .. "-server",
+            version = opts.config.env.version,
+          }),
+          rules = tbl.get(opts, "config", "rules", "server"),
+        }
+        fs.mkdirp(test_server_dir())
+        fs.pushd(test_server_dir(), function ()
+          local lib = require("santoku.make.project").init({
+            config_file = config_file,
+            luarocks_config = fs.absolute(base_server_luarocks_cfg),
+            config = server_config,
+            single = single_target == "server" and single_path and remove_tk(single_path) or nil,
+            profile = opts.profile,
+            trace = opts.trace,
+            skip_check = opts.skip_check,
+            lua = test_server_env.lua,
+            lua_path = test_server_env.lua_path,
+            lua_cpath = test_server_env.lua_cpath,
+            dir = test_server_dir(),
+          })
+          lib.test({ skip_check = true })
+          lib.check()
+        end)
+      end
+
+      if needs_server and not iterating then
+        build({ "test-stop" }, opts.verbosity)
+      end
     end)
 
   target({ "iterate" }, {}, function (_, _)
@@ -786,4 +936,5 @@ end
 
 return {
   init = init,
+  create = create,
 }

@@ -49,6 +49,7 @@ local from_base64 = str.from_base64
 -- Embedded templates for lib init
 local init_templates = {
   make_lua = from_base64(<% return squote(to_base64(readfile("res/init/lib/make.lua"))) %>), -- luacheck: ignore
+  bin_lua = from_base64(<% return squote(to_base64(readfile("res/init/lib/bin.lua"))) %>), -- luacheck: ignore
   lib_lua = from_base64(<% return squote(to_base64(readfile("res/init/lib/lib.lua"))) %>), -- luacheck: ignore
   test_spec_lua = from_base64(<% return squote(to_base64(readfile("res/init/lib/test-spec.lua"))) %>), -- luacheck: ignore
   gitignore = from_base64(<% return squote(to_base64(readfile("res/init/lib/gitignore"))) %>), -- luacheck: ignore
@@ -74,6 +75,7 @@ local function create (opts)
   -- Evaluate templates
   local files = {
     ["make.lua"] = tmpl.render(init_templates.make_lua, template_env),
+    [fs.join("bin", name .. ".lua")] = tmpl.render(init_templates.bin_lua, template_env),
     [fs.join("lib", name .. ".lua")] = tmpl.render(init_templates.lib_lua, template_env),
     [fs.join("test/spec", name .. ".lua")] = tmpl.render(init_templates.test_spec_lua, template_env),
     [".gitignore"] = init_templates.gitignore,
@@ -320,6 +322,7 @@ local function init (opts)
             tbl.get(test_env, "test", "wasm", "ldflags") or {})
           bundle(test_dir("bundler-pre", fp), test_dir("bundler-post", fs.dirname(fp)), {
             cc = "emcc",
+            close = false,
             mods = extend({},
               opts.profile and { "santoku.profile" } or {},
               opts.trace and { "santoku.trace" } or {}),
