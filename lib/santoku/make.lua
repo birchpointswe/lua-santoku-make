@@ -12,9 +12,11 @@ local printf = str.printf
 
 local fs = require("santoku.fs")
 local exists = fs.exists
+local readfile = fs.readfile
 
 local iter = require("santoku.iter")
 local ivals = iter.ivals
+local keys = iter.keys
 
 local arr = require("santoku.array")
 local extend = arr.extend
@@ -24,6 +26,9 @@ local max = math.max
 
 local posix = require("santoku.make.posix")
 local modtime = posix.time
+
+local tmpl = require("santoku.template")
+local deserialize_deps = tmpl.deserialize_deps
 
 return function ()
 
@@ -49,6 +54,22 @@ return function ()
     end
   end
 
+  local function get_dfile_deps_time (t)
+    local dfile = t .. ".d"
+    if not exists(dfile) then
+      return nil
+    end
+    local data = readfile(dfile)
+    local file_deps = deserialize_deps(data)
+    local maxtime = -huge
+    for fp in keys(file_deps) do
+      if exists(fp) then
+        maxtime = max(maxtime, modtime(fp))
+      end
+    end
+    return maxtime > -huge and maxtime or nil
+  end
+
   local function _build (ts, verbosity, cache, ...)
 
     local maxtime = -huge
@@ -65,6 +86,10 @@ return function ()
 
         local ttime = exists(t) and modtime(t)
         local dtime = deps[t] and _build(deps[t], verbosity, cache, ...)
+        local ddtime = get_dfile_deps_time(t)
+        if ddtime then
+          dtime = dtime and max(dtime, ddtime) or ddtime
+        end
 
         if ttime and (not dtime or dtime < ttime) then
 
