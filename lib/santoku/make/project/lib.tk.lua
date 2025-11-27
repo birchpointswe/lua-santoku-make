@@ -175,6 +175,18 @@ local function init (opts)
 
   local base_test_specs = opts.single and { opts.single } or get_files("test/spec")
 
+  -- Filter out .wasm.lua test specs for native builds
+  if not opts.wasm then
+    base_test_specs = collect(filter(function (fp)
+      return not smatch(fp, "%.wasm%.lua$")
+    end, ivals(base_test_specs)))
+  end
+
+  -- Helper to strip .wasm from filenames (for WASM builds)
+  local function remove_wasm(fp)
+    return gsub(fp, "%.wasm%.", ".")
+  end
+
   local base_test_deps = get_files("test/deps")
   local base_test_res, base_test_res_templated = get_files("test/res", true)
 
@@ -186,7 +198,7 @@ local function init (opts)
     base_res, base_test_res)
 
   if opts.wasm then
-    extend(test_all_base_templated, collect(map(fs.stripextension, ivals(base_test_specs))))
+    extend(test_all_base_templated, collect(map(fun.compose(fs.stripextension, remove_wasm), ivals(base_test_specs))))
   else
     extend(test_all_base_templated, base_test_specs)
   end
@@ -310,7 +322,7 @@ local function init (opts)
     end
 
     for fp in ivals(base_test_specs) do
-      target({ test_dir("bundler-post", fs.stripextension(fp)) },
+      target({ test_dir("bundler-post", fs.stripextension(remove_wasm(fp))) },
         push(extend({ test_dir("bundler-pre", fp) },
           test_cfgs), test_dir(base_lua_modules_ok)),
         function ()
@@ -340,8 +352,8 @@ local function init (opts)
     end
 
     for fp in ivals(base_test_specs) do
-      add_file_target(test_dir(fs.stripextension(remove_tk(fp))),
-        test_dir("bundler-post", fs.stripextension(fp)), test_env)
+      add_file_target(test_dir(fs.stripextension(remove_wasm(remove_tk(fp)))),
+        test_dir("bundler-post", fs.stripextension(remove_wasm(fp))), test_env)
     end
 
   end
@@ -593,20 +605,49 @@ local function init (opts)
         err.error("inotify not found", ...)
       end
     end, err.pcall(sys.execute, { "sh", "-c", "type inotifywait >/dev/null 2>/dev/null" }))
+    local config_mtime = fs.exists(opts.config_file) and require("santoku.make.posix").time(opts.config_file) or nil
     while true do
-      varg.tup(function (ok, ...)
-        if not ok then
-          print(...)
+      err.pcall(function ()
+        -- Check if config file changed - if so, need to restart
+        if config_mtime then
+          local new_mtime = fs.exists(opts.config_file) and require("santoku.make.posix").time(opts.config_file) or nil
+          if new_mtime and new_mtime > config_mtime then
+            print("\n[iterate] " .. opts.config_file .. " changed - please restart iterate\n")
+            config_mtime = new_mtime
+          end
         end
-      end, err.pcall(build, { "test", "check" }, opts.verbosity))
-      sys.execute({
-        "inotifywait", "-qr",
-        "-e", "close_write", "-e", "modify",
-        "-e", "move", "-e", "create", "-e", "delete",
-        spread(collect(filter(function (fp)
-          return fs.exists(fp)
-        end, chain(fs.files("."), ivals({ "lib", "bin", "test", "res" })))))
-      })
+        varg.tup(function (ok, ...)
+          if not ok then
+            print(...)
+          end
+        end, err.pcall(build, { "test", "check" }, opts.verbosity))
+      end)
+      -- Collect directories from .d files
+      local dfile_dirs = {}
+      err.pcall(function ()
+        for dfile in fs.files(work_dir(), true) do
+          if str.find(dfile, "%.d$") then
+            local data = fs.readfile(dfile)
+            local file_deps = tmpl.deserialize_deps(data)
+            for fp in iter.keys(file_deps) do
+              local dir = fs.dirname(fp)
+              if dir and dir ~= "" and dir ~= "." then
+                dfile_dirs[dir] = true
+              end
+            end
+          end
+        end
+      end)
+      err.pcall(function ()
+        sys.execute({
+          "inotifywait", "-qr",
+          "-e", "close_write", "-e", "modify",
+          "-e", "move", "-e", "create", "-e", "delete",
+          spread(collect(filter(function (fp)
+            return fs.exists(fp)
+          end, chain(fs.files("."), ivals({ "lib", "bin", "test", "res" }), iter.keys(dfile_dirs)))))
+        })
+      end)
       sys.sleep(.25)
     end
   end)
@@ -623,8 +664,8 @@ local function init (opts)
 
   local configure = tbl.get(opts, "config", "env", "configure")
   if configure then
-    configure(submake, build_env)
-    configure(submake, test_env)
+    configure(submake, { root = build_env })
+    configure(submake, { root = test_env })
   end
 
   return {

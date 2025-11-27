@@ -55,34 +55,6 @@ local function add_copied_target(target_fn, dest, src, extra_srcs)
   end)
 end
 
--- Create a target that processes a file (copy or template)
-local function add_file_target(target_fn, dest, src, env, config, config_file, extra_srcs)
-  extra_srcs = extra_srcs or {}
-  local action = get_action(src, config)
-  if action == "copy" then
-    return add_copied_target(target_fn, dest, src, extra_srcs)
-  elseif action == "template" then
-    dest = str.gsub(dest, "%.tk", "")
-    target_fn({ dest }, arr.extend({ src, config_file }, extra_srcs), function ()
-      fs.mkdirp(fs.dirname(dest))
-      local t, ds = tmpl.renderfile(src, env, _G)
-      fs.writefile(dest, t)
-      fs.writefile(dest .. ".d", tmpl.serialize_deps(src, dest, ds))
-    end)
-  end
-end
-
--- Create a target from base64-encoded template data
-local function add_templated_target_base64(target_fn, dest, data, env, config_file, extra_srcs)
-  extra_srcs = extra_srcs or {}
-  target_fn({ dest }, arr.extend({ config_file }, extra_srcs), function ()
-    fs.mkdirp(fs.dirname(dest))
-    local t, ds = tmpl.render(str.from_base64(data), env, _G)
-    fs.writefile(dest, t)
-    fs.writefile(dest .. ".d", tmpl.serialize_deps(dest, config_file, ds))
-  end)
-end
-
 -- Get Lua version from _VERSION global
 local function get_lua_version()
   return (str.match(_VERSION, "(%d+.%d+)"))
@@ -113,6 +85,64 @@ local function get_lua_cpath(prefix)
     "lib/lua/%s/loadall.so")
 end
 
+-- Helper to run a function with modified package paths
+local function with_build_deps(build_deps_dir, fn)
+  if not build_deps_dir then
+    return fn()
+  end
+  local old_path = package.path
+  local old_cpath = package.cpath
+  local deps_path = get_lua_path(build_deps_dir)
+  local deps_cpath = get_lua_cpath(build_deps_dir)
+  package.path = deps_path .. ";" .. old_path
+  package.cpath = deps_cpath .. ";" .. old_cpath
+  return varg.tup(function (...)
+    package.path = old_path
+    package.cpath = old_cpath
+    return ...
+  end, fn())
+end
+
+-- Create a target that processes a file (copy or template)
+local function add_file_target(target_fn, dest, src, env, config, config_file, extra_srcs, build_deps_dir, build_deps_ok)
+  extra_srcs = extra_srcs or {}
+  local action = get_action(src, config)
+  if action == "copy" then
+    return add_copied_target(target_fn, dest, src, extra_srcs)
+  elseif action == "template" then
+    dest = str.gsub(dest, "%.tk", "")
+    local deps = arr.extend({ src, config_file }, extra_srcs)
+    if build_deps_ok then
+      arr.push(deps, build_deps_ok)
+    end
+    target_fn({ dest }, deps, function ()
+      fs.mkdirp(fs.dirname(dest))
+      local t, ds = with_build_deps(build_deps_dir, function ()
+        return tmpl.renderfile(src, env, _G)
+      end)
+      fs.writefile(dest, t)
+      fs.writefile(dest .. ".d", tmpl.serialize_deps(src, dest, ds))
+    end)
+  end
+end
+
+-- Create a target from base64-encoded template data
+local function add_templated_target_base64(target_fn, dest, data, env, config_file, extra_srcs, build_deps_dir, build_deps_ok)
+  extra_srcs = extra_srcs or {}
+  local deps = arr.extend({ config_file }, extra_srcs)
+  if build_deps_ok then
+    arr.push(deps, build_deps_ok)
+  end
+  target_fn({ dest }, deps, function ()
+    fs.mkdirp(fs.dirname(dest))
+    local t, ds = with_build_deps(build_deps_dir, function ()
+      return tmpl.render(str.from_base64(data), env, _G)
+    end)
+    fs.writefile(dest, t)
+    fs.writefile(dest .. ".d", tmpl.serialize_deps(dest, config_file, ds))
+  end)
+end
+
 -- Scan directory for files, optionally checking for template patterns
 local function get_files(dir, config, check_tpl, check_tpl_client)
   local tpl = check_tpl and {} or nil
@@ -141,6 +171,7 @@ return {
   add_copied_target = add_copied_target,
   add_file_target = add_file_target,
   add_templated_target_base64 = add_templated_target_base64,
+  with_build_deps = with_build_deps,
   get_lua_version = get_lua_version,
   get_require_paths = get_require_paths,
   get_lua_path = get_lua_path,

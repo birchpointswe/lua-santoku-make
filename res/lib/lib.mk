@@ -6,14 +6,20 @@
 
 include $(addprefix ../, $(PARENT_DEPS_RESULTS))
 
+<% push(not wasm) %>
+LIB_LUA = $(filter-out %.wasm.lua, $(shell find * -name '*.lua'))
+LIB_C = $(filter-out %.wasm.c, $(shell find * -name '*.c'))
+LIB_CXX = $(filter-out %.wasm.cpp, $(shell find * -name '*.cpp'))
+<% pop() push(wasm) %>
 LIB_LUA = $(shell find * -name '*.lua')
 LIB_C = $(shell find * -name '*.c')
 LIB_CXX = $(shell find * -name '*.cpp')
-LIB_O = $(LIB_C:.c=.o) $(LIB_CXX:.cpp=.o)
+<% pop() %>
+LIB_O = $(patsubst %.wasm.o,%.o,$(LIB_C:.c=.o) $(LIB_CXX:.cpp=.o))
 LIB_SO = $(LIB_O:.o=.$(LIB_EXTENSION))
 LIB_H = $(shell find * -name '*.h')
 
-INST_LUA = $(addprefix $(INST_LUADIR)/, $(LIB_LUA))
+INST_LUA = $(patsubst %.wasm.lua,%.lua,$(addprefix $(INST_LUADIR)/, $(LIB_LUA)))
 INST_SO = $(addprefix $(INST_LIBDIR)/, $(LIB_SO))
 INST_H = $(addprefix $(INST_PREFIX)/include/, $(LIB_H))
 
@@ -110,6 +116,12 @@ all: $(LIB_O) $(LIB_SO)
 <% return inject_flags(tbl.get(test or {}, "wasm", "rules")) %>
 <% pop() %>
 
+%.o: %.wasm.c
+	$(CC) -c $< -o $@ $(CFLAGS) $(LIB_CFLAGS)
+
+%.o: %.wasm.cpp
+	$(CXX) -c $< -o $@ $(CXXFLAGS) $(LIB_CXXFLAGS)
+
 %.o: %.c
 	$(CC) -c $< -o $@ $(CFLAGS) $(LIB_CFLAGS)
 
@@ -120,6 +132,10 @@ all: $(LIB_O) $(LIB_SO)
 	$(CC) $(LIBFLAG) $< -o $@ $(LDFLAGS) $(LIB_LDFLAGS)
 
 install: $(INST_LUA) $(INST_SO) $(INST_H)
+
+$(INST_LUADIR)/%.lua: ./%.wasm.lua
+	@mkdir -p $(dir $@)
+	@cp $< $@
 
 $(INST_LUADIR)/%.lua: ./%.lua
 	@mkdir -p $(dir $@)

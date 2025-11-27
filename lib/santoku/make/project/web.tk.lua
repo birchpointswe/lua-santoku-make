@@ -209,12 +209,22 @@ local function init (opts)
     return common.add_copied_target(target, dest, src, extra_srcs)
   end
 
+  -- Build dependencies directory (host-native, for template processing)
+  local build_deps_dir = work_dir("build-deps")
+  local build_deps_ok = work_dir("build-deps.ok")
+  local build_deps = tbl.get(opts, "config", "env", "build", "dependencies") or {}
+  local has_build_deps = #build_deps > 0
+
   local function add_file_target(dest, src, env, extra_srcs)
-    return common.add_file_target(target, dest, src, env, opts.config, opts.config_file, extra_srcs)
+    return common.add_file_target(target, dest, src, env, opts.config, opts.config_file, extra_srcs,
+      has_build_deps and build_deps_dir or nil,
+      has_build_deps and build_deps_ok or nil)
   end
 
   local function add_templated_target_base64(dest, data, env, extra_srcs)
-    return common.add_templated_target_base64(target, dest, data, env, opts.config_file, extra_srcs)
+    return common.add_templated_target_base64(target, dest, data, env, opts.config_file, extra_srcs,
+      has_build_deps and build_deps_dir or nil,
+      has_build_deps and build_deps_ok or nil)
   end
 
   local function get_lua_path(prefix)
@@ -251,6 +261,7 @@ local function init (opts)
   local base_client_test_specs = get_files("client/test/spec")
 
   local base_root_test_specs = get_files("test/spec")
+  local base_root_libs = get_files("lib")
 
   local base_client_lua_modules_ok = "lua_modules.ok"
   local base_client_lua_modules_deps_ok = "lua_modules.deps.ok"
@@ -258,21 +269,6 @@ local function init (opts)
   local base_client_pages = collect(map(function (fp)
     return fs.stripparts(fs.stripextensions(fp) .. ".js", 2)
   end, ivals(base_client_bins)))
-
-  local function wrap_require (env)
-    env = env or {}
-    return function (mod)
-      local oldpath = package.path
-      local oldcpath = package.cpath
-      package.path = env.lua_path or ""
-      package.cpath = env.lua_cpath or ""
-      return varg.tup(function (...)
-        package.path = oldpath
-        package.cpath = oldcpath
-        return ...
-      end, require(mod))
-    end
-  end
 
   local base_env = {
     root_dir = fs.cwd(),
@@ -342,19 +338,75 @@ local function init (opts)
     luarocks_cfg = test_client_dir("build", "default-wasm", "build", base_server_luarocks_cfg),
   }
 
-  -- TODO: Expose both require_client and require_server to both client and
-  -- server builds
-  client_env.require_client = wrap_require(client_env)
-  test_client_env.require_client = wrap_require(test_client_env)
+  local root_env = {
+    environment = "main",
+    component = "root",
+    target = "build",
+    dist_dir = dist_dir(),
+    work_dir = work_dir(),
+  }
+
+  local test_root_env = {
+    environment = "test",
+    component = "root",
+    target = "test-build",
+    dist_dir = test_dist_dir(),
+    work_dir = work_dir("test"),
+    lua = env.interpreter()[1],
+    lua_path = get_lua_path(work_dir("test", "build")),
+    lua_cpath = get_lua_cpath(work_dir("test", "build")),
+  }
 
   tbl.merge(server_env, base_env, opts.config.env.server or {})
   tbl.merge(test_server_env, base_env, opts.config.env.server or {})
   tbl.merge(client_env, base_env, opts.config.env.client or {})
   tbl.merge(test_client_env, base_env, opts.config.env.client or {})
+  tbl.merge(root_env, base_env)
+  tbl.merge(test_root_env, base_env)
 
   opts.config.env.variable_prefix =
     opts.config.env.variable_prefix or
     supper((gsub(opts.config.env.name, "%W+", "_")))
+
+  -- Install build dependencies (host-native, for template processing)
+  local build_deps_luarocks_cfg = work_dir("build-deps-luarocks.lua")
+  if has_build_deps then
+    target(
+      { build_deps_ok },
+      { opts.config_file },
+      function ()
+        fs.mkdirp(build_deps_dir)
+        local config_file = fs.absolute(opts.config_file)
+        local lua_modules_dir = fs.join(fs.absolute(build_deps_dir), "lua_modules")
+        -- Generate minimal luarocks config for build deps
+        fs.writefile(build_deps_luarocks_cfg, str.interp([[
+rocks_trees = {
+  { name = "build-deps",
+    root = "%s#(lua_modules)"
+  } }
+lua_version = "5.1"
+rocks_provided = { lua = "5.1" }
+]], { lua_modules = lua_modules_dir }))
+        local build_config = {
+          type = "lib",
+          env = {
+            name = opts.config.env.name .. "-build-deps",
+            version = opts.config.env.version,
+            dependencies = build_deps,
+          },
+        }
+        fs.pushd(build_deps_dir, function ()
+          require("santoku.make.project").init({
+            config_file = config_file,
+            config = build_config,
+            luarocks_config = fs.absolute(build_deps_luarocks_cfg),
+            skip_tests = true,
+            dir = build_deps_dir,
+          }).install_deps()
+        end)
+        fs.touch(build_deps_ok)
+      end)
+  end
 
   add_templated_target_base64(server_dir(base_server_run_sh),
     <% return squote(to_base64(readfile("res/web/run.sh"))) %>, server_env) -- luacheck: ignore
@@ -437,6 +489,14 @@ local function init (opts)
     add_file_target(test_server_dir_stripped(remove_tk(fp)), fp, test_server_env)
   end
 
+  for fp in ivals(base_root_libs) do
+    add_file_target(server_dir(remove_tk(fp)), fp, server_env)
+  end
+
+  for fp in ivals(base_root_libs) do
+    add_file_target(test_server_dir(remove_tk(fp)), fp, test_server_env)
+  end
+
   for fp in ivals(base_server_deps) do
     add_file_target(server_dir_stripped(remove_tk(fp)), fp, server_env)
   end
@@ -497,6 +557,12 @@ local function init (opts)
           amap(extend({}, base_client_res_templated_client), fun.compose(remove_tk, cdir_stripped))))
     end
 
+    for fp in ivals(base_root_libs) do
+      add_copied_target(cdir(fp), fp,
+        extend({ cdir(base_client_lua_modules_deps_ok) },
+          amap(extend({}, base_client_res_templated_client), fun.compose(remove_tk, cdir_stripped))))
+    end
+
     for fp in ivals(base_client_bins) do
       add_copied_target(cdir_stripped(fp), fp,
         extend({ cdir(base_client_lua_modules_deps_ok) },
@@ -517,6 +583,8 @@ local function init (opts)
       add_file_target(cdir_stripped(remove_tk(fp)), fp, env,
         amap(extend({}, base_client_static), cdir_stripped))
     end
+
+    local bundle_mode = tbl.get(env, "bundle_mode") or "bytecode"
 
     for fp in ivals(base_client_pages) do
       local pre = cdir("build", "default-wasm", "build", "bin", fs.stripextensions(fp)) .. ".lua"
@@ -539,13 +607,25 @@ local function init (opts)
           local lua_dir = cdir("build", "default-wasm", "build", "lua-5.1.5")
           local extra_cflags = extend({}, extra_flags, tbl.get(env, "cxxflags") or {})
           local extra_ldflags = tbl.get(env, "ldflags") or {}
-          bundle(pre, fs.dirname(post), {
-            cc = "emcc",
-            ignores = { "debug" },
-            path = get_lua_path(cdir("build", "default-wasm", "build")),
-            cpath = get_lua_cpath(cdir("build", "default-wasm", "build")),
-            flags = wasm.get_bundle_flags(lua_dir, "build", extra_cflags, extra_ldflags)
-          })
+
+          if bundle_mode == "embed" then
+            -- Dev mode: embed lua_modules as virtual filesystem for useful stack traces
+            local lua_modules_dir = cdir("build", "default-wasm", "build", "lua_modules")
+            wasm.build_embed(pre, fs.dirname(post), {
+              lua_dir = lua_dir,
+              lua_modules_dir = lua_modules_dir,
+              flags = extend({}, extra_cflags, extra_ldflags),
+            })
+          else
+            -- Prod mode (default): bundle as bytecode for smallest size
+            bundle(pre, fs.dirname(post), {
+              cc = "emcc",
+              ignores = { "debug" },
+              path = get_lua_path(cdir("build", "default-wasm", "build")),
+              cpath = get_lua_cpath(cdir("build", "default-wasm", "build")),
+              flags = wasm.get_bundle_flags(lua_dir, "build", extra_cflags, extra_ldflags)
+            })
+          end
         end)
       end)
       add_copied_target(ddir(fp), post)
@@ -585,7 +665,8 @@ local function init (opts)
     target(
       { cdir(base_client_lua_modules_ok) },
       extend({ opts.config_file, cdir(base_client_lua_modules_deps_ok) },
-        amap(extend({}, base_client_bins, base_client_libs, base_client_deps), cdir_stripped)),
+        amap(extend({}, base_client_bins, base_client_libs, base_client_deps), cdir_stripped),
+        amap(extend({}, base_root_libs), cdir)),
       function ()
         local config_file = fs.absolute(opts.config_file)
         local config = {
@@ -618,7 +699,8 @@ local function init (opts)
   target(
     { server_dir(base_server_lua_modules_ok) },
     extend({ server_dir(base_server_luarocks_cfg) },
-      amap(amap(extend({}, base_server_libs, base_server_deps), server_dir_stripped), remove_tk)),
+      amap(amap(extend({}, base_server_libs, base_server_deps), server_dir_stripped), remove_tk),
+      amap(amap(extend({}, base_root_libs), server_dir), remove_tk)),
     function ()
       local config_file = fs.absolute(opts.config_file)
       local config = {
@@ -650,7 +732,8 @@ local function init (opts)
   target(
     { test_server_dir(base_server_lua_modules_ok) },
     extend({ test_server_dir(base_server_luarocks_cfg) },
-      amap(amap(extend({}, base_server_libs, base_server_deps), test_server_dir_stripped), remove_tk)),
+      amap(amap(extend({}, base_server_libs, base_server_deps), test_server_dir_stripped), remove_tk),
+      amap(amap(extend({}, base_root_libs), test_server_dir), remove_tk)),
     function ()
       local config_file = fs.absolute(opts.config_file)
       local config = {
@@ -782,6 +865,7 @@ local function init (opts)
           env = tbl.assign({}, opts.config.env, {
             name = opts.config.env.name,
             version = opts.config.env.version,
+            configure = nil,  -- Don't pass configure to sub-projects
           }),
           rules = tbl.get(opts, "config", "rules"),
         }
@@ -862,20 +946,49 @@ local function init (opts)
         err.error("inotify not found", ...)
       end
     end, err.pcall(sys.execute, { "sh", "-c", "type inotifywait >/dev/null 2>/dev/null" }))
+    local config_mtime = fs.exists(opts.config_file) and require("santoku.make.posix").time(opts.config_file) or nil
     while true do
-      varg.tup(function (ok, ...)
-        if not ok then
-          print(...)
+      err.pcall(function ()
+        -- Check if config file changed - if so, need to restart
+        if config_mtime then
+          local new_mtime = fs.exists(opts.config_file) and require("santoku.make.posix").time(opts.config_file) or nil
+          if new_mtime and new_mtime > config_mtime then
+            print("\n[iterate] " .. opts.config_file .. " changed - please restart iterate\n")
+            config_mtime = new_mtime
+          end
         end
-      end, err.pcall(build, { "test" }, opts.verbosity, true))
-      sys.execute({
-        "inotifywait", "-qr",
-        "-e", "close_write", "-e", "modify",
-        "-e", "move", "-e", "create", "-e", "delete",
-        spread(collect(filter(function (fp)
-          return fs.exists(fp)
-        end, chain(fs.files("."), ivals({ "client", "server" })))))
-      })
+        varg.tup(function (ok, ...)
+          if not ok then
+            print(...)
+          end
+        end, err.pcall(build, { "test" }, opts.verbosity, true))
+      end)
+      -- Collect directories from .d files
+      local dfile_dirs = {}
+      err.pcall(function ()
+        for dfile in fs.files(work_dir(), true) do
+          if str.find(dfile, "%.d$") then
+            local data = fs.readfile(dfile)
+            local file_deps = tmpl.deserialize_deps(data)
+            for fp in it.keys(file_deps) do
+              local dir = fs.dirname(fp)
+              if dir and dir ~= "" and dir ~= "." then
+                dfile_dirs[dir] = true
+              end
+            end
+          end
+        end
+      end)
+      err.pcall(function ()
+        sys.execute({
+          "inotifywait", "-qr",
+          "-e", "close_write", "-e", "modify",
+          "-e", "move", "-e", "create", "-e", "delete",
+          spread(collect(filter(function (fp)
+            return fs.exists(fp)
+          end, chain(fs.files("."), ivals({ "client", "server", "res", "lib", "bin", "test" }), it.keys(dfile_dirs)))))
+        })
+      end)
       sys.sleep(.25)
     end
   end)
@@ -904,8 +1017,8 @@ local function init (opts)
 
   local configure = tbl.get(opts, "config", "env", "configure")
   if configure then
-    configure(submake, client_env, server_env)
-    configure(submake, test_client_env, test_server_env)
+    configure(submake, { root = root_env, client = client_env, server = server_env })
+    configure(submake, { root = test_root_env, client = test_client_env, server = test_server_env })
   end
 
   return {
