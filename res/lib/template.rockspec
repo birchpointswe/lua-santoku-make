@@ -72,6 +72,7 @@ build = {
     LUA = "$(LUA)",
   },
   install_variables = {
+    CC = "$(CC)",
     INST_PREFIX = "$(PREFIX)",
     INST_BINDIR = "$(BINDIR)",
     INST_LIBDIR = "$(LIBDIR)",
