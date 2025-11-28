@@ -5,12 +5,6 @@
   err = require("santoku.error")
 %>
 
-<% push(profile) %>
-require("santoku.profile")
-<% pop() push(trace) %>
-require("santoku.trace")
-<% pop() %>
-
 <% push(init_worker) %>
 local fs = require("santoku.fs")
 local init_file = <% if showing() then
