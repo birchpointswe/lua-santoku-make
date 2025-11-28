@@ -19,6 +19,7 @@ local err = require("santoku.error")
 local fun = require("santoku.functional")
 local common = require("santoku.make.common")
 local wasm = require("santoku.make.wasm")
+local clean = require("santoku.make.clean")
 
 local arr = require("santoku.array")
 local amap = arr.map
@@ -204,13 +205,12 @@ local function init (opts)
     extend(test_all_base_templated, base_test_specs)
   end
 
-  local test_all = amap(extend({},
-    amap(extend({},
-      test_all_base_templated,
-      { base_rockspec, base_makefile,
-        base_luarocks_cfg, base_luacheck_cfg,
-        base_run_sh, base_check_sh }), remove_tk),
-    test_all_base_copied), test_dir)
+  local test_all = amap(amap(extend({},
+    test_all_base_templated,
+    { base_rockspec, base_makefile,
+      base_luarocks_cfg, base_luacheck_cfg,
+      base_run_sh, base_check_sh },
+    test_all_base_copied), remove_tk), test_dir)
 
   local test_srcs = amap(amap(extend({},
     base_bins, base_libs, base_deps, base_test_deps), test_dir), remove_tk)
@@ -220,12 +220,10 @@ local function init (opts)
     base_luacheck_cfg, base_run_sh,
     base_check_sh), test_dir), remove_tk)
 
-  local build_all = amap(extend({},
-    amap(push(extend({},
-      base_bins, base_libs, base_deps, opts.wasm and { base_luarocks_cfg } or {},
-      base_res_templated),
-      base_rockspec, base_makefile), remove_tk),
-    base_res), build_dir)
+  local build_all = amap(amap(extend({},
+    base_bins, base_libs, base_deps, opts.wasm and { base_luarocks_cfg } or {},
+    base_res_templated, base_res,
+    { base_rockspec, base_makefile }), remove_tk), build_dir)
 
   if #base_libs > 0 then
     push(test_all, test_dir(base_lib_makefile))
@@ -778,6 +776,16 @@ local function init (opts)
     exec = not opts.wasm and function (opts)
       opts = opts or {}
       build(tbl.assign({ "exec" }), opts.verbosity, opts)
+    end,
+    clean = function (clean_opts)
+      clean_opts = clean_opts or {}
+      return clean.lib({
+        dir = opts.dir,
+        env = clean_opts.env,  -- nil = all envs with --all, otherwise use project env
+        all = clean_opts.all,
+        deps = clean_opts.deps,
+        dry_run = clean_opts.dry_run,
+      })
     end,
   }
 

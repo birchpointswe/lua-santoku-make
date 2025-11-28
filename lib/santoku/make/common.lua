@@ -13,7 +13,7 @@ local iter = require("santoku.iter")
 local function get_action(fp, config)
   config = config or {}
   local match_fp = fun.bind(str.match, fp)
-  local rules = config.rules or {}
+  local rules = tbl.get(config, "env", "rules") or config.rules or {}
   if iter.find(match_fp, iter.ivals(tbl.get(rules, "exclude") or {})) then
     return "ignore"
   elseif iter.find(match_fp, iter.ivals(tbl.get(rules, "copy") or {}))
@@ -29,14 +29,8 @@ end
 local function force_template(fp, config)
   config = config or {}
   local match_fp = fun.bind(str.match, fp)
-  return iter.find(match_fp, iter.ivals(tbl.get(config, "rules", "template") or {}))
-end
-
--- Check if file matches rules.template_client pattern (web projects)
-local function force_template_client(fp, config)
-  config = config or {}
-  local match_fp = fun.bind(str.match, fp)
-  return iter.find(match_fp, iter.ivals(tbl.get(config, "rules", "template_client") or {}))
+  local rules = tbl.get(config, "env", "rules") or config.rules or {}
+  return iter.find(match_fp, iter.ivals(tbl.get(rules, "template") or {}))
 end
 
 -- Remove .tk extension from template files
@@ -144,29 +138,23 @@ local function add_templated_target_base64(target_fn, dest, data, env, config_fi
 end
 
 -- Scan directory for files, optionally checking for template patterns
-local function get_files(dir, config, check_tpl, check_tpl_client)
+local function get_files(dir, config, check_tpl)
   local tpl = check_tpl and {} or nil
-  local tpl_client = check_tpl_client and {} or nil
   if not fs.exists(dir) then
-    return {}, tpl, tpl_client
+    return {}, tpl
   end
   return iter.collect(iter.filter(function (fp)
     if check_tpl and force_template(fp, config) then
       arr.push(tpl, fp)
       return false
     end
-    if check_tpl_client and force_template_client(fp, config) then
-      arr.push(tpl_client, fp)
-      return false
-    end
     return get_action(fp, config) ~= "ignore"
-  end, fs.files(dir, true))), tpl, tpl_client
+  end, fs.files(dir, true))), tpl
 end
 
 return {
   get_action = get_action,
   force_template = force_template,
-  force_template_client = force_template_client,
   remove_tk = remove_tk,
   add_copied_target = add_copied_target,
   add_file_target = add_file_target,

@@ -14,10 +14,10 @@ local tbl = require("santoku.table")
 local varg = require("santoku.varg")
 local vdt = require("santoku.validate")
 local err = require("santoku.error")
-local fun = require("santoku.functional")
 local fs = require("santoku.fs")
 local common = require("santoku.make.common")
 local wasm = require("santoku.make.wasm")
+local clean = require("santoku.make.clean")
 
 local arr = require("santoku.array")
 local amap = arr.map
@@ -235,8 +235,8 @@ local function init (opts)
     return common.get_lua_cpath(prefix)
   end
 
-  local function get_files(dir, check_tpl, check_tpl_client)
-    return common.get_files(dir, opts.config, check_tpl, check_tpl_client)
+  local function get_files(dir, check_tpl)
+    return common.get_files(dir, opts.config, check_tpl)
   end
 
   local base_server_libs = get_files("server/lib")
@@ -256,12 +256,12 @@ local function init (opts)
   local base_client_deps = get_files("client/deps")
   local base_client_libs = get_files("client/lib")
   local base_client_bins = get_files("client/bin")
-  local base_client_res, base_client_res_templated, base_client_res_templated_client
-    = get_files("client/res", true, true)
+  local base_client_res, base_client_res_templated = get_files("client/res", true)
   local base_client_test_specs = get_files("client/test/spec")
 
   local base_root_test_specs = get_files("test/spec")
   local base_root_libs = get_files("lib")
+  local base_root_res = get_files("res")
 
   local base_client_lua_modules_ok = "lua_modules.ok"
   local base_client_lua_modules_deps_ok = "lua_modules.deps.ok"
@@ -355,12 +355,40 @@ local function init (opts)
     lua_cpath = get_lua_cpath(work_dir("test", "build")),
   }
 
-  tbl.merge(server_env, base_env, opts.config.env.server or {})
-  tbl.merge(test_server_env, base_env, opts.config.env.server or {})
-  tbl.merge(client_env, base_env, opts.config.env.client or {})
-  tbl.merge(test_client_env, base_env, opts.config.env.client or {})
+  -- Merge base_env into all environments (root_dir, var(), etc.)
+  tbl.merge(server_env, base_env)
+  tbl.merge(test_server_env, base_env)
+  tbl.merge(client_env, base_env)
+  tbl.merge(test_client_env, base_env)
   tbl.merge(root_env, base_env)
   tbl.merge(test_root_env, base_env)
+
+  -- Namespaced access to component configs from all environments
+  -- Templates use client.opts.X, server.domain, etc. consistently
+  local client_cfg = opts.config.env.client or {}
+  local server_cfg = opts.config.env.server or {}
+  local all_envs = {
+    server_env, test_server_env,
+    client_env, test_client_env,
+    root_env, test_root_env,
+  }
+  for _, e in ipairs(all_envs) do
+    e.client = client_cfg
+    e.server = server_cfg
+    e.name = opts.config.env.name
+    e.version = opts.config.env.version
+  end
+  -- Copy component-specific build flags into component envs
+  for _, e in ipairs({ client_env, test_client_env }) do
+    e.rules = client_cfg.rules
+    e.ldflags = client_cfg.ldflags
+    e.cxxflags = client_cfg.cxxflags
+  end
+  for _, e in ipairs({ server_env, test_server_env }) do
+    e.rules = server_cfg.rules
+    e.ldflags = server_cfg.ldflags
+    e.cxxflags = server_cfg.cxxflags
+  end
 
   opts.config.env.variable_prefix =
     opts.config.env.variable_prefix or
@@ -495,6 +523,14 @@ rocks_provided = { lua = "5.1" }
     add_file_target(test_server_dir(remove_tk(fp)), fp, test_server_env)
   end
 
+  for fp in ivals(base_root_res) do
+    add_file_target(server_dir(remove_tk(fp)), fp, server_env)
+  end
+
+  for fp in ivals(base_root_res) do
+    add_file_target(test_server_dir(remove_tk(fp)), fp, test_server_env)
+  end
+
   for fp in ivals(base_server_deps) do
     add_file_target(server_dir_stripped(remove_tk(fp)), fp, server_env)
   end
@@ -508,7 +544,7 @@ rocks_provided = { lua = "5.1" }
   end
 
   for fp in ivals(base_server_test_res) do
-    add_copied_target(test_server_dir_stripped(fp), fp)
+    add_file_target(test_server_dir_stripped(remove_tk(fp)), fp, test_server_env)
   end
 
   for fp in ivals(base_server_test_res_templated) do
@@ -538,7 +574,7 @@ rocks_provided = { lua = "5.1" }
       add_copied_target(cdir_stripped(fp), fp)
       add_file_target(cdir(remove_tk(fp)), cdir_stripped(fp), env,
         extend({ cdir(base_client_lua_modules_deps_ok) },
-          amap(extend({}, base_client_res_templated_client), fun.compose(remove_tk, cdir_stripped))))
+          amap(amap(extend({}, base_client_res, base_client_res_templated), remove_tk), cdir_stripped)))
       add_copied_target(ddir_stripped(remove_tk(fp)),
         cdir(remove_tk(fp)))
     end
@@ -546,38 +582,37 @@ rocks_provided = { lua = "5.1" }
     for fp in ivals(base_client_deps) do
       add_copied_target(cdir_stripped(fp), fp,
         extend({ cdir(base_client_lua_modules_deps_ok) },
-          amap(extend({}, base_client_res_templated_client), fun.compose(remove_tk, cdir_stripped))))
+          amap(amap(extend({}, base_client_res, base_client_res_templated), remove_tk), cdir_stripped)))
     end
 
     for fp in ivals(base_client_libs) do
       add_copied_target(cdir_stripped(fp), fp,
         extend({ cdir(base_client_lua_modules_deps_ok) },
-          amap(extend({}, base_client_res_templated_client), fun.compose(remove_tk, cdir_stripped))))
+          amap(amap(extend({}, base_client_res, base_client_res_templated), remove_tk), cdir_stripped)))
     end
 
     for fp in ivals(base_root_libs) do
-      add_copied_target(cdir(fp), fp,
+      add_file_target(cdir(remove_tk(fp)), fp, env,
         extend({ cdir(base_client_lua_modules_deps_ok) },
-          amap(extend({}, base_client_res_templated_client), fun.compose(remove_tk, cdir_stripped))))
+          amap(amap(extend({}, base_client_res, base_client_res_templated), remove_tk), cdir_stripped)))
+    end
+
+    for fp in ivals(base_root_res) do
+      add_file_target(cdir(remove_tk(fp)), fp, env)
     end
 
     for fp in ivals(base_client_bins) do
       add_copied_target(cdir_stripped(fp), fp,
         extend({ cdir(base_client_lua_modules_deps_ok) },
-          amap(extend({}, base_client_res_templated_client), fun.compose(remove_tk, cdir_stripped))))
+          amap(amap(extend({}, base_client_res, base_client_res_templated), remove_tk), cdir_stripped)))
     end
 
     for fp in ivals(base_client_res) do
-      add_copied_target(cdir_stripped(fp), fp,
+      add_file_target(cdir_stripped(remove_tk(fp)), fp, env,
         amap(extend({}, base_client_static), cdir_stripped))
     end
 
     for fp in ivals(base_client_res_templated) do
-      add_file_target(cdir_stripped(fp), fp, env,
-        amap(extend({}, base_client_static), cdir_stripped))
-    end
-
-    for fp in ivals(base_client_res_templated_client) do
       add_file_target(cdir_stripped(remove_tk(fp)), fp, env,
         amap(extend({}, base_client_static), cdir_stripped))
     end
@@ -618,7 +653,7 @@ rocks_provided = { lua = "5.1" }
     target(
       { cdir(base_client_lua_modules_deps_ok) },
       extend({ opts.config_file },
-        amap(extend({}, base_client_res, amap(extend({}, base_client_res_templated), remove_tk)), cdir_stripped)),
+        amap(extend({}, amap(extend({}, base_client_res), remove_tk), amap(extend({}, base_client_res_templated), remove_tk)), cdir_stripped)),
       function ()
         local config_file = fs.absolute(opts.config_file)
         local config = {
@@ -626,8 +661,8 @@ rocks_provided = { lua = "5.1" }
           env = tbl.merge({
             name = opts.config.env.name .. "-client",
             version = opts.config.env.version,
-          }, env),
-          rules = tbl.get(opts, "config", "rules", "client"),
+            rules = opts.config.env.rules,
+          }, opts.config.env.client or {}, env),
         }
         fs.mkdirp(cdir())
         return fs.pushd(cdir(), function ()
@@ -648,7 +683,7 @@ rocks_provided = { lua = "5.1" }
       { cdir(base_client_lua_modules_ok) },
       extend({ opts.config_file, cdir(base_client_lua_modules_deps_ok) },
         amap(extend({}, base_client_bins, base_client_libs, base_client_deps), cdir_stripped),
-        amap(extend({}, base_root_libs), cdir)),
+        amap(amap(extend({}, base_root_libs, base_root_res), remove_tk), cdir)),
       function ()
         local config_file = fs.absolute(opts.config_file)
         local config = {
@@ -656,8 +691,8 @@ rocks_provided = { lua = "5.1" }
           env = tbl.merge({
             name = opts.config.env.name .. "-client",
             version = opts.config.env.version,
-          }, env),
-          rules = tbl.get(opts, "config", "rules", "client"),
+            rules = opts.config.env.rules,
+          }, opts.config.env.client or {}, env),
         }
         fs.mkdirp(cdir())
         return fs.pushd(cdir(), function ()
@@ -680,16 +715,16 @@ rocks_provided = { lua = "5.1" }
     { server_dir(base_server_lua_modules_ok) },
     extend({ server_dir(base_server_luarocks_cfg) },
       amap(amap(extend({}, base_server_libs, base_server_deps), server_dir_stripped), remove_tk),
-      amap(amap(extend({}, base_root_libs), server_dir), remove_tk)),
+      amap(amap(extend({}, base_root_libs, base_root_res), server_dir), remove_tk)),
     function ()
       local config_file = fs.absolute(opts.config_file)
       local config = {
         type = "lib",
-        env = tbl.assign(opts.config.env.server, {
+        env = tbl.merge({
           name = opts.config.env.name .. "-server",
           version = opts.config.env.version,
-        }),
-        rules = tbl.get(opts, "config", "rules", "server"),
+          rules = opts.config.env.rules,
+        }, opts.config.env.server or {}),
       }
       fs.mkdirp(server_dir())
       return fs.pushd(server_dir(), function ()
@@ -711,16 +746,16 @@ rocks_provided = { lua = "5.1" }
     { test_server_dir(base_server_lua_modules_ok) },
     extend({ test_server_dir(base_server_luarocks_cfg) },
       amap(amap(extend({}, base_server_libs, base_server_deps), test_server_dir_stripped), remove_tk),
-      amap(amap(extend({}, base_root_libs), test_server_dir), remove_tk)),
+      amap(amap(extend({}, base_root_libs, base_root_res), test_server_dir), remove_tk)),
     function ()
       local config_file = fs.absolute(opts.config_file)
       local config = {
         type = "lib",
-        env = tbl.assign(opts.config.env.server, {
+        env = tbl.merge({
           name = opts.config.env.name .. "-server",
           version = opts.config.env.version,
-        }),
-        rules = tbl.get(opts, "config", "rules", "server"),
+          rules = opts.config.env.rules,
+        }, opts.config.env.server or {}),
       }
       fs.mkdirp(test_server_dir())
       return fs.pushd(test_server_dir(), function ()
@@ -823,9 +858,7 @@ rocks_provided = { lua = "5.1" }
     { "test" },
     extend(
       { test_client_dir(base_client_lua_modules_ok) },
-      amap(extend({},
-        amap(extend({}, base_server_test_specs, base_server_test_res_templated), remove_tk),
-        base_server_test_res), test_server_dir_stripped),
+      amap(amap(extend({}, base_server_test_specs, base_server_test_res_templated, base_server_test_res), remove_tk), test_server_dir_stripped),
       amap(amap(extend({}, base_client_test_specs), remove_tk), test_client_dir_stripped)),
     function (_, _, iterating)
       local config_file = fs.absolute(opts.config_file)
@@ -834,12 +867,11 @@ rocks_provided = { lua = "5.1" }
       if run_root and #base_root_test_specs > 0 then
         local root_config = {
           type = "lib",
-          env = tbl.assign({}, opts.config.env, {
+          env = tbl.merge({
             name = opts.config.env.name,
             version = opts.config.env.version,
             configure = nil,  -- Don't pass configure to sub-projects
-          }),
-          rules = tbl.get(opts, "config", "rules"),
+          }, opts.config.env),
         }
         require("santoku.make.project").init({
           config_file = config_file,
@@ -857,8 +889,8 @@ rocks_provided = { lua = "5.1" }
           env = tbl.merge({
             name = opts.config.env.name .. "-client",
             version = opts.config.env.version,
-          }, test_client_env),
-          rules = tbl.get(opts, "config", "rules", "client"),
+            rules = opts.config.env.rules,
+          }, opts.config.env.client or {}, test_client_env),
         }
         fs.mkdirp(test_client_dir())
         fs.pushd(test_client_dir(), function ()
@@ -897,11 +929,11 @@ rocks_provided = { lua = "5.1" }
 
         local server_config = {
           type = "lib",
-          env = tbl.assign(opts.config.env.server, {
+          env = tbl.merge({
             name = opts.config.env.name .. "-server",
             version = opts.config.env.version,
-          }),
-          rules = tbl.get(opts, "config", "rules", "server"),
+            rules = opts.config.env.rules,
+          }, opts.config.env.server or {}),
         }
         fs.mkdirp(test_server_dir())
         fs.pushd(test_server_dir(), function ()
@@ -1034,6 +1066,19 @@ rocks_provided = { lua = "5.1" }
     stop = function (opts)
       opts = opts or {}
       build(tbl.assign({ "stop", "test-stop" }, opts), opts.verbosity)
+    end,
+    clean = function (clean_opts)
+      clean_opts = clean_opts or {}
+      return clean.web({
+        dir = opts.dir,
+        env = clean_opts.env,  -- nil = all envs with --all, otherwise use project env
+        all = clean_opts.all,
+        deps = clean_opts.deps,
+        wasm = clean_opts.wasm,
+        client = clean_opts.client,
+        server = clean_opts.server,
+        dry_run = clean_opts.dry_run,
+      })
     end,
   }
 
