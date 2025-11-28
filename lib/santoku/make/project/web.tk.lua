@@ -45,17 +45,32 @@ local tmpl = require("santoku.template")
 local init_templates = {
 
   make_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/make.lua"))) %>), -- luacheck: ignore
-  bin_lua = from_base64(<% return squote(to_base64(readfile("res/init/lib/bin.lua"))) %>), -- luacheck: ignore
-  lib_lua = from_base64(<% return squote(to_base64(readfile("res/init/lib/lib.lua"))) %>), -- luacheck: ignore
-  test_spec_lua = from_base64(<% return squote(to_base64(readfile("res/init/lib/test-spec.lua"))) %>), -- luacheck: ignore
+  make_common_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/make-common.lua"))) %>), -- luacheck: ignore
 
-  client_bin_index_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-bin-index.lua"))) %>), -- luacheck: ignore
+  bin_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/bin.lua"))) %>), -- luacheck: ignore
+  lib_common_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/lib-common.lua"))) %>), -- luacheck: ignore
+  lib_web_templates_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/lib-web-templates.tk.lua"))) %>), -- luacheck: ignore
+  test_spec_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/test-spec.lua"))) %>), -- luacheck: ignore
+
+  client_bin_sw_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-bin-sw.tk.lua"))) %>), -- luacheck: ignore
   client_lib_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-lib.lua"))) %>), -- luacheck: ignore
   client_test_spec_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-test-spec.lua"))) %>), -- luacheck: ignore
+  client_static_index_html = from_base64(<% return squote(to_base64(readfile("res/init/web/client-static-index.tk.html"))) %>), -- luacheck: ignore
+  client_res_index_css = from_base64(<% return squote(to_base64(readfile("res/init/web/client-res-index.css"))) %>), -- luacheck: ignore
+  client_res_pre_js = from_base64(<% return squote(to_base64(readfile("res/init/web/client-res-pre.tk.js"))) %>), -- luacheck: ignore
 
+  server_bin_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-bin.lua"))) %>), -- luacheck: ignore
   server_lib_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib.lua"))) %>), -- luacheck: ignore
-  server_lib_init_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib-init.lua"))) %>), -- luacheck: ignore
+  server_lib_web_init_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib-web-init.lua"))) %>), -- luacheck: ignore
+  server_lib_web_random_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib-web-random.lua"))) %>), -- luacheck: ignore
+  server_lib_web_numbers_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib-web-numbers.lua"))) %>), -- luacheck: ignore
+  server_lib_db_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib-db.tk.lua"))) %>), -- luacheck: ignore
   server_test_spec_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-test-spec.lua"))) %>), -- luacheck: ignore
+
+  res_migrations_sql = from_base64(<% return squote(to_base64(readfile("res/init/web/res-migrations-0.0.1.sql"))) %>), -- luacheck: ignore
+  res_templates_body_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-body.html"))) %>), -- luacheck: ignore
+  res_templates_number_item_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-number-item.html"))) %>), -- luacheck: ignore
+  res_templates_number_items_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-number-items.html"))) %>), -- luacheck: ignore
 
   gitignore = from_base64(<% return squote(to_base64(readfile("res/init/web/gitignore"))) %>), -- luacheck: ignore
 }
@@ -81,17 +96,32 @@ local function create (opts)
   local files = {
 
     ["make.lua"] = tmpl.render(init_templates.make_lua, template_env),
+    [fs.join("make", "common.lua")] = tmpl.render(init_templates.make_common_lua, template_env),
+
     [fs.join("bin", name .. ".lua")] = tmpl.render(init_templates.bin_lua, template_env),
-    [fs.join("lib", name .. ".lua")] = tmpl.render(init_templates.lib_lua, template_env),
+    [fs.join("lib", name, "common.lua")] = tmpl.render(init_templates.lib_common_lua, template_env),
+    [fs.join("lib", name, "web", "templates.tk.lua")] = tmpl.render(init_templates.lib_web_templates_lua, template_env),
     [fs.join("test/spec", name .. ".lua")] = tmpl.render(init_templates.test_spec_lua, template_env),
 
-    [fs.join("client/bin", "index.lua")] = tmpl.render(init_templates.client_bin_index_lua, template_env),
+    [fs.join("client/bin", "sw.tk.lua")] = tmpl.render(init_templates.client_bin_sw_lua, template_env),
     [fs.join("client/lib", name .. ".lua")] = tmpl.render(init_templates.client_lib_lua, template_env),
     [fs.join("client/test/spec", name .. ".lua")] = tmpl.render(init_templates.client_test_spec_lua, template_env),
+    [fs.join("client/static", "index.tk.html")] = tmpl.render(init_templates.client_static_index_html, template_env),
+    [fs.join("client/res", "index.css")] = init_templates.client_res_index_css,
+    [fs.join("client/res", "pre.tk.js")] = init_templates.client_res_pre_js,
 
+    [fs.join("server/bin", name .. ".lua")] = tmpl.render(init_templates.server_bin_lua, template_env),
     [fs.join("server/lib", name .. ".lua")] = tmpl.render(init_templates.server_lib_lua, template_env),
-    [fs.join("server/lib", name, "init.lua")] = tmpl.render(init_templates.server_lib_init_lua, template_env),
+    [fs.join("server/lib", name, "web", "init.lua")] = tmpl.render(init_templates.server_lib_web_init_lua, template_env),
+    [fs.join("server/lib", name, "web", "random.lua")] = tmpl.render(init_templates.server_lib_web_random_lua, template_env),
+    [fs.join("server/lib", name, "web", "numbers.lua")] = tmpl.render(init_templates.server_lib_web_numbers_lua, template_env),
+    [fs.join("server/lib", name, "db.tk.lua")] = tmpl.render(init_templates.server_lib_db_lua, template_env),
     [fs.join("server/test/spec", name .. ".lua")] = tmpl.render(init_templates.server_test_spec_lua, template_env),
+
+    [fs.join("res/migrations", "0.0.1.sql")] = init_templates.res_migrations_sql,
+    [fs.join("res/web/templates", "body.html")] = init_templates.res_templates_body_html,
+    [fs.join("res/web/templates", "number-item.html")] = init_templates.res_templates_number_item_html,
+    [fs.join("res/web/templates", "number-items.html")] = init_templates.res_templates_number_items_html,
 
     [".gitignore"] = init_templates.gitignore,
   }

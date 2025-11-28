@@ -1,0 +1,17 @@
+<%
+  local fs = require("santoku.fs")
+  local body_file = fs.join(root_dir, "res/web/templates/body.html")
+  return require("santoku.web.pwa.index")({
+    title = client.opts.title,
+    description = client.opts.description,
+    theme_color = client.opts.theme_color,
+    head = [[
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap">
+      <link rel="stylesheet" href="/index.css">
+      <script src="/htmx.min.js"></script>
+    ]],
+    body_tag = readfile(body_file),
+  })
+%>

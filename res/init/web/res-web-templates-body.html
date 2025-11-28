@@ -1,0 +1,58 @@
+<body class="bg-neutral-100 min-h-screen p-0 m-0">
+  <!-- SW Update Banner (hidden by default) -->
+  <div id="sw-update" class="hidden fixed top-0 left-0 right-0 bg-amber-500 text-white text-center py-2 px-4 z-20 cursor-pointer hover:bg-amber-600"
+       onclick="location.reload()">
+    New version available. Click to update.
+  </div>
+  <header class="fixed top-0 left-0 right-0 bg-slate-800 text-white shadow-md z-10">
+    <div class="h-14 flex items-center justify-center">
+      <h1 class="text-xl font-medium"><% return name %></h1>
+    </div>
+  </header>
+  <main class="pt-18 p-4">
+    <div class="max-w-md mx-auto">
+      <div class="flex gap-2">
+        <button
+          hx-get="/random"
+          hx-target="#numbers"
+          hx-swap="beforeend"
+          class="flex-1 bg-emerald-600 border-none hover:bg-emerald-700 active:bg-emerald-800 text-white font-medium py-3 px-4 rounded shadow hover:shadow-md transition-all uppercase tracking-wide text-sm">
+          Backend
+        </button>
+        <button
+          hx-get="/random-sw"
+          hx-target="#numbers"
+          hx-swap="beforeend"
+          class="flex-1 bg-amber-600 border-none hover:bg-amber-700 active:bg-amber-800 text-white font-medium py-3 px-4 rounded shadow hover:shadow-md transition-all uppercase tracking-wide text-sm">
+          Service Worker
+        </button>
+      </div>
+      <div class="mt-4 bg-white rounded shadow">
+        <ul id="numbers" class="divide-y flex flex-col divide-neutral-200 list-none m-0 p-0 peer"
+            hx-get="/numbers"
+            hx-trigger="load"
+            hx-swap="innerHTML"></ul>
+        <p class="p-4 m-0 text-center text-neutral-400 text-sm hidden peer-[&.htmx-request]:block">
+          Loading...
+        </p>
+        <p class="p-4 m-0 text-center text-neutral-400 text-sm peer-has-[li]:hidden peer-[&.htmx-request]:hidden">
+          No numbers yet. Click a button above to add some.
+        </p>
+      </div>
+    </div>
+  </main>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then(function(reg) {
+        reg.addEventListener('updatefound', function() {
+          var newWorker = reg.installing;
+          newWorker.addEventListener('statechange', function() {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              document.getElementById('sw-update').classList.remove('hidden');
+            }
+          });
+        });
+      });
+    }
+  </script>
+</body>

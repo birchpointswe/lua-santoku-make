@@ -1,7 +1,9 @@
+local common = require("<% return name %>.common")
+
 local M = {}
 
 function M.hello()
-  return "Hello from <% return name %> server!"
+  return "Hello from <% return name %> server", common.hello()
 end
 
 return M
