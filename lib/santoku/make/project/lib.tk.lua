@@ -198,6 +198,7 @@ local function init (opts)
     base_res, base_test_res)
 
   if opts.wasm then
+    -- Add JS files (bundler uses SINGLE_FILE so no separate .wasm)
     extend(test_all_base_templated, collect(map(fun.compose(fs.stripextension, remove_wasm), ivals(base_test_specs))))
   else
     extend(test_all_base_templated, base_test_specs)
@@ -242,8 +243,6 @@ local function init (opts)
 
   local base_env = {
     wasm = opts.wasm,
-    profile = opts.profile,
-    trace = opts.trace,
     skip_check = opts.skip_check,
     single = opts.single and remove_tk(opts.single) or nil,
     bins = base_bins,
@@ -335,14 +334,9 @@ local function init (opts)
           bundle(test_dir("bundler-pre", fp), test_dir("bundler-post", fs.dirname(fp)), {
             cc = "emcc",
             close = false,
-            mods = extend({},
-              opts.profile and { "santoku.profile" } or {},
-              opts.trace and { "santoku.trace" } or {}),
             ignores = { "debug" },
             env = {
               { base_env.var("WASM"), "1" },
-              { base_env.var("PROFILE"), opts.profile and "1" or "" },
-              { base_env.var("TRACE"), opts.trace and "1" or "" },
             },
             path = get_lua_path(test_dir()),
             cpath = get_lua_cpath(test_dir()),
@@ -352,6 +346,7 @@ local function init (opts)
     end
 
     for fp in ivals(base_test_specs) do
+      -- Copy JS file (bundler uses SINGLE_FILE so no separate .wasm)
       add_file_target(test_dir(fs.stripextension(remove_wasm(remove_tk(fp)))),
         test_dir("bundler-post", fs.stripextension(remove_wasm(fp))), test_env)
     end
@@ -429,7 +424,7 @@ local function init (opts)
     <% return squote(to_base64(readfile("res/lib/test-check.sh"))) %>, test_env) -- luacheck: ignore
 
   for flag in ivals({
-    "profile", "trace", "single", "skip_check", "lua",
+    "single", "skip_check", "lua",
     "lua_path_extra", "lua_cpath_extra"
   }) do
     local fp = work_dir(flag .. ".flag")
@@ -448,8 +443,8 @@ local function init (opts)
   target(
     amap({ base_run_sh, base_check_sh }, test_dir),
     amap({
-      "skip_check.flag", "single.flag", "profile.flag",
-      "trace.flag", "lua.flag", "lua_path_extra.flag", "lua_cpath_extra.flag" },
+      "skip_check.flag", "single.flag",
+      "lua.flag", "lua_path_extra.flag", "lua_cpath_extra.flag" },
       work_dir))
 
   target(

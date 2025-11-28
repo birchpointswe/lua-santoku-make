@@ -272,8 +272,6 @@ local function init (opts)
 
   local base_env = {
     root_dir = fs.cwd(),
-    profile = opts.profile,
-    trace = opts.trace,
     skip_check = opts.skip_check,
     var = function (n)
       err.assert(vdt.isstring(n))
@@ -462,7 +460,7 @@ rocks_provided = { lua = "5.1" }
     { test_dist_dir(base_server_init_test_lua), test_dist_dir(base_server_init_worker_test_lua) })
 
   for flag in ivals({
-    "profile", "trace", "skip_check"
+    "skip_check"
   }) do
     local fp = work_dir(flag .. ".flag")
     fs.mkdirp(fs.dirname(fp))
@@ -479,7 +477,7 @@ rocks_provided = { lua = "5.1" }
 
   target(
     amap({ base_server_init_test_lua, base_server_init_worker_test_lua }, test_server_dir),
-    amap({ "profile.flag", "trace.flag", "skip_check.flag" }, work_dir))
+    amap({ "skip_check.flag" }, work_dir))
 
   for fp in ivals(base_server_libs) do
     add_file_target(server_dir_stripped(remove_tk(fp)), fp, server_env)
@@ -584,8 +582,6 @@ rocks_provided = { lua = "5.1" }
         amap(extend({}, base_client_static), cdir_stripped))
     end
 
-    local bundle_mode = tbl.get(env, "bundle_mode") or "bytecode"
-
     for fp in ivals(base_client_pages) do
       local pre = cdir("build", "default-wasm", "build", "bin", fs.stripextensions(fp)) .. ".lua"
       local post = cdir("bundler-post", fs.stripextensions(fp))
@@ -607,25 +603,13 @@ rocks_provided = { lua = "5.1" }
           local lua_dir = cdir("build", "default-wasm", "build", "lua-5.1.5")
           local extra_cflags = extend({}, extra_flags, tbl.get(env, "cxxflags") or {})
           local extra_ldflags = tbl.get(env, "ldflags") or {}
-
-          if bundle_mode == "embed" then
-            -- Dev mode: embed lua_modules as virtual filesystem for useful stack traces
-            local lua_modules_dir = cdir("build", "default-wasm", "build", "lua_modules")
-            wasm.build_embed(pre, fs.dirname(post), {
-              lua_dir = lua_dir,
-              lua_modules_dir = lua_modules_dir,
-              flags = extend({}, extra_cflags, extra_ldflags),
-            })
-          else
-            -- Prod mode (default): bundle as bytecode for smallest size
-            bundle(pre, fs.dirname(post), {
-              cc = "emcc",
-              ignores = { "debug" },
-              path = get_lua_path(cdir("build", "default-wasm", "build")),
-              cpath = get_lua_cpath(cdir("build", "default-wasm", "build")),
-              flags = wasm.get_bundle_flags(lua_dir, "build", extra_cflags, extra_ldflags)
-            })
-          end
+          bundle(pre, fs.dirname(post), {
+            cc = "emcc",
+            ignores = { "debug" },
+            path = get_lua_path(cdir("build", "default-wasm", "build")),
+            cpath = get_lua_cpath(cdir("build", "default-wasm", "build")),
+            flags = wasm.get_bundle_flags(lua_dir, "build", extra_cflags, extra_ldflags)
+          })
         end)
       end)
       add_copied_target(ddir(fp), post)
@@ -651,8 +635,6 @@ rocks_provided = { lua = "5.1" }
             config_file = config_file,
             config = config,
             single = opts.single and remove_tk(opts.single) or nil,
-            profile = opts.profile,
-            trace = opts.trace,
             skip_check = opts.skip_check,
             wasm = true,
             skip_tests = true,
@@ -683,8 +665,6 @@ rocks_provided = { lua = "5.1" }
             config_file = config_file,
             config = config,
             single = opts.single and remove_tk(opts.single) or nil,
-            profile = opts.profile,
-            trace = opts.trace,
             skip_check = opts.skip_check,
             wasm = true,
             skip_tests = true,
@@ -719,8 +699,6 @@ rocks_provided = { lua = "5.1" }
           luarocks_config = fs.absolute(base_server_luarocks_cfg),
           config = config,
           single = opts.single and remove_tk(opts.single) or nil,
-          profile = opts.profile,
-          trace = opts.trace,
           skip_check = opts.skip_check,
           skip_tests = true,
           dir = server_dir(),
@@ -752,8 +730,6 @@ rocks_provided = { lua = "5.1" }
           luarocks_config = fs.absolute(base_server_luarocks_cfg),
           config = config,
           single = opts.single and remove_tk(opts.single) or nil,
-          profile = opts.profile,
-          trace = opts.trace,
           skip_check = opts.skip_check,
           skip_tests = true,
           lua = test_server_env.lua,
@@ -846,19 +822,15 @@ rocks_provided = { lua = "5.1" }
   target(
     { "test" },
     extend(
+      { test_client_dir(base_client_lua_modules_ok) },
       amap(extend({},
         amap(extend({}, base_server_test_specs, base_server_test_res_templated), remove_tk),
         base_server_test_res), test_server_dir_stripped),
       amap(amap(extend({}, base_client_test_specs), remove_tk), test_client_dir_stripped)),
     function (_, _, iterating)
-      local needs_server = run_server and #base_server_test_specs > 0
-      if needs_server then
-        build({ "stop", "test-stop" }, opts.verbosity)
-        build({ "test-start" }, opts.verbosity)
-      end
       local config_file = fs.absolute(opts.config_file)
 
-      -- Run root tests
+      -- Run root tests first
       if run_root and #base_root_test_specs > 0 then
         local root_config = {
           type = "lib",
@@ -873,14 +845,12 @@ rocks_provided = { lua = "5.1" }
           config_file = config_file,
           config = root_config,
           single = single_target == "root" and single_path and remove_tk(single_path) or nil,
-          profile = opts.profile,
-          trace = opts.trace,
           skip_check = opts.skip_check,
           dir = fs.absolute("build"),
         }).test()
       end
 
-      -- Run client tests
+      -- Run client tests second
       if run_client and #base_client_test_specs > 0 then
         local client_config = {
           type = "lib",
@@ -896,17 +866,35 @@ rocks_provided = { lua = "5.1" }
             config_file = config_file,
             config = client_config,
             single = single_target == "client" and single_path and remove_tk(single_path) or nil,
-            profile = opts.profile,
-            trace = opts.trace,
             skip_check = opts.skip_check,
             wasm = true,
-            dir = test_client_dir(),
+            dir = test_client_dir("build"),
           }).test()
         end)
       end
 
-      -- Run server tests
+      -- Run server tests last (only these need the server running)
       if run_server and #base_server_test_specs > 0 then
+        -- Start server and verify it started successfully
+        build({ "stop", "test-stop" }, opts.verbosity)
+        build({ "test-start" }, opts.verbosity)
+
+        -- Wait briefly and verify server is running
+        sys.sleep(0.5)
+        local pid_file = test_dist_dir("server.pid")
+        if not fs.exists(pid_file) then
+          err.error("fatal", "Server failed to start: no pid file created")
+        end
+        local pid = smatch(fs.readfile(pid_file), "(%d+)")
+        if not pid then
+          err.error("fatal", "Server failed to start: invalid pid file")
+        end
+        -- Check if process is still alive
+        local alive = err.pcall(sys.execute, { "kill", "-0", pid })
+        if not alive then
+          err.error("fatal", "Server failed to start: process died immediately (check nginx error log)")
+        end
+
         local server_config = {
           type = "lib",
           env = tbl.assign(opts.config.env.server, {
@@ -922,8 +910,6 @@ rocks_provided = { lua = "5.1" }
             luarocks_config = fs.absolute(base_server_luarocks_cfg),
             config = server_config,
             single = single_target == "server" and single_path and remove_tk(single_path) or nil,
-            profile = opts.profile,
-            trace = opts.trace,
             skip_check = opts.skip_check,
             lua = test_server_env.lua,
             lua_path = test_server_env.lua_path,
@@ -933,10 +919,10 @@ rocks_provided = { lua = "5.1" }
           lib.test({ skip_check = true })
           lib.check()
         end)
-      end
 
-      if needs_server and not iterating then
-        build({ "test-stop" }, opts.verbosity)
+        if not iterating then
+          build({ "test-stop" }, opts.verbosity)
+        end
       end
     end)
 
@@ -948,21 +934,27 @@ rocks_provided = { lua = "5.1" }
     end, err.pcall(sys.execute, { "sh", "-c", "type inotifywait >/dev/null 2>/dev/null" }))
     local config_mtime = fs.exists(opts.config_file) and require("santoku.make.posix").time(opts.config_file) or nil
     while true do
-      err.pcall(function ()
-        -- Check if config file changed - if so, need to restart
-        if config_mtime then
-          local new_mtime = fs.exists(opts.config_file) and require("santoku.make.posix").time(opts.config_file) or nil
-          if new_mtime and new_mtime > config_mtime then
-            print("\n[iterate] " .. opts.config_file .. " changed - please restart iterate\n")
-            config_mtime = new_mtime
-          end
+      -- Check if config file changed - if so, need to restart
+      if config_mtime then
+        local new_mtime = fs.exists(opts.config_file) and require("santoku.make.posix").time(opts.config_file) or nil
+        if new_mtime and new_mtime > config_mtime then
+          print("\n[iterate] " .. opts.config_file .. " changed - please restart iterate\n")
+          config_mtime = new_mtime
         end
-        varg.tup(function (ok, ...)
-          if not ok then
-            print(...)
+      end
+      varg.tup(function (ok, first, ...)
+        if not ok then
+          if first == "fatal" then
+            err.error(first, ...)
           end
-        end, err.pcall(build, { "test" }, opts.verbosity, true))
-      end)
+          -- Check for interrupt signal
+          local msg = tostring(first)
+          if smatch(msg, "interrupt") or smatch(msg, "SIGINT") then
+            err.error(first, ...)
+          end
+          print(first, ...)
+        end
+      end, err.pcall(build, { "test" }, opts.verbosity, true))
       -- Collect directories from .d files
       local dfile_dirs = {}
       err.pcall(function ()
@@ -986,7 +978,7 @@ rocks_provided = { lua = "5.1" }
           "-e", "move", "-e", "create", "-e", "delete",
           spread(collect(filter(function (fp)
             return fs.exists(fp)
-          end, chain(fs.files("."), ivals({ "client", "server", "res", "lib", "bin", "test" }), it.keys(dfile_dirs)))))
+          end, chain(ivals({ "client", "server", "res", "lib", "bin", "test", opts.config_file }), it.keys(dfile_dirs)))))
         })
       end)
       sys.sleep(.25)
