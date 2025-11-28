@@ -1,38 +1,31 @@
-return {
-  type = "web",
+local fs = require("santoku.fs")
+local tbl = require("santoku.table")
+
+return tbl.merge(
+  fs.runfile("make.common.lua"), {
   env = {
-    name = "<% return name %>",
-    version = "0.0.1-1",
-
-    dependencies = {
-      "lua >= 5.1",
-      "santoku >= 0.0.297-1",
-    },
-
-    server = {
-      dependencies = {
-        "lua == 5.1",
-        "santoku >= 0.0.297-1",
-      },
-      domain = "localhost",
-      port = "8080",
-      workers = "auto",
-      ssl = false,
-      init = "<% return name %>.init",
-      routes = {}
-    },
-
     client = {
-      dependencies = {
-        "lua == 5.1",
-        "santoku >= 0.0.297-1",
-        "santoku-web >= 0.0.253-1"
-      },
       ldflags = {
         "-sWASM_BIGINT",
         "-sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE='$stringToNewUTF8'",
-        "--bind"
-      }
+        "--bind",
+        "-O0",
+        "-g",
+        "-sASSERTIONS=2",
+      },
+      rules = {
+        ["sw$"] = {
+          ldflags = {
+            "--pre-js", "res/pre.js",
+            "-sWASM_BIGINT",
+            "-sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE='$stringToNewUTF8'",
+            "--bind",
+            "-O0",
+            "-g",
+            "-sASSERTIONS=2",
+          },
+        },
+      },
     }
   }
-}
+})
