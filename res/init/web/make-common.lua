@@ -2,9 +2,8 @@ local fs = require("santoku.fs")
 local sys = require("santoku.system")
 
 return {
-  type = "web",
   env = {
-    name = "<%= name %>",
+    name = "<% return name %>",
     version = "0.0.1-1",
     dependencies = {
       "lua == 5.1",
@@ -12,16 +11,16 @@ return {
     },
     build = {
       dependencies = {
-        "santoku-web >= 0.0.284-1",
+        "santoku-web >= 0.0.292-1",
       }
     },
     server = {
       dependencies = {
         "lua == 5.1",
         "santoku >= 0.0.297-1",
-        "santoku-mustache >= 0.0.6-1",
+        "santoku-mustache >= 0.0.8-1",
         "santoku-sqlite >= 0.0.15-1",
-        "santoku-sqlite-migrate >= 0.0.15-1",
+        "santoku-sqlite-migrate >= 0.0.16-1",
         "lsqlite3 >= 0.9.6-1",
         "argparse >= 0.7.1-1",
       },
@@ -29,20 +28,30 @@ return {
       port = "8080",
       workers = "auto",
       ssl = false,
-      init = "<%= name %>.web.init",
+      init = "<% return name %>.web.init",
       routes = {
-        { "GET", "/random", "<%= name %>.web.random" },
-        { "GET", "/numbers", "<%= name %>.web.numbers" }
+        { "GET", "/random", "<% return name %>.web.random" },
+        { "GET", "/numbers", "<% return name %>.web.numbers" }
       }
     },
     client = {
       dependencies = {
         "lua == 5.1",
         "santoku >= 0.0.297-1",
-        "santoku-web >= 0.0.284-1"
+        "santoku-web >= 0.0.292-1",
+        "santoku-sqlite >= 0.0.15-1",
+        "santoku-sqlite-migrate >= 0.0.16-1",
+      },
+      rules = {
+        [".*"] = {
+          ldflags = { "--pre-js", "res/pre.js" },
+        },
+        ["bundle$"] = {
+          ldflags = { "--extern-pre-js", "deps/sqlite/jswasm/sqlite3.js" }
+        }
       },
       opts = {
-        title = "<%= name %>",
+        title = "<% return name %>",
         description = "A web app built with santoku",
         theme_color = "#1e293b",
         background_color = "#1e293b",
@@ -59,6 +68,22 @@ return {
           "https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"
         })
       end)
+      local roboto_weights = { "300", "400", "500", "700" }
+      local roboto_urls = {
+        ["300"] = "https://fonts.gstatic.com/s/roboto/v32/KFOlCnqEu92Fr1MmSU5fCxc4EsA.woff2",
+        ["400"] = "https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Mu7GxKOzY.woff2",
+        ["500"] = "https://fonts.gstatic.com/s/roboto/v32/KFOlCnqEu92Fr1MmEU9fCxc4EsA.woff2",
+        ["700"] = "https://fonts.gstatic.com/s/roboto/v32/KFOlCnqEu92Fr1MmWUlfCxc4EsA.woff2",
+      }
+      for _, weight in ipairs(roboto_weights) do
+        local font_file = fs.join(client_env.public_dir, "roboto-" .. weight .. ".woff2")
+        submake.target({ client_env.target }, { font_file })
+        submake.target({ font_file }, {}, function ()
+          sys.execute({
+            "curl", "-sL", "-o", font_file, roboto_urls[weight]
+          })
+        end)
+      end
       local css_out = fs.join(client_env.public_dir, "index.css")
       local css_in = fs.join(client_env.root_dir, "client/res/index.css")
       local body_html = fs.join(client_env.root_dir, "res/web/templates/body.html")

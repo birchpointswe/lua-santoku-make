@@ -4,7 +4,7 @@
   local serialize = require("santoku.serialize")
   t_migrations = serialize(iter.tabulate(iter.map(function (fp)
     return fs.basename(fp), fs.readfile(fp)
-  end, fs.files("res/migrations"))), true)
+  end, fs.files("res/server/migrations"))), true)
 %>
 
 local lsqlite3 = require("lsqlite3")
@@ -24,9 +24,11 @@ return function (db_file)
   db.exec("pragma synchronous = NORMAL")
   db.exec("pragma busy_timeout = 30000")
 
-  sqlite_migrate(db, <%% return t_migrations %%>) -- luacheck: ignore
+  sqlite_migrate(db, <% return t_migrations %>) -- luacheck: ignore
 
   M.db = db
+
+  M.random_hex = db.getter("select lower(hex(randomblob(?)))")
 
   local get_session = db.getter([[
     select id, session_id from sessions where session_id = ?

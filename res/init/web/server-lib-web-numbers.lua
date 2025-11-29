@@ -12,7 +12,7 @@ local session = db.get_or_create_session(session_id)
 local raw_numbers = db.get_numbers(session)
 local numbers = {}
 for i, n in ipairs(raw_numbers) do
-  numbers[i] = { number = n, tag = "API", color = "text-emerald-600" }
+  numbers[i] = { number = n, tag = "API", api = true }
 end
 
 ngx.header.content_type = "text/html"

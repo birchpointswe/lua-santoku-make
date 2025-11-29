@@ -9,9 +9,15 @@ return tbl.merge(
         "-sWASM_BIGINT",
         "-sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE='$stringToNewUTF8'",
         "--bind",
-        "-O0",
-        "-g",
-        "-sASSERTIONS=2",
+        "-flto",
+        "-Oz",
+        "-sASSERTIONS=0",
+        "-sEVAL_CTORS",
+        "-sMALLOC=emmalloc",
+        "-sENVIRONMENT=web,worker",
+        "-sTEXTDECODER=2",
+        "-sABORT_ON_WASM_EXCEPTIONS=0",
+        "-sNO_EXIT_RUNTIME",
       },
     }
   }
