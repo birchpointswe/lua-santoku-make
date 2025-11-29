@@ -651,23 +651,24 @@ rocks_provided = { lua = "5.1" }
       local pre = cdir("build", "default-wasm", "build", "bin", fs.stripextensions(fp)) .. ".lua"
       local post = cdir("bundler-post", fs.stripextensions(fp))
       local deps = { cdir(base_client_lua_modules_ok), pre }
-      local extra_flags = it.reduce(function (a, k, v)
+      local extra_rule_cflags = {}
+      local extra_rule_ldflags = {}
+      for k, v in it.pairs(tbl.get(env, "rules") or {}) do
         if (type(k) == "string" and str.find(post, k)) or (type(k) == "function" and k(post)) then
           if v.cxxflags then
-            arr.extend(a, v.cxxflags)
+            arr.extend(extra_rule_cflags, v.cxxflags)
           end
           if v.ldflags then
-            arr.extend(a, v.ldflags)
+            arr.extend(extra_rule_ldflags, v.ldflags)
           end
         end
-        return a
-      end, {}, it.pairs(tbl.get(env, "rules") or {}))
+      end
       target({ post }, deps, function ()
         fs.mkdirp(cdir("build", "default-wasm", "build"))
         fs.pushd(cdir("build", "default-wasm", "build"), function ()
           local lua_dir = cdir("build", "default-wasm", "build", "lua-5.1.5")
-          local extra_cflags = extend({}, extra_flags, tbl.get(env, "cxxflags") or {})
-          local extra_ldflags = tbl.get(env, "ldflags") or {}
+          local extra_cflags = extend({}, extra_rule_cflags, tbl.get(env, "cxxflags") or {})
+          local extra_ldflags = extend({}, extra_rule_ldflags, tbl.get(env, "ldflags") or {})
           bundle(pre, fs.dirname(post), {
             cc = "emcc",
             ignores = { "debug" },
