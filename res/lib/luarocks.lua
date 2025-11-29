@@ -17,7 +17,7 @@ variables = {
 
   CFLAGS = "-I <% return client_lua_dir %>/include",
   LDFLAGS = "-L <% return client_lua_dir %>/lib",
-  LIBFLAG = "-shared",
+  LIBFLAG = "-shared -Wno-linkflags",
 
   CC = "emcc",
   CXX = "em++",
