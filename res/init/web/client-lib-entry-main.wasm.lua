@@ -1,10 +1,10 @@
-local app = require("santoku.web.pwa.app")
-local db = require("<% return name %>.db")
+local wrpc = require("santoku.web.worker.rpc.client")
+local shared = require("santoku.web.sqlite.shared")
 
-app.init({
-  name = "<% return name %>",
-  db = db,
-  main = function ()
+local db = wrpc.init("/bundle.js")
 
-  end
-})
+local service = shared.SharedService("<% return name %>-db", function ()
+  return shared.create_provider_port(db, true)
+end)
+
+service.activate()

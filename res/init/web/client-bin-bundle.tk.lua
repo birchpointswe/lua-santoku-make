@@ -5,7 +5,9 @@ local has_registration = global.registration ~= nil
 local has_document = global.document ~= nil
 
 if has_registration then
-  require("<% return name %>.sw")
+  require("<% return name %>.entry.sw")
+elseif not has_document then
+  require("<% return name %>.entry.db")
 else
   require("<% return name %>.entry.main")
 end
