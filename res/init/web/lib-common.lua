@@ -1,7 +1,7 @@
 local M = {}
 
 function M.hello()
-  return "hello from <%= name %>/common"
+  return "hello from <% return name %>/common"
 end
 
 return M

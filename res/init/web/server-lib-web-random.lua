@@ -1,11 +1,10 @@
 local tpl = require("<% return name %>.web.templates")
 local db = require("<% return name %>.db.loaded")
-local random = require("santoku.random")
 
 local session_id = ngx.var.cookie_session
 local is_new = not session_id
 if is_new then
-  session_id = random.alnum(32)
+  session_id = db.random_hex(16)
 end
 
 if is_new then
@@ -17,4 +16,4 @@ local number = math.random(1, 1000)
 db.add_number(session_pk, number)
 
 ngx.header.content_type = "text/html"
-ngx.say(tpl["number-item"]({ number = number, tag = "API", color = "text-emerald-600" }))
+ngx.say(tpl["number-item"]({ number = number, tag = "API", api = true }))
