@@ -6,9 +6,9 @@ local str = require("santoku.string")
 local err = require("santoku.error")
 
 local function is_contained(path)
-  local cwd = fs.cwd()
-  local abs = fs.absolute(path)
-  if not abs then
+  local cwd = str.gsub(fs.cwd() or "", "/+$", "")
+  local abs = str.gsub(fs.absolute(path) or "", "/+$", "")
+  if abs == "" then
     return false
   end
   return abs == cwd or str.startswith(abs, cwd .. "/")
