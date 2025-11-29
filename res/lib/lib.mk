@@ -29,7 +29,11 @@ INST_LUA = $(patsubst %.wasm.lua,%.lua,$(addprefix $(INST_LUADIR)/, $(LIB_LUA)))
 INST_SO = $(addprefix $(INST_LIBDIR)/, $(LIB_SO))
 INST_H = $(addprefix $(INST_PREFIX)/include/, $(LIB_H))
 
+ifdef _WASM
+LIBFLAG = -shared -Wno-linkflags
+else
 LIBFLAG = -shared
+endif
 
 <%
 inject_flags = function (env, wasm_env)
