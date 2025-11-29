@@ -1,9 +1,7 @@
 local sw = require("santoku.web.pwa.sw")
 local swdb = require("santoku.web.sqlite.sw")
-local tpl = require("__NAME__.web.templates")
 
 local js = require("santoku.web.js")
-local Math = js.Math
 local Response = js.Response
 
 -- Connect to the database via SharedService
@@ -28,34 +26,17 @@ sw({
     "/roboto-700.woff2",
   },
 
-  -- Simple route handlers
+  -- Route handlers - call db worker which returns rendered HTML
   routes = {
-    ["/random-sw"] = function (req, params, done)
-      local num = Math:floor(Math:random() * 1000) + 1
-      db.call("add_number", { num }, function (ok, _)
-        if ok then
-          done(true, tpl["number-item"]({
-            number = num,
-            tag = "SW",
-            sw = true
-          }))
-        else
-          done(false, "Failed to add number")
-        end
+    ["/random-sw"] = function (_, _, done)
+      db.add_random(function (ok, html)
+        done(ok, html or "Failed to add number")
       end)
     end,
 
-    ["/numbers-sw"] = function (req, params, done)
-      db.call("get_numbers", {}, function (ok, rows)
-        if ok then
-          local numbers = {}
-          for i, row in ipairs(rows or {}) do
-            numbers[i] = { number = row.number, tag = "SW", sw = true }
-          end
-          done(true, tpl["number-items"]({ numbers = numbers }))
-        else
-          done(false, "Failed to get numbers")
-        end
+    ["/numbers-sw"] = function (_, _, done)
+      db.get_numbers(function (ok, html)
+        done(ok, html or "Failed to get numbers")
       end)
     end,
   },
