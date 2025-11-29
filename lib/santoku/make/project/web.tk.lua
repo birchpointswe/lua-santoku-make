@@ -300,6 +300,10 @@ local function init (opts)
     return fs.stripparts(fs.stripextensions(fp) .. ".js", 2)
   end, ivals(base_client_bins)))
 
+  local base_client_wasm = collect(map(function (fp)
+    return fs.stripparts(fs.stripextensions(fp) .. ".wasm", 2)
+  end, ivals(base_client_bins)))
+
   local base_env = {
     root_dir = fs.cwd(),
     skip_check = opts.skip_check,
@@ -667,10 +671,13 @@ rocks_provided = { lua = "5.1" }
         fs.mkdirp(cdir("build", "default-wasm", "build"))
         fs.pushd(cdir("build", "default-wasm", "build"), function ()
           local lua_dir = cdir("build", "default-wasm", "build", "lua-5.1.5")
+          local luac_bin = fs.join(lua_dir, "bin", "luac")
           local extra_cflags = extend({}, extra_rule_cflags, tbl.get(env, "cxxflags") or {})
           local extra_ldflags = extend({}, extra_rule_ldflags, tbl.get(env, "ldflags") or {})
           bundle(pre, fs.dirname(post), {
             cc = "emcc",
+            luac = luac_bin .. " -s -o %output %input",
+            binary = true,
             ignores = { "debug" },
             path = get_lua_path(cdir("build", "default-wasm", "build")),
             cpath = get_lua_cpath(cdir("build", "default-wasm", "build")),
@@ -679,6 +686,9 @@ rocks_provided = { lua = "5.1" }
         end)
       end)
       add_copied_target(ddir(fp), post)
+      local wasm_dest = fs.join(fs.dirname(ddir(fp)), fs.stripextensions(fs.basename(ddir(fp))) .. ".wasm")
+      local wasm_src = post .. ".wasm"
+      add_copied_target(wasm_dest, wasm_src)
     end
 
     target(
@@ -818,7 +828,7 @@ rocks_provided = { lua = "5.1" }
         base_client_static, base_client_assets),
         dist_dir_client_stripped), remove_tk),
       amap(amap(extend({},
-        base_client_pages),
+        base_client_pages, base_client_wasm),
         dist_dir_client), remove_tk)), true)
 
   target(
@@ -832,7 +842,7 @@ rocks_provided = { lua = "5.1" }
         base_client_static, base_client_assets),
         test_dist_dir_client_stripped), remove_tk),
       amap(amap(extend({},
-        base_client_pages),
+        base_client_pages, base_client_wasm),
         test_dist_dir_client), remove_tk)), true)
 
   target(

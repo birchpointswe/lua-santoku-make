@@ -21,24 +21,27 @@ local function setup_lua(target_fn, dir)
         sys.execute({ "rm", "-rf", "lua-5.1.5" })
       end
       sys.execute({ "tar", "xf", "lua-5.1.5.tar.gz" })
-      fs.cd("lua-5.1.5")
-      sys.execute({ "emmake", "sh", "-c", arr.concat({
-        "make", "generic",
-        "CC=\"$CC\"",
-        "LD=\"$LD\"",
-        "AR=\"$AR rcu\"",
-        "RANLIB=\"$RANLIB\"",
-        "CFLAGS=\"-flto -Oz\"",
-        "MYLDFLAGS=\"-flto -Oz\""
-      }, " ") })
-      sys.execute({ "make", "local" })
-      fs.cd("bin")
-      sys.execute({ "mv", "lua", "lua.js" })
-      sys.execute({ "mv", "luac", "luac.js" })
-      fs.writefile("lua", "#!/bin/sh\nnode \"$(dirname $0)/lua.js\" \"$@\"\n")
-      fs.writefile("luac", "#!/bin/sh\nnode \"$(dirname $0)/luac.js\" \"$@\"\n")
-      sys.execute({ "chmod", "+x", "lua" })
-      sys.execute({ "chmod", "+x", "luac" })
+      fs.pushd("lua-5.1.5", function ()
+        fs.pushd("src", function ()
+          sys.execute({ "emmake", "sh", "-c", arr.concat({
+            "make", "all",
+            "CC=\"$CC\"",
+            "AR=\"$AR rcu\"",
+            "RANLIB=\"$RANLIB\"",
+            "MYCFLAGS=\"-flto -Oz\"",
+            "MYLDFLAGS=\"-flto -Oz -sSINGLE_FILE -lnodefs.js -lnoderawfs.js\""
+          }, " ") })
+        end)
+        sys.execute({ "make", "local" })
+        fs.pushd("bin", function ()
+          sys.execute({ "mv", "lua", "lua.js" })
+          sys.execute({ "mv", "luac", "luac.js" })
+          fs.writefile("lua", "#!/bin/sh\nnode \"$(dirname $0)/lua.js\" \"$@\"\n")
+          fs.writefile("luac", "#!/bin/sh\nnode \"$(dirname $0)/luac.js\" \"$@\"\n")
+          sys.execute({ "chmod", "+x", "lua" })
+          sys.execute({ "chmod", "+x", "luac" })
+        end)
+      end)
       fs.touch(lua_ok)
     end)
   end)
@@ -54,15 +57,14 @@ local function get_bundle_flags(lua_dir, context, extra_cflags, extra_ldflags)
 
   local flags = {
     "-sASSERTIONS",
-    "-sSINGLE_FILE",
     "-sALLOW_MEMORY_GROWTH",
     "-I" .. fs.join(lua_dir, "include"),
     "-L" .. fs.join(lua_dir, "lib"),
   }
 
-  -- Test context needs node filesystem access
+  -- Test context needs node filesystem access and single file for simplicity
   if context == "test" then
-    arr.extend(flags, { "-lnodefs.js", "-lnoderawfs.js" })
+    arr.extend(flags, { "-sSINGLE_FILE", "-lnodefs.js", "-lnoderawfs.js" })
   end
 
   arr.extend(flags, { "-llua", "-lm" })
