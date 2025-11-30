@@ -112,6 +112,15 @@ return function ()
 
           maxtime = huge -- now()
 
+        elseif not fns[t] then
+
+          if verbosity > 1 then
+            printf("[src]   \t%s\n", t)
+          end
+
+          cache[t] = ttime
+          maxtime = max(maxtime, ttime)
+
         else
 
           if verbosity > 0 then
