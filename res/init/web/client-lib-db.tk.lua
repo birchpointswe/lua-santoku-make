@@ -10,10 +10,10 @@
 local js = require("santoku.web.js")
 local sqlite_worker = require("santoku.web.sqlite.worker")
 local migrate = require("santoku.sqlite.migrate")
-local tpl = require("<% return name %>.web.templates")
+local tpl = require("__NAME__.web.templates")
 local Math = js.Math
 
-return sqlite_worker("/<% return name %>.db", function (ok, db, callback)
+return sqlite_worker("/__NAME__.db", function (ok, db, callback)
 
   if not ok then
     return callback(false, db)

@@ -117,10 +117,10 @@ local function create (opts)
     -- Client
     [fs.join("client/bin", "bundle.tk.lua")] = tmpl.render(init_templates.client_bin_bundle_lua, template_env),
     [fs.join("client/lib", name .. ".lua")] = tmpl.render(init_templates.client_lib_lua, template_env),
-    [fs.join("client/lib", name, "sw.tk.lua")] = tmpl.render(init_templates.client_lib_entry_sw_lua, template_env),
+    [fs.join("client/lib", name, "sw.tk.lua")] = gsub(init_templates.client_lib_entry_sw_lua, "__NAME__", name),
     [fs.join("client/lib", name, "main.lua")] = tmpl.render(init_templates.client_lib_entry_main_lua, template_env),
-    [fs.join("client/lib", name, "db.tk.lua")] = tmpl.render(init_templates.client_lib_db_lua, template_env),
-    [fs.join("client/lib", name, "routes.tk.lua")] = tmpl.render(init_templates.client_lib_routes_lua, template_env),
+    [fs.join("client/lib", name, "db.tk.lua")] = gsub(init_templates.client_lib_db_lua, "__NAME__", name),
+    [fs.join("client/lib", name, "routes.lua")] = tmpl.render(init_templates.client_lib_routes_lua, template_env),
     [fs.join("client/deps/sqlite", "Makefile.tk")] = init_templates.client_deps_sqlite_makefile,
     [fs.join("client/test/spec", name .. ".lua")] = tmpl.render(init_templates.client_test_spec_lua, template_env),
     [fs.join("client/static", "index.tk.html")] = init_templates.client_static_index_html,
