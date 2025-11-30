@@ -55,10 +55,10 @@ local init_templates = {
   -- Client
   client_bin_bundle_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-bin-bundle.tk.lua"))) %>), -- luacheck: ignore
   client_lib_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-lib.lua"))) %>), -- luacheck: ignore
-  client_lib_entry_sw_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-lib-entry-sw.tk.wasm.lua"))) %>), -- luacheck: ignore
-  client_lib_entry_main_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-lib-entry-main.wasm.lua"))) %>), -- luacheck: ignore
-  client_lib_entry_db_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-lib-entry-db.wasm.lua"))) %>), -- luacheck: ignore
-  client_lib_db_worker_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-lib-db-worker.tk.wasm.lua"))) %>), -- luacheck: ignore
+  client_lib_entry_sw_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-lib-entry-sw.tk.lua"))) %>), -- luacheck: ignore
+  client_lib_entry_main_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-lib-entry-main.lua"))) %>), -- luacheck: ignore
+  client_lib_db_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-lib-db.tk.lua"))) %>), -- luacheck: ignore
+  client_lib_routes_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-lib-routes.tk.lua"))) %>), -- luacheck: ignore
   client_deps_sqlite_makefile = from_base64(<% return squote(to_base64(readfile("res/init/web/client-deps-sqlite-Makefile.tk"))) %>), -- luacheck: ignore
   client_test_spec_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-test-spec.lua"))) %>), -- luacheck: ignore
   client_static_index_html = from_base64(<% return squote(to_base64(readfile("res/init/web/client-static-index.tk.html"))) %>), -- luacheck: ignore
@@ -77,6 +77,7 @@ local init_templates = {
   res_server_migrations_sql = from_base64(<% return squote(to_base64(readfile("res/init/web/res-server-migrations-0.0.1.sql"))) %>), -- luacheck: ignore
   res_client_migrations_sql = from_base64(<% return squote(to_base64(readfile("res/init/web/res-client-migrations-0.0.1.sql"))) %>), -- luacheck: ignore
   res_templates_body_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-body.html"))) %>), -- luacheck: ignore
+  res_templates_app_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-app.html"))) %>), -- luacheck: ignore
   res_templates_number_item_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-number-item.html"))) %>), -- luacheck: ignore
   res_templates_number_items_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-number-items.html"))) %>), -- luacheck: ignore
   res_tailwind_theme_css = from_base64(<% return squote(to_base64(readfile("res/init/web/res-tailwind-theme.css"))) %>), -- luacheck: ignore
@@ -116,10 +117,10 @@ local function create (opts)
     -- Client
     [fs.join("client/bin", "bundle.tk.lua")] = tmpl.render(init_templates.client_bin_bundle_lua, template_env),
     [fs.join("client/lib", name .. ".lua")] = tmpl.render(init_templates.client_lib_lua, template_env),
-    [fs.join("client/lib", name, "entry", "sw.tk.wasm.lua")] = gsub(init_templates.client_lib_entry_sw_lua, "__NAME__", name),
-    [fs.join("client/lib", name, "entry", "main.wasm.lua")] = tmpl.render(init_templates.client_lib_entry_main_lua, template_env),
-    [fs.join("client/lib", name, "entry", "db.wasm.lua")] = tmpl.render(init_templates.client_lib_entry_db_lua, template_env),
-    [fs.join("client/lib", name, "db", "worker.tk.wasm.lua")] = gsub(init_templates.client_lib_db_worker_lua, "__NAME__", name),
+    [fs.join("client/lib", name, "sw.tk.lua")] = tmpl.render(init_templates.client_lib_entry_sw_lua, template_env),
+    [fs.join("client/lib", name, "main.lua")] = tmpl.render(init_templates.client_lib_entry_main_lua, template_env),
+    [fs.join("client/lib", name, "db.tk.lua")] = tmpl.render(init_templates.client_lib_db_lua, template_env),
+    [fs.join("client/lib", name, "routes.tk.lua")] = tmpl.render(init_templates.client_lib_routes_lua, template_env),
     [fs.join("client/deps/sqlite", "Makefile.tk")] = init_templates.client_deps_sqlite_makefile,
     [fs.join("client/test/spec", name .. ".lua")] = tmpl.render(init_templates.client_test_spec_lua, template_env),
     [fs.join("client/static", "index.tk.html")] = init_templates.client_static_index_html,
@@ -137,7 +138,8 @@ local function create (opts)
     -- Resources
     [fs.join("res/server/migrations", "0.0.1.sql")] = init_templates.res_server_migrations_sql,
     [fs.join("res/client/migrations", "0.0.1.sql")] = init_templates.res_client_migrations_sql,
-    [fs.join("res/web/templates", "body.html")] = tmpl.render(init_templates.res_templates_body_html, template_env),
+    [fs.join("res/web/templates", "body.html")] = init_templates.res_templates_body_html,
+    [fs.join("res/web/templates", "app.html")] = tmpl.render(init_templates.res_templates_app_html, template_env),
     [fs.join("res/web/templates", "number-item.html")] = init_templates.res_templates_number_item_html,
     [fs.join("res/web/templates", "number-items.html")] = init_templates.res_templates_number_items_html,
     [fs.join("res/tailwind", "theme.css")] = init_templates.res_tailwind_theme_css,

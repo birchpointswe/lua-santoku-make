@@ -1,13 +1,11 @@
 local js = require("santoku.web.js")
 local global = js.self
-
 local has_registration = global.registration ~= nil
 local has_document = global.document ~= nil
-
 if has_registration then
-  require("<% return name %>.entry.sw")
+  return require("<% return name %>.sw")
 elseif not has_document then
-  require("<% return name %>.entry.db")
+  return require("<% return name %>.db")
 else
-  require("<% return name %>.entry.main")
+  return require("<% return name %>.main")
 end

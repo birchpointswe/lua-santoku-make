@@ -1,8 +1,5 @@
 <% fs = require("santoku.fs") %>
-
 DIST = <% return dist_dir %>
-
-# Download pre-built SQLite WASM from official npm package
 results.mk:
 	rm -rf sqlite-wasm-pkg jswasm
 	mkdir -p sqlite-wasm-pkg
