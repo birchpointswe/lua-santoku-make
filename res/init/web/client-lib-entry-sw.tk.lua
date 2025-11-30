@@ -1,5 +1,5 @@
 local sw = require("santoku.web.pwa.sw")
-local routes = require("<% return name %>.routes")
+local routes = require("__NAME__.routes")
 
 return sw({
   service_worker_version = (<% return tostring(os.time()) %>),
