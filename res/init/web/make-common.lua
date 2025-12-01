@@ -11,14 +11,14 @@ return {
     },
     build = {
       dependencies = {
-        "santoku-web >= 0.0.302-1",
+        "santoku-web >= 0.0.305-1",
       }
     },
     server = {
       dependencies = {
         "lua == 5.1",
         "santoku >= 0.0.297-1",
-        "santoku-mustache >= 0.0.8-1",
+        "santoku-mustache >= 0.0.10-1",
         "santoku-sqlite >= 0.0.15-1",
         "santoku-sqlite-migrate >= 0.0.16-1",
         "lsqlite3 >= 0.9.6-1",
@@ -38,7 +38,7 @@ return {
       dependencies = {
         "lua == 5.1",
         "santoku >= 0.0.297-1",
-        "santoku-web >= 0.0.302-1",
+        "santoku-web >= 0.0.305-1",
         "santoku-sqlite >= 0.0.15-1",
         "santoku-sqlite-migrate >= 0.0.16-1",
       },
