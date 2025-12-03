@@ -44,11 +44,11 @@ return {
         "santoku-sqlite-migrate >= 0.0.16-1",
       },
       rules = {
-        [".*"] = {
-          ldflags = { "--pre-js", "res/pre.js" },
-        },
         ["bundle$"] = {
-          ldflags = { "--extern-pre-js", "deps/sqlite/jswasm/sqlite3.js" }
+          ldflags = {
+            "--pre-js", "res/pre.js",
+            "--extern-pre-js", "deps/sqlite/jswasm/sqlite3.js"
+          }
         }
       },
       opts = {
