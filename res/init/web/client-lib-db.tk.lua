@@ -3,7 +3,7 @@
   local iter = require("santoku.iter")
   local serialize = require("santoku.serialize")
   t_migrations = serialize(iter.tabulate(iter.map(function (fp)
-    return fs.basename(fp), fs.readfile(fp)
+    return fs.basename(fp), readfile(fp)
   end, fs.files("res/client/migrations"))), true)
 %>
 
@@ -30,7 +30,7 @@ return sqlite_worker("/__NAME__.db", function (ok, db, callback)
   M.get_numbers = function ()
     local numbers = get_numbers()
     for i = 1, #numbers do
-      numbers[i] = { number = numbers[i].number, tag = "SW", sw = true }
+      numbers[i] = { number = numbers[i], tag = "SW", sw = true }
     end
     return tpl["number-items"]({ numbers = numbers })
   end
@@ -43,6 +43,27 @@ return sqlite_worker("/__NAME__.db", function (ok, db, callback)
     local num = Math:floor(Math:random() * 1000) + 1
     add_random(num)
     return tpl["number-item"]({ number = num, tag = "SW", sw = true })
+  end
+
+  local get_setting = db.getter([[
+    select value from settings where key = ?
+  ]])
+
+  local set_setting = db.runner([[
+    insert into settings (key, value) values (?1, ?2)
+    on conflict (key) do update set value = ?2
+  ]])
+
+  M.get_authorization = function ()
+    return get_setting("authorization")
+  end
+
+  M.set_authorization = function (auth)
+    return set_setting("authorization", auth)
+  end
+
+  M.has_authorization = function ()
+    return M.get_authorization() ~= nil
   end
 
   return callback(true, M)

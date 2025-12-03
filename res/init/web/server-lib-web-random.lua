@@ -2,13 +2,11 @@ local tpl = require("<% return name %>.web.templates")
 local db = require("<% return name %>.db.loaded")
 
 local session_id = ngx.var.cookie_session
-local is_new = not session_id
-if is_new then
-  session_id = db.random_hex(16)
-end
-
-if is_new then
-  ngx.header["Set-Cookie"] = "session=" .. session_id .. "; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000"
+if not session_id then
+  ngx.status = 401
+  ngx.header.content_type = "text/html"
+  ngx.say("Session required")
+  return
 end
 
 local session_pk = db.get_or_create_session(session_id)

@@ -1,6 +1,8 @@
-<body class="bg-neutral-100 min-h-screen flex items-center justify-center"
-      hx-trigger="sw-ready from:body"
-      hx-get="/app"
-      hx-swap="outerHTML">
-  <div class="text-neutral-400 text-sm animate-pulse">Loading...</div>
+<body class="bg-neutral-100 min-h-screen p-0 m-0">
+  <div id="app" class="min-h-screen flex items-center justify-center"
+       hx-trigger="sw-ready from:body"
+       hx-get="/app"
+       hx-swap="outerHTML">
+    <div class="text-neutral-400 text-sm animate-pulse">Loading...</div>
+  </div>
 </body>

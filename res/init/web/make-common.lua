@@ -11,7 +11,7 @@ return {
     },
     build = {
       dependencies = {
-        "santoku-web >= 0.0.305-1",
+        "santoku-web >= 0.0.323-1",
       }
     },
     server = {
@@ -31,14 +31,15 @@ return {
       init = "<% return name %>.web.init",
       routes = {
         { "GET", "/random", "<% return name %>.web.random" },
-        { "GET", "/numbers", "<% return name %>.web.numbers" }
+        { "GET", "/numbers", "<% return name %>.web.numbers" },
+        { "POST", "/session/create", "<% return name %>.web.session-create" }
       }
     },
     client = {
       dependencies = {
         "lua == 5.1",
         "santoku >= 0.0.297-1",
-        "santoku-web >= 0.0.305-1",
+        "santoku-web >= 0.0.323-1",
         "santoku-sqlite >= 0.0.15-1",
         "santoku-sqlite-migrate >= 0.0.16-1",
       },
@@ -86,9 +87,8 @@ return {
       end
       local css_out = fs.join(client_env.public_dir, "index.css")
       local css_in = fs.join(client_env.root_dir, "client/res/index.css")
-      local body_html = fs.join(client_env.root_dir, "res/web/templates/body.html")
       submake.target({ client_env.target }, { css_out })
-      submake.target({ css_out }, { css_in, body_html }, function ()
+      submake.target({ css_out }, { css_in }, function ()
         sys.execute({
           "tailwindcss",
           "--cwd", client_env.root_dir,

@@ -9,7 +9,7 @@ local templates = <%
     if tp == "file" then
       local key = str.match(path, "^.*/res/web/templates/(.*).html$")
       if key then
-        tpl[key] = fs.readfile(path)
+        tpl[key] = readfile(path)
       end
     end
   end

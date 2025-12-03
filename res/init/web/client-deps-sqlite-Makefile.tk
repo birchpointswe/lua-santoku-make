@@ -7,7 +7,6 @@ results.mk:
 	cd sqlite-wasm-pkg && tar xzf sqlite.org-sqlite-wasm-*.tgz
 	mkdir -p $(DIST)/public
 	cp sqlite-wasm-pkg/package/sqlite-wasm/jswasm/sqlite3.wasm $(DIST)/public/
-	cp sqlite-wasm-pkg/package/sqlite-wasm/jswasm/sqlite3-opfs-async-proxy.js $(DIST)/public/
 	mkdir -p jswasm
 	cp sqlite-wasm-pkg/package/sqlite-wasm/jswasm/sqlite3.js jswasm/
 	touch $@

@@ -3,3 +3,8 @@ create table numbers (
   number integer not null,
   created_at text default (datetime('now'))
 );
+
+create table settings (
+  key text primary key,
+  value text
+);
