@@ -1,21 +1,47 @@
-<body class="bg-neutral-100 min-h-screen p-0 m-0">
-  <div id="sw-update" class="hidden fixed top-0 left-0 right-0 bg-amber-500 text-white text-center py-2 px-4 z-20 cursor-pointer hover:bg-amber-600"
-       onclick="location.reload()">
+<div id="sw-error" class="hidden sw-error:flex items-center justify-center w-full h-screen fixed inset-0 bg-neutral-100 text-neutral-600 z-50 flex-col gap-4">
+  <p class="text-lg font-medium">Service Worker Unavailable</p>
+  <p class="text-sm text-neutral-500 max-w-sm text-center px-4">This app requires service worker support. Try using HTTPS or a modern browser.</p>
+</div>
+<div id="db-error" class="hidden db-error:flex sw-error:hidden items-center justify-center w-full h-screen fixed inset-0 bg-neutral-100 text-neutral-600 z-50 flex-col gap-4">
+  <p class="text-lg font-medium">Database Unavailable</p>
+  <p class="text-sm text-neutral-500 max-w-sm text-center px-4">This app requires browser storage features that are not available. Try using HTTPS or a different browser.</p>
+</div>
+<div id="app" class="db-error:hidden sw-error:hidden">
+  <span id="session-state" class="hidden no-session"
+    hx-get="/auth/status" hx-trigger="load" hx-swap="outerHTML"></span>
+  <div id="sw-update" class="hidden sw-update:flex items-center justify-center w-full h-10 fixed top-0 left-0 right-0 bg-amber-500 text-white z-20 cursor-pointer hover:bg-amber-600"
+    onclick="if(window.swRegistration&&window.swRegistration.waiting){window.swRegistration.waiting.postMessage({type:'skip_waiting'})}">
     New version available. Click to update.
   </div>
-  <header class="fixed top-0 left-0 right-0 bg-slate-800 text-white shadow-md z-10">
+  <header class="fixed top-0 left-0 right-0 bg-slate-800 text-white shadow-md z-10 sw-update:translate-y-10">
     <div class="h-14 flex items-center justify-center">
       <h1 class="text-xl font-medium"><% return name %></h1>
     </div>
   </header>
-  <main class="pt-18 p-4">
+  <main class="pt-18 p-4 sw-update:pt-28">
     <div class="max-w-md mx-auto">
+      <div class="mb-2">
+        <button
+          hx-post="/session/create"
+          hx-target="#session-state"
+          hx-swap="outerHTML"
+          class="session:hidden w-full bg-sky-600 border-none hover:bg-sky-700 active:bg-sky-800 text-white font-medium py-2 px-4 rounded shadow hover:shadow-md transition-all text-sm">
+          Create Session
+        </button>
+        <button
+          hx-post="/session/delete"
+          hx-target="#session-state"
+          hx-swap="outerHTML"
+          class="hidden session:block w-full bg-rose-600 border-none hover:bg-rose-700 active:bg-rose-800 text-white font-medium py-2 px-4 rounded shadow hover:shadow-md transition-all text-sm">
+          Delete Session
+        </button>
+      </div>
       <div class="flex gap-2">
         <button
           hx-get="/random"
           hx-target="#numbers"
           hx-swap="beforeend"
-          class="flex-1 bg-emerald-600 border-none hover:bg-emerald-700 active:bg-emerald-800 text-white font-medium py-3 px-4 rounded shadow hover:shadow-md transition-all uppercase tracking-wide text-sm">
+          class="flex-1 text-white font-medium py-3 px-4 rounded shadow hover:shadow-md transition-all uppercase tracking-wide text-sm no-session:bg-neutral-400 no-session:pointer-events-none no-session:cursor-not-allowed session:bg-emerald-600 session:hover:bg-emerald-700 session:active:bg-emerald-800">
           Backend
         </button>
         <button
@@ -28,13 +54,13 @@
       </div>
       <div class="mt-4 bg-white rounded shadow">
         <ul id="numbers" class="divide-y flex flex-col divide-neutral-200 list-none m-0 p-0 peer"
-            hx-get="/numbers"
-            hx-trigger="load"
-            hx-swap="innerHTML"></ul>
+          hx-get="/numbers"
+          hx-trigger="session-active from:document"
+          hx-swap="beforeend"></ul>
         <span hx-get="/numbers-sw"
-              hx-trigger="load"
-              hx-target="#numbers"
-              hx-swap="beforeend"></span>
+          hx-trigger="load"
+          hx-target="#numbers"
+          hx-swap="beforeend"></span>
         <p class="p-4 m-0 text-center text-neutral-400 text-sm hidden peer-[&.htmx-request]:block">
           Loading...
         </p>
@@ -44,4 +70,4 @@
       </div>
     </div>
   </main>
-</body>
+</div>

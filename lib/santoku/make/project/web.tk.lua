@@ -71,15 +71,18 @@ local init_templates = {
   server_lib_web_init_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib-web-init.lua"))) %>), -- luacheck: ignore
   server_lib_web_random_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib-web-random.lua"))) %>), -- luacheck: ignore
   server_lib_web_numbers_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib-web-numbers.lua"))) %>), -- luacheck: ignore
+  server_lib_web_session_create_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib-web-session-create.lua"))) %>), -- luacheck: ignore
   server_lib_db_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib-db.tk.lua"))) %>), -- luacheck: ignore
   server_test_spec_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-test-spec.lua"))) %>), -- luacheck: ignore
   -- Resources
   res_server_migrations_sql = from_base64(<% return squote(to_base64(readfile("res/init/web/res-server-migrations-0.0.1.sql"))) %>), -- luacheck: ignore
   res_client_migrations_sql = from_base64(<% return squote(to_base64(readfile("res/init/web/res-client-migrations-0.0.1.sql"))) %>), -- luacheck: ignore
   res_templates_body_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-body.html"))) %>), -- luacheck: ignore
+  res_templates_sw_body_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-sw-body.html"))) %>), -- luacheck: ignore
   res_templates_app_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-app.html"))) %>), -- luacheck: ignore
   res_templates_number_item_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-number-item.html"))) %>), -- luacheck: ignore
   res_templates_number_items_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-number-items.html"))) %>), -- luacheck: ignore
+  res_templates_session_state_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-session-state.html"))) %>), -- luacheck: ignore
   res_tailwind_theme_css = from_base64(<% return squote(to_base64(readfile("res/init/web/res-tailwind-theme.css"))) %>), -- luacheck: ignore
   res_icon_svg = from_base64(<% return squote(to_base64(readfile("res/init/web/res-icon.tk.svg"))) %>), -- luacheck: ignore
   -- Common
@@ -133,15 +136,18 @@ local function create (opts)
     [fs.join("server/lib", name, "web", "init.lua")] = tmpl.render(init_templates.server_lib_web_init_lua, template_env),
     [fs.join("server/lib", name, "web", "random.lua")] = tmpl.render(init_templates.server_lib_web_random_lua, template_env),
     [fs.join("server/lib", name, "web", "numbers.lua")] = tmpl.render(init_templates.server_lib_web_numbers_lua, template_env),
+    [fs.join("server/lib", name, "web", "session-create.lua")] = tmpl.render(init_templates.server_lib_web_session_create_lua, template_env),
     [fs.join("server/lib", name, "db.tk.lua")] = init_templates.server_lib_db_lua,
     [fs.join("server/test/spec", name .. ".lua")] = tmpl.render(init_templates.server_test_spec_lua, template_env),
     -- Resources
     [fs.join("res/server/migrations", "0.0.1.sql")] = init_templates.res_server_migrations_sql,
     [fs.join("res/client/migrations", "0.0.1.sql")] = init_templates.res_client_migrations_sql,
     [fs.join("res/web/templates", "body.html")] = init_templates.res_templates_body_html,
+    [fs.join("res/web/templates", "sw-body.html")] = init_templates.res_templates_sw_body_html,
     [fs.join("res/web/templates", "app.html")] = tmpl.render(init_templates.res_templates_app_html, template_env),
     [fs.join("res/web/templates", "number-item.html")] = init_templates.res_templates_number_item_html,
     [fs.join("res/web/templates", "number-items.html")] = init_templates.res_templates_number_items_html,
+    [fs.join("res/web/templates", "session-state.html")] = init_templates.res_templates_session_state_html,
     [fs.join("res/tailwind", "theme.css")] = init_templates.res_tailwind_theme_css,
     [fs.join("res", "icon.tk.svg")] = init_templates.res_icon_svg,
     -- Common
@@ -674,9 +680,13 @@ rocks_provided = { lua = "5.1" }
     end
 
     for fp in ivals(base_client_pages) do
-      local pre = cdir("build", "default-wasm", "build", "bin", fs.stripextensions(fp)) .. ".lua"
+      local nested_env = env.environment == "test" and "test" or "build"
+      local pre = cdir("build", "default-wasm", nested_env, "bin", fs.stripextensions(fp)) .. ".lua"
       local post = cdir("bundler-post", fs.stripextensions(fp))
       local deps = { cdir(base_client_lua_modules_ok), pre }
+      if has_build_deps then
+        arr.push(deps, build_deps_ok)
+      end
       local extra_rule_cflags = {}
       local extra_rule_ldflags = {}
       for k, v in it.pairs(tbl.get(env, "rules") or {}) do
@@ -690,21 +700,23 @@ rocks_provided = { lua = "5.1" }
         end
       end
       target({ post }, deps, function ()
-        fs.mkdirp(cdir("build", "default-wasm", "build"))
-        fs.pushd(cdir("build", "default-wasm", "build"), function ()
-          local lua_dir = cdir("build", "default-wasm", "build", "lua-5.1.5")
+        fs.mkdirp(cdir("build", "default-wasm", nested_env))
+        fs.pushd(cdir("build", "default-wasm", nested_env), function ()
+          local lua_dir = cdir("build", "default-wasm", nested_env, "lua-5.1.5")
           local luac_bin = fs.join(lua_dir, "bin", "luac")
           local extra_cflags = extend({}, extra_rule_cflags, tbl.get(env, "cxxflags") or {})
           local extra_ldflags = extend({}, extra_rule_ldflags, tbl.get(env, "ldflags") or {})
-          bundle(pre, fs.dirname(post), {
-            cc = "emcc",
-            luac = luac_bin .. " -s -o %output %input",
-            binary = true,
-            ignores = { "debug" },
-            path = get_lua_path(cdir("build", "default-wasm", "build")),
-            cpath = get_lua_cpath(cdir("build", "default-wasm", "build")),
-            flags = wasm.get_bundle_flags(lua_dir, "build", extra_cflags, extra_ldflags)
-          })
+          common.with_build_deps(has_build_deps and build_deps_dir or nil, function ()
+            bundle(pre, fs.dirname(post), {
+              cc = "emcc",
+              luac = luac_bin .. " -s -o %output %input",
+              binary = true,
+              ignores = { "debug" },
+              path = get_lua_path(cdir("build", "default-wasm", nested_env)),
+              cpath = get_lua_cpath(cdir("build", "default-wasm", nested_env)),
+              flags = wasm.get_bundle_flags(lua_dir, "build", extra_cflags, extra_ldflags)
+            })
+          end)
         end)
       end)
       add_copied_target(ddir(fp), post)
@@ -718,6 +730,7 @@ rocks_provided = { lua = "5.1" }
       extend({ opts.config_file },
         amap(extend({}, amap(extend({}, base_client_res), remove_tk), amap(extend({}, base_client_res_templated), remove_tk)), cdir_stripped)),
       function ()
+        local nested_env = env.environment == "test" and "test" or "build"
         local config_file = fs.absolute(opts.config_file)
         local config = {
           type = "lib",
@@ -729,15 +742,18 @@ rocks_provided = { lua = "5.1" }
         }
         fs.mkdirp(cdir())
         return fs.pushd(cdir(), function ()
-          require("santoku.make.project").init({
-            config_file = config_file,
-            config = config,
-            single = opts.single and remove_tk(opts.single) or nil,
-            skip_check = opts.skip_check,
-            wasm = true,
-            skip_tests = true,
-            dir = cdir("build"),
-          }).install_deps()
+          common.with_build_deps(has_build_deps and build_deps_dir or nil, function ()
+            require("santoku.make.project").init({
+              config_file = config_file,
+              config = config,
+              single = opts.single and remove_tk(opts.single) or nil,
+              skip_check = opts.skip_check,
+              wasm = true,
+              skip_tests = env.environment ~= "test",
+              dir = cdir("build"),
+              environment = nested_env,
+            }).install_deps()
+          end)
           fs.touch(base_client_lua_modules_deps_ok)
         end)
       end)
@@ -745,9 +761,11 @@ rocks_provided = { lua = "5.1" }
     target(
       { cdir(base_client_lua_modules_ok) },
       extend({ opts.config_file, cdir(base_client_lua_modules_deps_ok) },
+        has_build_deps and { build_deps_ok } or {},
         amap(extend({}, base_client_bins, base_client_libs, base_client_deps), cdir_stripped),
         amap(amap(extend({}, base_root_libs, base_root_res), remove_tk), cdir)),
       function ()
+        local nested_env = env.environment == "test" and "test" or "build"
         local config_file = fs.absolute(opts.config_file)
         local config = {
           type = "lib",
@@ -759,15 +777,18 @@ rocks_provided = { lua = "5.1" }
         }
         fs.mkdirp(cdir())
         return fs.pushd(cdir(), function ()
-          require("santoku.make.project").init({
-            config_file = config_file,
-            config = config,
-            single = opts.single and remove_tk(opts.single) or nil,
-            skip_check = opts.skip_check,
-            wasm = true,
-            skip_tests = true,
-            dir = cdir("build"),
-          }).install()
+          common.with_build_deps(has_build_deps and build_deps_dir or nil, function ()
+            require("santoku.make.project").init({
+              config_file = config_file,
+              config = config,
+              single = opts.single and remove_tk(opts.single) or nil,
+              skip_check = opts.skip_check,
+              wasm = true,
+              skip_tests = env.environment ~= "test",
+              dir = cdir("build"),
+              environment = nested_env,
+            }).install()
+          end)
           fs.touch(base_client_lua_modules_ok)
         end)
       end)
@@ -903,18 +924,17 @@ rocks_provided = { lua = "5.1" }
 
   local single_target, single_path = get_single_target(opts.single)
 
-  -- Determine which test sets to run
+  -- Determine which test sets to run (client tests now run via lua_modules.ok)
   local run_root = opts.test_root or (not opts.test_client and not opts.test_server and not single_target)
-  local run_client = opts.test_client or (not opts.test_root and not opts.test_server and not single_target)
   local run_server = opts.test_server or (not opts.test_root and not opts.test_client and not single_target)
 
   -- If --single specified, only run that target
   if single_target == "root" then
-    run_root, run_client, run_server = true, false, false
+    run_root, run_server = true, false
   elseif single_target == "client" then
-    run_root, run_client, run_server = false, true, false
+    run_root, run_server = false, false
   elseif single_target == "server" then
-    run_root, run_client, run_server = false, false, true
+    run_root, run_server = false, true
   end
 
   target(
@@ -945,28 +965,7 @@ rocks_provided = { lua = "5.1" }
         }).test()
       end
 
-      -- Run client tests second
-      if run_client and #base_client_test_specs > 0 then
-        local client_config = {
-          type = "lib",
-          env = tbl.merge({
-            name = opts.config.env.name .. "-client",
-            version = opts.config.env.version,
-            rules = opts.config.env.rules,
-          }, opts.config.env.client or {}, test_client_env),
-        }
-        fs.mkdirp(test_client_dir())
-        fs.pushd(test_client_dir(), function ()
-          require("santoku.make.project").init({
-            config_file = config_file,
-            config = client_config,
-            single = single_target == "client" and single_path and remove_tk(single_path) or nil,
-            skip_check = opts.skip_check,
-            wasm = true,
-            dir = test_client_dir("build"),
-          }).test()
-        end)
-      end
+      -- Client tests are now handled by lua_modules.ok target with skip_tests = false
 
       -- Run server tests last (only these need the server running)
       if run_server and #base_server_test_specs > 0 then

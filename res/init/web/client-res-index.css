@@ -1,7 +1,15 @@
 @import "../../res/tailwind/theme.css";
+@source "../../res/web/templates/*.html";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@custom-variant sw-ready (&:is(body.sw-ready *));
+@custom-variant sw-update (&:is(body.sw-update-available *));
+@custom-variant sw-error (&:is(body.sw-error *));
+@custom-variant db-error (&:is(body.db-error *));
+@custom-variant session (&:is(body:has(#session-state.has-session) *));
+@custom-variant no-session (&:is(body:has(#session-state.no-session) *));
 
 @font-face {
   font-family: 'Roboto';

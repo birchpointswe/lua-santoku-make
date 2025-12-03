@@ -137,12 +137,22 @@ local function init (opts)
     return common.add_copied_target(target, dest, src, extra_srcs)
   end
 
+  -- Build dependencies directory (host-native, for template processing)
+  local build_deps_dir = work_dir("build-deps")
+  local build_deps_ok = work_dir("build-deps.ok")
+  local build_deps = tbl.get(opts, "config", "env", "build", "dependencies") or {}
+  local has_build_deps = #build_deps > 0
+
   local function add_file_target(dest, src, env, extra_srcs)
-    return common.add_file_target(target, dest, src, env, opts.config, opts.config_file, extra_srcs)
+    return common.add_file_target(target, dest, src, env, opts.config, opts.config_file, extra_srcs,
+      has_build_deps and build_deps_dir or nil,
+      has_build_deps and build_deps_ok or nil)
   end
 
   local function add_templated_target_base64(dest, data, env, extra_srcs)
-    return common.add_templated_target_base64(target, dest, data, env, opts.config_file, extra_srcs)
+    return common.add_templated_target_base64(target, dest, data, env, opts.config_file, extra_srcs,
+      has_build_deps and build_deps_dir or nil,
+      has_build_deps and build_deps_ok or nil)
   end
 
   local function get_lua_path(prefix)
@@ -238,6 +248,11 @@ local function init (opts)
   end
 
   push(test_all, test_dir(base_lua_modules_ok))
+
+  if has_build_deps then
+    push(test_all, build_deps_ok)
+    push(build_all, build_deps_ok)
+  end
 
   local base_env = {
     wasm = opts.wasm,
@@ -471,6 +486,46 @@ local function init (opts)
         fs.touch(base_lua_modules_ok)
       end)
     end)
+
+  -- Install build dependencies (host-native, for template processing)
+  local build_deps_luarocks_cfg = work_dir("build-deps-luarocks.lua")
+  if has_build_deps then
+    target(
+      { build_deps_ok },
+      { opts.config_file },
+      function ()
+        fs.mkdirp(build_deps_dir)
+        local config_file = fs.absolute(opts.config_file)
+        local lua_modules_dir = fs.join(fs.absolute(build_deps_dir), "lua_modules")
+        -- Generate minimal luarocks config for build deps
+        fs.writefile(build_deps_luarocks_cfg, sinterp([[
+rocks_trees = {
+  { name = "build-deps",
+    root = "%s#(lua_modules)"
+  } }
+lua_version = "5.1"
+rocks_provided = { lua = "5.1" }
+]], { lua_modules = lua_modules_dir }))
+        local build_config = {
+          type = "lib",
+          env = {
+            name = opts.config.env.name .. "-build-deps",
+            version = opts.config.env.version,
+            dependencies = build_deps,
+          },
+        }
+        fs.pushd(build_deps_dir, function ()
+          require("santoku.make.project").init({
+            config_file = config_file,
+            config = build_config,
+            luarocks_config = fs.absolute(build_deps_luarocks_cfg),
+            skip_tests = true,
+            dir = build_deps_dir,
+          }).install_deps()
+        end)
+        fs.touch(build_deps_ok)
+      end)
+  end
 
   target({ "build-deps" }, build_all, true)
   target({ "test-deps" }, test_all, true)

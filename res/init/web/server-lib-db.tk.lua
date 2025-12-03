@@ -3,7 +3,7 @@
   local iter = require("santoku.iter")
   local serialize = require("santoku.serialize")
   t_migrations = serialize(iter.tabulate(iter.map(function (fp)
-    return fs.basename(fp), fs.readfile(fp)
+    return fs.basename(fp), readfile(fp)
   end, fs.files("res/server/migrations"))), true)
 %>
 
