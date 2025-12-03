@@ -656,7 +656,8 @@ rocks_provided = { lua = "5.1" }
     for fp in ivals(base_root_libs) do
       add_file_target(cdir(remove_tk(fp)), fp, env,
         extend({ cdir(base_client_lua_modules_deps_ok) },
-          amap(amap(extend({}, base_client_res, base_client_res_templated), remove_tk), cdir_stripped)))
+          amap(amap(extend({}, base_client_res, base_client_res_templated), remove_tk), cdir_stripped),
+          amap(amap(extend({}, base_root_res), remove_tk), cdir)))
     end
 
     for fp in ivals(base_root_res) do
@@ -1100,6 +1101,17 @@ rocks_provided = { lua = "5.1" }
       end
     end)
   end)
+
+  -- Load .d file dependencies (tracks files read during template expansion)
+  for fp in ivals(submake.targets) do
+    local dfile = fp .. ".d"
+    if fs.exists(dfile) then
+      local chunks = map(str.sub, map(function (line)
+        return str.splits(line, "%s*:%s*", false)
+      end, fs.lines(dfile)))
+      target(chunks(), collect(chunks))
+    end
+  end
 
   local configure = tbl.get(opts, "config", "env", "configure")
   if configure then
