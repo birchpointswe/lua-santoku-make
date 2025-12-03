@@ -396,7 +396,8 @@ local function init (opts)
   end
 
   add_templated_target_base64(build_dir(base_rockspec),
-    <% return squote(to_base64(readfile("res/lib/template.rockspec"))) %>, build_env) -- luacheck: ignore
+    <% return squote(to_base64(readfile("res/lib/template.rockspec"))) %>, build_env, -- luacheck: ignore
+    amap(amap(extend({}, base_libs, base_bins, base_deps, base_res, base_res_templated), remove_tk), build_dir))
 
   add_templated_target_base64(build_dir(base_makefile),
     <% return squote(to_base64(readfile("res/lib/luarocks.mk"))) %>, build_env) -- luacheck: ignore
@@ -408,7 +409,8 @@ local function init (opts)
     <% return squote(to_base64(readfile("res/lib/bin.mk"))) %>, build_env) -- luacheck: ignore
 
   add_templated_target_base64(test_dir(base_rockspec),
-    <% return squote(to_base64(readfile("res/lib/template.rockspec"))) %>, test_env) -- luacheck: ignore
+    <% return squote(to_base64(readfile("res/lib/template.rockspec"))) %>, test_env, -- luacheck: ignore
+    amap(amap(extend({}, base_libs, base_bins, base_deps, base_res, base_res_templated), remove_tk), test_dir))
 
   add_templated_target_base64(test_dir(base_makefile),
     <% return squote(to_base64(readfile("res/lib/luarocks.mk"))) %>, test_env) -- luacheck: ignore
