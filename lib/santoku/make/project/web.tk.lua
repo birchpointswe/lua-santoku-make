@@ -707,11 +707,14 @@ rocks_provided = { lua = "5.1" }
           local luac_bin = fs.join(lua_dir, "bin", "luac")
           local extra_cflags = extend({}, extra_rule_cflags, tbl.get(env, "cxxflags") or {})
           local extra_ldflags = extend({}, extra_rule_ldflags, tbl.get(env, "ldflags") or {})
+          local use_files = tbl.get(env, "client", "files")
           common.with_build_deps(has_build_deps and build_deps_dir or nil, function ()
             bundle(pre, fs.dirname(post), {
               cc = "emcc",
-              luac = luac_bin .. " -s -o %output %input",
-              binary = true,
+              -- In files mode, skip luac to preserve source info
+              luac = not use_files and (luac_bin .. " -s -o %output %input") or nil,
+              binary = not use_files,
+              files = use_files,
               ignores = { "debug" },
               path = get_lua_path(cdir("build", "default-wasm", nested_env)),
               cpath = get_lua_cpath(cdir("build", "default-wasm", nested_env)),
