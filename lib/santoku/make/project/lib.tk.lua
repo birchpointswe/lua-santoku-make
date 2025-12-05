@@ -482,7 +482,8 @@ local function init (opts)
         sys.execute(extend({
           "luarocks", "make", fs.basename(base_rockspec),
           env = {
-            LUAROCKS_CONFIG = lcfg
+            LUAROCKS_CONFIG = lcfg,
+            MAKEFLAGS = "--no-print-directory"
           }
         }, vars))
         fs.touch(base_lua_modules_ok)
@@ -550,7 +551,8 @@ rocks_provided = { lua = "5.1" }
       sys.execute(extend({
         "luarocks", "make", base_rockspec,
         env = {
-          LUAROCKS_CONFIG = lcfg
+          LUAROCKS_CONFIG = lcfg,
+          MAKEFLAGS = "--no-print-directory"
         },
       }, vars))
     end)
@@ -570,7 +572,8 @@ rocks_provided = { lua = "5.1" }
       sys.execute(extend({
         "luarocks", "make", "--deps-only", base_rockspec,
         env = {
-          LUAROCKS_CONFIG = lcfg
+          LUAROCKS_CONFIG = lcfg,
+          MAKEFLAGS = "--no-print-directory"
         },
       }, vars))
     end)

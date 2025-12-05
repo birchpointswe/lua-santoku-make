@@ -24,15 +24,15 @@ local function setup_lua(target_fn, dir)
       fs.pushd("lua-5.1.5", function ()
         fs.pushd("src", function ()
           sys.execute({ "emmake", "sh", "-c", arr.concat({
-            "make", "all",
+            "make", "--no-print-directory", "all",
             "CC=\"$CC\"",
             "AR=\"$AR rcu\"",
             "RANLIB=\"$RANLIB\"",
-            "MYCFLAGS=\"-flto -Oz\"",
+            "MYCFLAGS=\"-w -flto -Oz\"",
             "MYLDFLAGS=\"-flto -Oz -sSINGLE_FILE -lnodefs.js -lnoderawfs.js\""
           }, " ") })
         end)
-        sys.execute({ "make", "local" })
+        sys.execute({ "make", "--no-print-directory", "local" })
         fs.pushd("bin", function ()
           sys.execute({ "mv", "lua", "lua.js" })
           sys.execute({ "mv", "luac", "luac.js" })

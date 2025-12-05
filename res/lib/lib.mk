@@ -29,10 +29,10 @@ INST_LUA = $(patsubst %.wasm.lua,%.lua,$(addprefix $(INST_LUADIR)/, $(LIB_LUA)))
 INST_SO = $(addprefix $(INST_LIBDIR)/, $(LIB_SO))
 INST_H = $(addprefix $(INST_PREFIX)/include/, $(LIB_H))
 
-ifdef _WASM
-LIBFLAG = -shared -Wno-linkflags
-else
 LIBFLAG = -shared
+
+ifdef _WASM
+WASM_LDFLAGS_FINAL = -Wno-emcc
 endif
 
 <%
@@ -76,7 +76,7 @@ inject_flags = function (env, wasm_env)
             end
             if #wasm_flags.ldflags > 0 then
               arr.push(out, base, ".$(LIB_EXTENSION): ", base, ".o\n", "\t$(CC) $(LIBFLAG) $< -o $@ $(LDFLAGS) $(LIB_LDFLAGS) ",
-                arr.concat(wasm_flags.ldflags, " "), "\n\n")
+                arr.concat(wasm_flags.ldflags, " "), " $(WASM_LDFLAGS_FINAL)\n\n")
             end
             if has_native then
               arr.push(out, "else\n")
@@ -113,9 +113,9 @@ end
 %>
 
 <% -- flags for all environments %>
-LIB_CFLAGS := -Wall -I. $(addprefix -I, $(LUA_INCDIR)) <% return arr.concat(cflags or {}, " ") %> $(<% return var("CFLAGS") %>) $(LIB_CFLAGS)
-LIB_CXXFLAGS := -Wall -I. $(addprefix -I, $(LUA_INCDIR)) <% return arr.concat(cxxflags or {}, " ") %> $(<% return var("CXXFLAGS") %>) $(LIB_CXXFLAGS)
-LIB_LDFLAGS := -Wall $(addprefix -L, $(LUA_LIBDIR)) <% return arr.concat(ldflags or {}, " ") %> $(<% return var("LDFLAGS") %>) $(LIB_LDFLAGS)
+LIB_CFLAGS := -I. $(addprefix -I, $(LUA_INCDIR)) <% return arr.concat(cflags or {}, " ") %> $(<% return var("CFLAGS") %>) $(LIB_CFLAGS)
+LIB_CXXFLAGS := -I. $(addprefix -I, $(LUA_INCDIR)) <% return arr.concat(cxxflags or {}, " ") %> $(<% return var("CXXFLAGS") %>) $(LIB_CXXFLAGS)
+LIB_LDFLAGS := $(addprefix -L, $(LUA_LIBDIR)) <% return arr.concat(ldflags or {}, " ") %> $(<% return var("LDFLAGS") %>) $(LIB_LDFLAGS)
 
 <% -- flags for build/test environments (non-wasm-specific) %>
 <% push(environment == "build") %>
@@ -173,7 +173,7 @@ all: $(LIB_O) $(LIB_SO)
 	$(CXX) -c $< -o $@ $(CXXFLAGS) $(LIB_CXXFLAGS)
 
 %.$(LIB_EXTENSION): %.o
-	$(CC) $(LIBFLAG) $< -o $@ $(LDFLAGS) $(LIB_LDFLAGS)
+	$(CC) $(LIBFLAG) $< -o $@ $(LDFLAGS) $(LIB_LDFLAGS) $(WASM_LDFLAGS_FINAL)
 
 install: $(INST_LUA) $(INST_SO) $(INST_H)
 
