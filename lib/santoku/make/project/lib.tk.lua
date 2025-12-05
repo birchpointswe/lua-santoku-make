@@ -579,8 +579,8 @@ rocks_provided = { lua = "5.1" }
     end)
   end)
 
-  -- NOTE: release not supported in wasm mode
-  if not opts.wasm and opts.config.env.public then
+  -- NOTE: pack/release not supported in wasm mode
+  if not opts.wasm then
 
     local release_tarball_dir = sinterp("%s#(name)-%s#(version)", opts.config.env)
     local release_tarball = release_tarball_dir .. ".tar.gz"
@@ -598,29 +598,37 @@ rocks_provided = { lua = "5.1" }
       push(release_tarball_contents, base_license)
     end
 
-    target({ "release" }, install_release_deps, function ()
+    target({ "pack" }, install_release_deps, function ()
       fs.mkdirp(build_dir())
       return fs.pushd(build_dir(), function ()
-        varg.tup(function (ok, ...)
-          if not ok then
-            err.error("Commit your changes first", ...)
-          end
-        end, err.pcall(sys.execute, { "git", "diff", "--quiet" }))
-        local api_key = opts.luarocks_api_key or env.var("LUAROCKS_API_KEY")
         if fs.exists(release_tarball) then
           fs.rm(release_tarball)
         end
-        sys.execute({ "git", "tag", opts.config.env.version })
-        sys.execute({ "git", "push", "--tags" })
-        sys.execute({ "git", "push" })
         sys.execute({
           "tar", "--dereference", "--transform", sformat("s#^#%s/#", release_tarball_dir),
           "-czvf", release_tarball, spread(release_tarball_contents) })
-        sys.execute({ "gh", "release", "create", "--generate-notes",
-          opts.config.env.version, release_tarball, base_rockspec })
-        sys.execute({ "luarocks", "upload", "--skip-pack", "--api-key", api_key, base_rockspec })
       end)
     end)
+
+    if opts.config.env.public then
+      target({ "release" }, { "pack" }, function ()
+        fs.mkdirp(build_dir())
+        return fs.pushd(build_dir(), function ()
+          varg.tup(function (ok, ...)
+            if not ok then
+              err.error("Commit your changes first", ...)
+            end
+          end, err.pcall(sys.execute, { "git", "diff", "--quiet" }))
+          local api_key = opts.luarocks_api_key or env.var("LUAROCKS_API_KEY")
+          sys.execute({ "git", "tag", opts.config.env.version })
+          sys.execute({ "git", "push", "--tags" })
+          sys.execute({ "git", "push" })
+          sys.execute({ "gh", "release", "create", "--generate-notes",
+            opts.config.env.version, release_tarball, base_rockspec })
+          sys.execute({ "luarocks", "upload", "--skip-pack", "--api-key", api_key, base_rockspec })
+        end)
+      end)
+    end
 
   end
 
@@ -669,9 +677,13 @@ rocks_provided = { lua = "5.1" }
             config_mtime = new_mtime
           end
         end
-        varg.tup(function (ok, ...)
+        varg.tup(function (ok, first, ...)
           if not ok then
-            print(...)
+            local msg = tostring(first)
+            if smatch(msg, "interrupt") or smatch(msg, "SIGINT") or smatch(msg, "signaled") then
+              err.error(first, ...)
+            end
+            print(first, ...)
           end
         end, err.pcall(build, { "test", "check" }, opts.verbosity))
       end)
@@ -691,7 +703,14 @@ rocks_provided = { lua = "5.1" }
           end
         end
       end)
-      err.pcall(function ()
+      varg.tup(function (ok, first, ...)
+        if not ok then
+          local msg = tostring(first)
+          if smatch(msg, "interrupt") or smatch(msg, "SIGINT") or smatch(msg, "signaled") then
+            err.error(first, ...)
+          end
+        end
+      end, err.pcall(function ()
         sys.execute({
           "inotifywait", "-qr",
           "-e", "close_write", "-e", "modify",
@@ -700,7 +719,7 @@ rocks_provided = { lua = "5.1" }
             return fs.exists(fp)
           end, chain(fs.files("."), ivals({ "lib", "bin", "test", "res" }), iter.keys(dfile_dirs)))))
         })
-      end)
+      end))
       sys.sleep(.25)
     end
   end)
@@ -828,6 +847,10 @@ rocks_provided = { lua = "5.1" }
     install_deps = function (opts)
       opts = opts or {}
       build(tbl.assign({ "install-deps" }, opts), opts.verbosity)
+    end,
+    pack = not opts.wasm and function (opts)
+      opts = opts or {}
+      build(tbl.assign({ "pack" }, opts), opts.verbosity)
     end,
     release = not opts.wasm and opts.config.env.public and function (opts)
       opts = opts or {}
