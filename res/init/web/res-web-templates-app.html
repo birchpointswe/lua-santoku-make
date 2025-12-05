@@ -6,68 +6,100 @@
   <p class="text-lg font-medium">Database Unavailable</p>
   <p class="text-sm text-neutral-500 max-w-sm text-center px-4">This app requires browser storage features that are not available. Try using HTTPS or a different browser.</p>
 </div>
-<div id="app" class="db-error:hidden sw-error:hidden">
-  <span id="session-state" class="hidden no-session"
-    hx-get="/auth/status" hx-trigger="load" hx-swap="outerHTML"></span>
-  <div id="sw-update" class="hidden sw-update:flex items-center justify-center w-full h-10 fixed top-0 left-0 right-0 bg-amber-500 text-white z-20 cursor-pointer hover:bg-amber-600"
-    onclick="if(window.swRegistration&&window.swRegistration.waiting){window.swRegistration.waiting.postMessage({type:'skip_waiting'})}">
+<div id="app-content" class="db-error:hidden sw-error:hidden">
+  <span id="sync-state" data-state="loading" hx-get="/sync/status" hx-trigger="load" hx-swap="morph:outerHTML"></span>
+  <span id="sync-debouncer" class="hidden"
+    hx-post="/sync"
+    hx-vals="js:{page: new URLSearchParams(window.location.search).get('page') || 1}"
+    hx-trigger="sync-requested delay:500ms"
+    hx-target="#numbers"
+    hx-swap="morph:outerHTML"
+    hx-indicator="#sync-button"
+    hx-on:sync-requested="document.body.classList.add('sync-debouncing')"
+    hx-on::before-request="document.body.classList.remove('sync-debouncing')"></span>
+  <div id="sw-update" class="flex items-center justify-center w-full h-10 fixed top-0 left-0 right-0 bg-amber-500 text-white z-20 cursor-pointer hover:bg-amber-600 transition-transform duration-300 ease-out"
+    onclick="if (window.swRegistration && window.swRegistration.waiting) { window.swRegistration.waiting.postMessage({ type: 'skip_waiting' }); }">
     New version available. Click to update.
   </div>
-  <header class="fixed top-0 left-0 right-0 bg-slate-800 text-white shadow-md z-10 sw-update:translate-y-10">
-    <div class="h-14 flex items-center justify-center">
+  <header class="fixed top-0 left-0 right-0 bg-slate-800 text-white shadow-md z-10 sw-update:translate-y-10 transition-transform duration-300 ease-out">
+    <div class="h-14 flex items-center justify-between px-4">
       <h1 class="text-xl font-medium"><% return name %></h1>
+      <div class="flex items-center gap-3">
+        <button hx-post="/auto-sync/toggle" hx-target="#sync-state" hx-swap="outerHTML settle:200ms" class="h-8 px-3 py-1 text-xs rounded border border-slate-500 text-slate-400 bg-transparent opacity-50 pointer-events-none sync-ready:opacity-100 sync-ready:pointer-events-auto hover:border-slate-400 hover:text-slate-300 hover:bg-slate-700 active:bg-slate-600 auto-sync:border-emerald-600 auto-sync:bg-emerald-600 auto-sync:text-white auto-sync:hover:border-emerald-700 auto-sync:hover:bg-emerald-700 auto-sync:hover:text-white auto-sync:active:border-emerald-800 auto-sync:active:bg-emerald-800 transition-all duration-300">Auto</button>
+        <button id="sync-button"
+          hx-post="/sync"
+          hx-vals="js:{page: new URLSearchParams(window.location.search).get('page') || 1}"
+          hx-trigger="click, do-sync from:body"
+          hx-target="#numbers"
+          hx-swap="morph:outerHTML"
+          hx-indicator="this"
+          class="relative h-8 w-8 p-1.5 rounded border-none hover:bg-slate-600 active:bg-slate-700 bg-transparent text-white transition-colors duration-150 [&.htmx-request]:pointer-events-none [&>span]:absolute [&>span]:inset-1.5 [&>span>svg]:w-full [&>span>svg]:h-full [&>span]:transition-all [&>span]:duration-200">
+          <span class="opacity-100 scale-100 sync-ready:opacity-0 sync-ready:scale-75 animate-spin">{{>icons.sync}}</span>
+          <span class="opacity-0 scale-75 sync-synced:opacity-100 sync-synced:scale-100 sync-requesting:opacity-0 sync-requesting:scale-75 text-emerald-500">{{>icons.check}}</span>
+          <span class="opacity-0 scale-75 sync-dirty:opacity-100 sync-dirty:scale-100 sync-error:opacity-100 sync-error:scale-100 sync-requesting:opacity-0 sync-requesting:scale-75 text-amber-500">{{>icons.sync}}</span>
+          <span class="opacity-0 scale-75 sync-pending:opacity-100 sync-pending:scale-100 sync-requesting:opacity-100 sync-requesting:scale-100 animate-spin">{{>icons.sync}}</span>
+        </button>
+      </div>
     </div>
   </header>
-  <main class="pt-18 p-4 sw-update:pt-28">
+  <main class="pt-18 p-4 pb-24 sw-update:translate-y-10 transition-transform duration-300 ease-out">
     <div class="max-w-md mx-auto">
-      <div class="mb-2">
-        <button
-          hx-post="/session/create"
-          hx-target="#session-state"
-          hx-swap="outerHTML"
-          class="session:hidden w-full bg-sky-600 border-none hover:bg-sky-700 active:bg-sky-800 text-white font-medium py-2 px-4 rounded shadow hover:shadow-md transition-all text-sm">
-          Create Session
-        </button>
-        <button
-          hx-post="/session/delete"
-          hx-target="#session-state"
-          hx-swap="outerHTML"
-          class="hidden session:block w-full bg-rose-600 border-none hover:bg-rose-700 active:bg-rose-800 text-white font-medium py-2 px-4 rounded shadow hover:shadow-md transition-all text-sm">
-          Delete Session
-        </button>
-      </div>
       <div class="flex gap-2">
         <button
-          hx-get="/random"
+          hx-get="/number/create"
           hx-target="#numbers"
-          hx-swap="beforeend"
-          class="flex-1 text-white font-medium py-3 px-4 rounded shadow hover:shadow-md transition-all uppercase tracking-wide text-sm no-session:bg-neutral-400 no-session:pointer-events-none no-session:cursor-not-allowed session:bg-emerald-600 session:hover:bg-emerald-700 session:active:bg-emerald-800">
-          Backend
-        </button>
-        <button
-          hx-get="/random-sw"
-          hx-target="#numbers"
-          hx-swap="beforeend"
-          class="flex-1 bg-amber-600 border-none hover:bg-amber-700 active:bg-amber-800 text-white font-medium py-3 px-4 rounded shadow hover:shadow-md transition-all uppercase tracking-wide text-sm">
-          Service Worker
+          hx-swap="morph:outerHTML"
+          hx-push-url="?page=1"
+          class="flex-1 border-none text-white font-medium py-3 px-4 rounded uppercase tracking-wide text-sm bg-neutral-400 opacity-60 shadow-none cursor-not-allowed pointer-events-none numbers-loaded:pointer-events-auto numbers-loaded:opacity-100 numbers-loaded:bg-emerald-600 numbers-loaded:shadow numbers-loaded:cursor-pointer numbers-loaded:hover:bg-emerald-700 numbers-loaded:active:bg-emerald-800 numbers-loaded:hover:shadow-md transition-[background-color,box-shadow,opacity] duration-300">
+          Add Number
         </button>
       </div>
-      <div class="mt-4 bg-white rounded shadow">
-        <ul id="numbers" class="divide-y flex flex-col divide-neutral-200 list-none m-0 p-0 peer"
+      <div class="mt-4 bg-white rounded shadow overflow-hidden">
+        <ul id="numbers" class="divide-y flex flex-col divide-neutral-200 list-none m-0 p-0"
           hx-get="/numbers"
-          hx-trigger="session-active from:document"
-          hx-swap="beforeend"></ul>
-        <span hx-get="/numbers-sw"
+          hx-vals="js:{page: new URLSearchParams(window.location.search).get('page') || 1}"
           hx-trigger="load"
-          hx-target="#numbers"
-          hx-swap="beforeend"></span>
-        <p class="p-4 m-0 text-center text-neutral-400 text-sm hidden peer-[&.htmx-request]:block">
-          Loading...
-        </p>
-        <p class="p-4 m-0 text-center text-neutral-400 text-sm peer-has-[li]:hidden peer-[&.htmx-request]:hidden">
-          No numbers yet. Click a button above to add some.
-        </p>
+          hx-swap="outerHTML">
+          <li class="p-4 pb-[17px] flex items-center gap-3">
+            <div class="h-5 w-5 shrink-0 rounded-full bg-neutral-200 animate-pulse"></div>
+            <div class="flex-1 min-w-0 flex flex-col gap-2">
+              <div class="h-4 w-32 bg-neutral-200 rounded animate-pulse"></div>
+              <div class="h-3 w-46 bg-neutral-200 rounded animate-pulse"></div>
+              <div class="h-3 w-46 bg-neutral-200 rounded animate-pulse"></div>
+            </div>
+            <div class="flex gap-1 shrink-0">
+              <div class="h-8 w-8 bg-neutral-200 rounded animate-pulse"></div>
+              <div class="h-8 w-8 bg-neutral-200 rounded animate-pulse"></div>
+            </div>
+          </li>
+          <li class="p-4 pb-[17px] flex items-center gap-3">
+            <div class="h-5 w-5 shrink-0 rounded-full bg-neutral-200 animate-pulse"></div>
+            <div class="flex-1 min-w-0 flex flex-col gap-2">
+              <div class="h-4 w-32 bg-neutral-200 rounded animate-pulse"></div>
+              <div class="h-3 w-46 bg-neutral-200 rounded animate-pulse"></div>
+              <div class="h-3 w-46 bg-neutral-200 rounded animate-pulse"></div>
+            </div>
+            <div class="flex gap-1 shrink-0">
+              <div class="h-8 w-8 bg-neutral-200 rounded animate-pulse"></div>
+              <div class="h-8 w-8 bg-neutral-200 rounded animate-pulse"></div>
+            </div>
+          </li>
+          <li class="p-4 pb-[17px] flex items-center gap-3">
+            <div class="h-5 w-5 shrink-0 rounded-full bg-neutral-200 animate-pulse"></div>
+            <div class="flex-1 min-w-0 flex flex-col gap-2">
+              <div class="h-4 w-32 bg-neutral-200 rounded animate-pulse"></div>
+              <div class="h-3 w-46 bg-neutral-200 rounded animate-pulse"></div>
+              <div class="h-3 w-46 bg-neutral-200 rounded animate-pulse"></div>
+            </div>
+            <div class="flex gap-1 shrink-0">
+              <div class="h-8 w-8 bg-neutral-200 rounded animate-pulse"></div>
+              <div class="h-8 w-8 bg-neutral-200 rounded animate-pulse"></div>
+            </div>
+          </li>
+        </ul>
       </div>
     </div>
   </main>
+  <div id="pagination" class="hidden"></div>
 </div>
+<div id="loading" hx-swap-oob="outerHTML" class="fixed inset-0 z-50 bg-neutral-100 flex items-center justify-center transition-opacity duration-300 pointer-events-none opacity-0"></div>

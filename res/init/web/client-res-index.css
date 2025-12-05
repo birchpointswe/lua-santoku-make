@@ -10,6 +10,19 @@
 @custom-variant db-error (&:is(body.db-error *));
 @custom-variant session (&:is(body:has(#session-state.has-session) *));
 @custom-variant no-session (&:is(body:has(#session-state.no-session) *));
+@custom-variant numbers-loaded (&:is(body:has(#numbers.loaded) *));
+@custom-variant numbers-empty (&:is(body:has(#numbers.loaded.empty) *));
+@custom-variant item-needs-sync (&:is([data-sync="dirty"] *), &:is([data-sync="just-dirtied"] *));
+@custom-variant item-just-synced (&:is([data-sync="just-synced"] *));
+@custom-variant item-just-dirtied (&:is([data-sync="just-dirtied"] *));
+@custom-variant sync-loading (&:is(body:has(#sync-state[data-state="loading"]) *));
+@custom-variant sync-synced (&:is(body:has(#sync-state[data-state="synced"]) *));
+@custom-variant sync-dirty (&:is(body:has(#sync-state[data-state="dirty"]) *));
+@custom-variant sync-pending (&:is(body:has(#sync-state[data-state="pending"]) *), &:is(body.sync-debouncing *));
+@custom-variant sync-error (&:is(body:has(#sync-state[data-state="error"]) *));
+@custom-variant sync-requesting (&:is(body:has(#sync-button.htmx-request) *));
+@custom-variant sync-ready (&:is(body:has(#sync-state:is([data-state="synced"],[data-state="dirty"],[data-state="pending"],[data-state="error"])) *));
+@custom-variant auto-sync (&:is(body:has(#sync-state[data-auto-sync]) *));
 
 @font-face {
   font-family: 'Roboto';
@@ -40,6 +53,30 @@
   src: url('/roboto-700.woff2') format('woff2');
 }
 
+html, body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
 body {
   font-family: 'Roboto', sans-serif;
+}
+
+@keyframes icon-fade-in {
+  from { opacity: 0; transform: scale(0.75); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes icon-fade-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.75); }
+}
+
+#sw-update {
+  transform: translateY(-100%);
+}
+
+body.sw-update-available #sw-update {
+  transform: translateY(0);
 }

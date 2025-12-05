@@ -1,8 +1,10 @@
-<body class="bg-neutral-100 min-h-screen p-0 m-0">
-  <div id="app" class="min-h-screen flex items-center justify-center"
+<body hx-ext="morph" class="bg-neutral-100 min-h-screen p-0 m-0 overflow-y-scroll">
+  <div id="loading" class="fixed inset-0 z-50 bg-neutral-100 flex items-center justify-center transition-opacity duration-300 pointer-events-none">
+    <div class="w-[30vmin] h-[30vmin] fill-slate-800 animate-pulse">{{>icon}}</div>
+  </div>
+  <div id="app"
        hx-trigger="sw-ready from:body"
        hx-get="/app"
-       hx-swap="outerHTML">
-    <div class="text-neutral-400 text-sm animate-pulse">Loading...</div>
+       hx-swap="innerHTML">
   </div>
 </body>

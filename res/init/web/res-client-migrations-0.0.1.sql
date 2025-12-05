@@ -1,7 +1,11 @@
-create table numbers (
+create table records (
   id integer primary key,
-  number integer not null,
-  created_at text default (datetime('now'))
+  data,
+  created_at real not null default (unixepoch('now', 'subsec')),
+  updated_at real not null default (unixepoch('now', 'subsec')),
+  deleted boolean not null default false,
+  synced_at real,
+  hlc real not null default (unixepoch('now', 'subsec'))
 );
 
 create table settings (
