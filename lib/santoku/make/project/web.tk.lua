@@ -911,20 +911,30 @@ rocks_provided = { lua = "5.1" }
   target(
     { "start" },
     { "build" },
-    function ()
+    function (_, _, opts)
+      opts = opts or {}
       fs.mkdirp(dist_dir())
       return fs.pushd(dist_dir(), function ()
-        sys.execute({ "sh", "-c", "sh run.sh &" })
+        if opts.fg then
+          sys.execp("sh", { "run.sh" })
+        else
+          sys.execute({ "sh", "-c", "sh run.sh &" })
+        end
       end)
     end)
 
   target(
     { "test-start" },
     { "test-build" },
-    function ()
+    function (_, _, opts)
+      opts = opts or {}
       fs.mkdirp(test_dist_dir())
       return fs.pushd(test_dist_dir(), function ()
-        sys.execute({ "sh", "-c", "sh run.sh &" })
+        if opts.fg then
+          sys.execp("sh", { "run.sh" })
+        else
+          sys.execute({ "sh", "-c", "sh run.sh &" })
+        end
       end)
     end)
 
@@ -1085,7 +1095,14 @@ rocks_provided = { lua = "5.1" }
           end
         end
       end)
-      err.pcall(function ()
+      varg.tup(function (ok, first, ...)
+        if not ok then
+          local msg = tostring(first)
+          if smatch(msg, "interrupt") or smatch(msg, "SIGINT") or smatch(msg, "signaled") then
+            err.error(first, ...)
+          end
+        end
+      end, err.pcall(function ()
         sys.execute({
           "inotifywait", "-qr",
           "-e", "close_write", "-e", "modify",
@@ -1094,7 +1111,7 @@ rocks_provided = { lua = "5.1" }
             return fs.exists(fp)
           end, chain(ivals({ "client", "server", "res", "lib", "bin", "test", opts.config_file }), it.keys(dfile_dirs)))))
         })
-      end)
+      end))
       sys.sleep(.25)
     end
   end)
@@ -1154,7 +1171,7 @@ rocks_provided = { lua = "5.1" }
     end,
     start = function (opts)
       opts = opts or {}
-      build(tbl.assign({ opts.test and "test-start" or "start" }, opts), opts.verbosity)
+      build({ opts.test and "test-start" or "start" }, opts.verbosity, opts)
     end,
     stop = function (opts)
       opts = opts or {}
