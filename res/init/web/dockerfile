@@ -1,27 +1,36 @@
 from debian:bookworm-slim
-run apt-get update && apt-get -y install --no-install-recommends git gnupg ca-certificates python3 xz-utils && rm -rf /var/lib/apt/lists/*
-run git clone https://github.com/emscripten-core/emsdk.git
-run cd emsdk && ./emsdk install latest && /emsdk/emsdk activate latest
+
+run apt-get update && apt-get -y install --no-install-recommends \
+    git gnupg ca-certificates wget curl xz-utils
+
+run git clone https://github.com/emscripten-core/emsdk.git && \
+    cd emsdk && ./emsdk install latest && ./emsdk activate latest
 env PATH=$PATH:/emsdk/upstream/emscripten:/emsdk/node/16.20.0_64bit/bin/
-run apt-get update && apt-get -y install --no-install-recommends wget luarocks make libpython3-dev libmariadb-dev-compat python3 swig gcc g++ perl curl nginx perl make python3-dev pkg-config python3-pip python3-venv procps && rm -rf /var/lib/apt/lists/*
-run wget -O - https://openresty.org/package/pubkey.gpg | apt-key add -
-run echo "deb http://openresty.org/package/debian bookworm openresty" | tee /etc/apt/sources.list.d/openresty.list
-run apt-get update && apt-get -y install --no-install-recommends openresty && rm -rf /var/lib/apt/lists/*
-run luarocks install santoku-cli 0.0.310-1
-run luarocks install lua-cjson
-run wget https://www.sqlite.org/2024/sqlite-autoconf-3470200.tar.gz
-run tar xf sqlite-autoconf-3470200.tar.gz
-run cd sqlite-autoconf-3470200 && ./configure
-run cd sqlite-autoconf-3470200 && make
-run cd sqlite-autoconf-3470200 && make install
-run apt-get update && apt-get -y install --no-install-recommends libxml2-dev vim xxd && rm -rf /var/lib/apt/lists/*
-run apt-get update && apt-get -y install --no-install-recommends libopenblas-dev liblapacke-dev && rm -rf /var/lib/apt/lists/*
-run ln -sv /usr/include/x86_64-linux-gnu/openblas-pthread /usr/include/x86_64-linux-gnu/openblas
-run ln -sv /usr/include/lapacke.h /usr/include/x86_64-linux-gnu/openblas
-env OPENRESTY_DIR=/usr/local/openresty
-run apt-get update && apt-get -y install --no-install-recommends inotify-tools && rm -rf /var/lib/apt/lists/*
-run luarocks install luacheck
-run apt-get update && apt-get -y install --no-install-recommends npm && rm -rf /var/lib/apt/lists/*
+
+run wget -O - https://openresty.org/package/pubkey.gpg | apt-key add - && \
+    echo "deb http://openresty.org/package/debian bookworm openresty" > /etc/apt/sources.list.d/openresty.list
+
+run apt-get update && apt-get -y install --no-install-recommends \
+    gcc g++ make perl pkg-config swig \
+    luarocks npm \
+    python3 python3-dev python3-pip python3-venv libpython3-dev \
+    libmariadb-dev-compat libxml2-dev libopenblas-dev liblapacke-dev \
+    librsvg2-bin imagemagick inotify-tools procps vim xxd \
+    openresty
+
+run wget https://www.sqlite.org/2024/sqlite-autoconf-3470200.tar.gz && \
+    tar xf sqlite-autoconf-3470200.tar.gz && \
+    cd sqlite-autoconf-3470200 && ./configure && make && make install && \
+    cd / && rm -rf sqlite-autoconf-3470200*
+
+run luarocks install santoku-cli 0.0.310-1 && \
+    luarocks install lua-cjson && \
+    luarocks install luacheck
+
 run npm -g install tailwindcss @tailwindcss/cli
-run apt-get update && apt-get -y install --no-install-recommends librsvg2-bin imagemagick && rm -rf /var/lib/apt/lists/*
+
+run ln -sv /usr/include/x86_64-linux-gnu/openblas-pthread /usr/include/x86_64-linux-gnu/openblas && \
+    ln -sv /usr/include/lapacke.h /usr/include/x86_64-linux-gnu/openblas
+
+env OPENRESTY_DIR=/usr/local/openresty
 entrypoint [ "toku" ]
