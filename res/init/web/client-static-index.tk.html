@@ -1,6 +1,10 @@
 <%
   local fs = require("santoku.fs")
-  local body_file = fs.join(root_dir, "res/web/templates/body.html")
+  local mch = require("santoku.mustache")
+  local loader = fs.runfile(fs.join(root_dir, "res/web/template-loader.lua"))
+  local partials = loader(readfile, root_dir)
+  local body_rendered = mch(partials["body"], { partials = partials })({})
+
   return require("santoku.web.pwa.index")({
     title = client.opts.title,
     description = client.opts.description,
@@ -11,6 +15,6 @@
       <link rel="stylesheet" href="/index.css">
       <script src="/htmx.min.js"></script>
     ]],
-    body_tag = readfile(body_file),
+    body_tag = body_rendered,
   })
 %>

@@ -95,6 +95,9 @@ local init_templates = {
   res_icon_svg = from_base64(<% return squote(to_base64(readfile("res/init/web/res-icon.tk.svg"))) %>), -- luacheck: ignore
   -- Common
   gitignore = from_base64(<% return squote(to_base64(readfile("res/init/web/gitignore"))) %>), -- luacheck: ignore
+  res_web_template_loader_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-template-loader.lua"))) %>), -- luacheck: ignore
+  dockerfile = from_base64(<% return squote(to_base64(readfile("res/init/web/dockerfile"))) %>), -- luacheck: ignore
+  toku_sh = from_base64(<% return squote(to_base64(readfile("res/init/web/toku.sh"))) %>), -- luacheck: ignore
 }
 
 local function create (opts)
@@ -168,6 +171,9 @@ local function create (opts)
     [fs.join("res", "icon.tk.svg")] = init_templates.res_icon_svg,
     -- Common
     [".gitignore"] = init_templates.gitignore,
+    [fs.join("res/web", "template-loader.lua")] = init_templates.res_web_template_loader_lua,
+    ["Dockerfile"] = init_templates.dockerfile,
+    ["toku.sh"] = init_templates.toku_sh,
   }
 
   -- Create directories and write files
