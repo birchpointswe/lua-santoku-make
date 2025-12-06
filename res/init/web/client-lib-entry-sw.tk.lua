@@ -1,17 +1,8 @@
 <%
   local fs = require("santoku.fs")
-  local str = require("santoku.string")
   local mch = require("santoku.mustache")
-  local tpl_dir = fs.join(root_dir, "res/web/templates")
-  local partials = {}
-  for path, tp in fs.files(tpl_dir, true) do
-    if tp == "file" then
-      local key = str.match(path, "^.*/res/web/templates/(.*)%.[^.]+$")
-      if key then
-        partials[str.gsub(key, "/", ".")] = readfile(path)
-      end
-    end
-  end
+  local loader = fs.runfile(fs.join(root_dir, "res/web/template-loader.lua"))
+  local partials = loader(readfile, root_dir)
   local sw_body = mch(partials["sw-body"], { partials = partials })()
   index_html = require("santoku.web.pwa.index")({
     title = client.opts.title,
