@@ -4,4 +4,3 @@ lua_modules/
 *.swo
 .luacov
 luacov.*.out
-.toku.id

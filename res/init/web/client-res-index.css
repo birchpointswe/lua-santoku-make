@@ -5,13 +5,16 @@
 @tailwind utilities;
 
 @custom-variant sw-ready (&:is(body.sw-ready *));
-@custom-variant sw-update (&:is(body.sw-update-available *));
+@custom-variant sw-update (&:is(body.sw-update *));
 @custom-variant sw-error (&:is(body.sw-error *));
+@custom-variant sw-blocking (&:is(body.sw-blocking *));
 @custom-variant db-error (&:is(body.db-error *));
 @custom-variant session (&:is(body:has(#session-state.has-session) *));
 @custom-variant no-session (&:is(body:has(#session-state.no-session) *));
 @custom-variant numbers-loaded (&:is(body:has(#numbers.loaded) *));
 @custom-variant numbers-empty (&:is(body:has(#numbers.loaded.empty) *));
+@custom-variant item-local (&:is([data-sync="local"] *));
+@custom-variant item-synced (&:is([data-sync="clean"] *), &:is([data-sync="just-synced"] *));
 @custom-variant item-needs-sync (&:is([data-sync="dirty"] *), &:is([data-sync="just-dirtied"] *));
 @custom-variant item-just-synced (&:is([data-sync="just-synced"] *));
 @custom-variant item-just-dirtied (&:is([data-sync="just-dirtied"] *));
@@ -73,10 +76,3 @@ body {
   to { opacity: 0; transform: scale(0.75); }
 }
 
-#sw-update {
-  transform: translateY(-100%);
-}
-
-body.sw-update-available #sw-update {
-  transform: translateY(0);
-}

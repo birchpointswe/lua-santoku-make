@@ -96,9 +96,11 @@ local function create (opts)
 
   io.stdout:write("Created library project: " .. name .. "\n")
   io.stdout:write("\nNext steps:\n")
-  io.stdout:write("  cd " .. dir .. "\n")
-  io.stdout:write("  toku lib test        # Run tests\n")
-  io.stdout:write("  toku lib install     # Install locally\n")
+  if dir ~= "." then
+    io.stdout:write("  cd " .. dir .. "\n")
+  end
+  io.stdout:write("  toku test        # Run tests\n")
+  io.stdout:write("  toku install     # Install locally\n")
 end
 
 local function init (opts)

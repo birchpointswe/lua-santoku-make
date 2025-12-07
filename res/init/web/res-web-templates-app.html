@@ -7,20 +7,20 @@
   <p class="text-sm text-neutral-500 max-w-sm text-center px-4">This app requires browser storage features that are not available. Try using HTTPS or a different browser.</p>
 </div>
 <div id="app-content" class="db-error:hidden sw-error:hidden">
-  <span id="sync-state" data-state="loading" hx-get="/sync/status" hx-trigger="load" hx-swap="morph:outerHTML"></span>
+  <span id="sync-state" data-state="loading" hx-get="/sync/status" hx-trigger="load" hx-swap="outerHTML"></span>
   <span id="sync-debouncer" class="hidden"
     hx-post="/sync"
     hx-vals="js:{page: new URLSearchParams(window.location.search).get('page') || 1}"
     hx-trigger="sync-requested delay:500ms"
     hx-target="#numbers"
-    hx-swap="morph:outerHTML"
+    hx-swap="outerHTML"
     hx-indicator="#sync-button"
     hx-on:sync-requested="document.body.classList.add('sync-debouncing')"
     hx-on::before-request="document.body.classList.remove('sync-debouncing')"></span>
-  <div id="sw-update" class="flex items-center justify-center w-full h-10 fixed top-0 left-0 right-0 bg-amber-500 text-white z-20 cursor-pointer hover:bg-amber-600 transition-transform duration-300 ease-out"
-    onclick="if (window.swRegistration && window.swRegistration.waiting) { window.swRegistration.waiting.postMessage({ type: 'skip_waiting' }); }">
-    New version available. Click to update.
-  </div>
+  <a id="sw-update" href="/update" class="flex items-center justify-center w-full h-10 fixed top-0 left-0 right-0 bg-amber-500 sw-blocking:bg-red-600 text-white z-20 cursor-pointer hover:bg-amber-600 sw-blocking:hover:bg-red-700 -translate-y-full sw-update:translate-y-0 transition-transform duration-300 ease-out no-underline">
+    <span class="sw-blocking:hidden">New version available. Click to update.</span>
+    <span class="hidden sw-blocking:inline">Update required. Click to reload.</span>
+  </a>
   <header class="fixed top-0 left-0 right-0 bg-slate-800 text-white shadow-md z-10 sw-update:translate-y-10 transition-transform duration-300 ease-out">
     <div class="h-14 flex items-center justify-between px-4">
       <h1 class="text-xl font-medium"><% return name %></h1>
@@ -31,12 +31,12 @@
           hx-vals="js:{page: new URLSearchParams(window.location.search).get('page') || 1}"
           hx-trigger="click, do-sync from:body"
           hx-target="#numbers"
-          hx-swap="morph:outerHTML"
+          hx-swap="outerHTML"
           hx-indicator="this"
           class="relative h-8 w-8 p-1.5 rounded border-none hover:bg-slate-600 active:bg-slate-700 bg-transparent text-white transition-colors duration-150 [&.htmx-request]:pointer-events-none [&>span]:absolute [&>span]:inset-1.5 [&>span>svg]:w-full [&>span>svg]:h-full [&>span]:transition-all [&>span]:duration-200">
-          <span class="opacity-100 scale-100 sync-ready:opacity-0 sync-ready:scale-75 animate-spin">{{>icons.sync}}</span>
+          <span class="opacity-0 scale-75 sync-loading:opacity-100 sync-loading:scale-100 sync-error:opacity-100 sync-error:scale-100 sync-requesting:opacity-0 sync-requesting:scale-75 text-neutral-400">{{>icons.sync-warn}}</span>
           <span class="opacity-0 scale-75 sync-synced:opacity-100 sync-synced:scale-100 sync-requesting:opacity-0 sync-requesting:scale-75 text-emerald-500">{{>icons.check}}</span>
-          <span class="opacity-0 scale-75 sync-dirty:opacity-100 sync-dirty:scale-100 sync-error:opacity-100 sync-error:scale-100 sync-requesting:opacity-0 sync-requesting:scale-75 text-amber-500">{{>icons.sync}}</span>
+          <span class="opacity-0 scale-75 sync-dirty:opacity-100 sync-dirty:scale-100 sync-requesting:opacity-0 sync-requesting:scale-75 text-amber-500">{{>icons.sync}}</span>
           <span class="opacity-0 scale-75 sync-pending:opacity-100 sync-pending:scale-100 sync-requesting:opacity-100 sync-requesting:scale-100 animate-spin">{{>icons.sync}}</span>
         </button>
       </div>
@@ -48,7 +48,7 @@
         <button
           hx-get="/number/create"
           hx-target="#numbers"
-          hx-swap="morph:outerHTML"
+          hx-swap="outerHTML"
           hx-push-url="?page=1"
           class="flex-1 border-none text-white font-medium py-3 px-4 rounded uppercase tracking-wide text-sm bg-neutral-400 opacity-60 shadow-none cursor-not-allowed pointer-events-none numbers-loaded:pointer-events-auto numbers-loaded:opacity-100 numbers-loaded:bg-emerald-600 numbers-loaded:shadow numbers-loaded:cursor-pointer numbers-loaded:hover:bg-emerald-700 numbers-loaded:active:bg-emerald-800 numbers-loaded:hover:shadow-md transition-[background-color,box-shadow,opacity] duration-300">
           Add Number

@@ -1,5 +1,8 @@
 from debian:bookworm-slim
 
+env MAKE="make -j$(nproc)"
+env MAKEFLAGS="-j$(nproc)"
+
 run apt-get update && apt-get -y install --no-install-recommends \
     git gnupg ca-certificates wget curl xz-utils
 

@@ -191,9 +191,11 @@ local function create (opts)
 
   io.stdout:write("Created web project: " .. name .. "\n")
   io.stdout:write("\nNext steps:\n")
-  io.stdout:write("  cd " .. dir .. "\n")
-  io.stdout:write("  toku web test-build  # Build for testing\n")
-  io.stdout:write("  toku web test-start  # Start development server\n")
+  if dir ~= "." then
+    io.stdout:write("  cd " .. dir .. "\n")
+  end
+  io.stdout:write("  toku build --test  # Build for testing\n")
+  io.stdout:write("  toku start --test  # Start development server\n")
 end
 
 local function init (opts)
@@ -325,6 +327,7 @@ local function init (opts)
   local base_server_test_res, base_server_test_res_templated = get_files("server/test/res", true)
   local base_server_run_sh = "run.sh"
   local base_server_nginx_cfg = "nginx.conf"
+  local base_server_nginx_fg_cfg = "nginx-fg.conf"
   local base_server_init_test_lua = "init-test.lua"
   local base_server_init_worker_test_lua = "init-worker-test.lua"
   local base_server_luarocks_cfg = "luarocks.lua"
@@ -354,9 +357,17 @@ local function init (opts)
     return fs.stripparts(fs.stripextensions(fp) .. ".wasm", 2)
   end, ivals(base_client_bins)))
 
+  local version_check = opts.config.env.version_check
+  if version_check == true then
+    version_check = opts.config.env.version
+  elseif type(version_check) ~= "string" then
+    version_check = nil
+  end
+
   local base_env = {
     root_dir = fs.cwd(),
     skip_check = opts.skip_check,
+    version_check = version_check,
     var = function (n)
       err.assert(vdt.isstring(n))
       return concat({ opts.config.env.variable_prefix, "_", n })
@@ -528,8 +539,18 @@ rocks_provided = { lua = "5.1" }
     <% return squote(to_base64(readfile("res/web/nginx.tk.conf"))) %>, server_env, -- luacheck: ignore
     { server_dir(base_server_lua_modules_ok) })
 
+  add_templated_target_base64(server_dir(base_server_nginx_fg_cfg),
+    <% return squote(to_base64(readfile("res/web/nginx.tk.conf"))) %>, tbl.merge({ console_logs = true }, server_env), -- luacheck: ignore
+    { server_dir(base_server_lua_modules_ok) })
+
   add_templated_target_base64(test_server_dir(base_server_nginx_cfg),
     <% return squote(to_base64(readfile("res/web/nginx.tk.conf"))) %>, test_server_env, -- luacheck: ignore
+    { test_server_dir(base_server_lua_modules_ok),
+      test_server_dir(base_server_init_test_lua),
+      test_server_dir(base_server_init_worker_test_lua) })
+
+  add_templated_target_base64(test_server_dir(base_server_nginx_fg_cfg),
+    <% return squote(to_base64(readfile("res/web/nginx.tk.conf"))) %>, tbl.merge({ console_logs = true }, test_server_env), -- luacheck: ignore
     { test_server_dir(base_server_lua_modules_ok),
       test_server_dir(base_server_init_test_lua),
       test_server_dir(base_server_init_worker_test_lua) })
@@ -555,6 +576,10 @@ rocks_provided = { lua = "5.1" }
     server_dir(base_server_nginx_cfg))
 
   add_copied_target(
+    dist_dir(base_server_nginx_fg_cfg),
+    server_dir(base_server_nginx_fg_cfg))
+
+  add_copied_target(
     test_dist_dir(base_server_init_test_lua),
     test_server_dir(base_server_init_test_lua))
 
@@ -569,6 +594,11 @@ rocks_provided = { lua = "5.1" }
   add_copied_target(
     test_dist_dir(base_server_nginx_cfg),
     test_server_dir(base_server_nginx_cfg),
+    { test_dist_dir(base_server_init_test_lua), test_dist_dir(base_server_init_worker_test_lua) })
+
+  add_copied_target(
+    test_dist_dir(base_server_nginx_fg_cfg),
+    test_server_dir(base_server_nginx_fg_cfg),
     { test_dist_dir(base_server_init_test_lua), test_dist_dir(base_server_init_worker_test_lua) })
 
   for flag in ivals({
@@ -891,6 +921,7 @@ rocks_provided = { lua = "5.1" }
     extend({
       dist_dir(base_server_run_sh),
       dist_dir(base_server_nginx_cfg),
+      dist_dir(base_server_nginx_fg_cfg),
       server_dir(base_server_lua_modules_ok),
       client_dir(base_client_lua_modules_ok) },
       amap(amap(extend({},
@@ -905,6 +936,7 @@ rocks_provided = { lua = "5.1" }
     extend({
       test_dist_dir(base_server_run_sh),
       test_dist_dir(base_server_nginx_cfg),
+      test_dist_dir(base_server_nginx_fg_cfg),
       test_server_dir(base_server_lua_modules_ok),
       test_client_dir(base_client_lua_modules_ok) },
       amap(amap(extend({},
@@ -922,7 +954,7 @@ rocks_provided = { lua = "5.1" }
       fs.mkdirp(dist_dir())
       return fs.pushd(dist_dir(), function ()
         if opts.fg then
-          sys.execp("sh", { "run.sh" })
+          sys.execp("sh", { "run.sh", "--fg" })
         else
           sys.execute({ "sh", "-c", "sh run.sh &" })
         end
@@ -937,7 +969,7 @@ rocks_provided = { lua = "5.1" }
       fs.mkdirp(test_dist_dir())
       return fs.pushd(test_dist_dir(), function ()
         if opts.fg then
-          sys.execp("sh", { "run.sh" })
+          sys.execp("sh", { "run.sh", "--fg" })
         else
           sys.execute({ "sh", "-c", "sh run.sh &" })
         end
@@ -1023,6 +1055,23 @@ rocks_provided = { lua = "5.1" }
         local alive = err.pcall(sys.execute, { "kill", "-0", pid })
         if not alive then
           err.error("fatal", "Server failed to start: process died immediately (check nginx error log)")
+        end
+
+        -- Start log tailing if requested (and not already running)
+        local tail_pid_file = test_dist_dir("logs", "tail.pid")
+        if opts.show_logs then
+          local tail_running = false
+          if fs.exists(tail_pid_file) then
+            local existing_pid = smatch(fs.readfile(tail_pid_file), "(%d+)")
+            if existing_pid then
+              tail_running = err.pcall(sys.execute, { "kill", "-0", existing_pid })
+            end
+          end
+          if not tail_running then
+            sys.execute({ "sh", "-c",
+              "tail -f " .. test_dist_dir("logs", "access.log") .. " " .. test_dist_dir("logs", "error.log") ..
+              " & echo $! > " .. tail_pid_file })
+          end
         end
 
         local server_config = {
@@ -1136,6 +1185,13 @@ rocks_provided = { lua = "5.1" }
   target({ "test-stop" }, {}, function (_, _)
     fs.mkdirp(test_dist_dir())
     return fs.pushd(test_dist_dir(), function ()
+      if fs.exists("logs/tail.pid") then
+        err.pcall(function ()
+          sys.execute({ "kill", "-15", smatch(fs.readfile("logs/tail.pid"), "(%d+)") })
+        end)
+        sys.sleep(0.25)
+        fs.rm("logs/tail.pid")
+      end
       if fs.exists("server.pid") then
         err.pcall(function ()
           sys.execute({ "kill", "-15", smatch(fs.readfile("server.pid"), "(%d+)") })

@@ -27,20 +27,21 @@ return {
 
     name = "<% return name %>",
     version = "0.0.1-1",
+    version_check = true,
     dependencies = {
       "lua == 5.1",
-      "santoku >= 0.0.304-1",
+      "santoku >= 0.0.305-1",
     },
     build = {
       dependencies = {
-        "santoku-web >= 0.0.370-1",
+        "santoku-web >= 0.0.390-1",
       }
     },
 
     server = {
       dependencies = {
         "lua == 5.1",
-        "santoku >= 0.0.304-1",
+        "santoku >= 0.0.305-1",
         "santoku-mustache >= 0.0.13-1",
         "santoku-sqlite >= 0.0.27-1",
         "santoku-sqlite-migrate >= 0.0.17-1",
@@ -62,8 +63,9 @@ return {
       files = true,
       dependencies = {
         "lua == 5.1",
-        "santoku >= 0.0.304-1",
-        "santoku-web >= 0.0.370-1",
+        "santoku >= 0.0.305-1",
+        "santoku-web >= 0.0.390-1",
+        "santoku-http >= 0.0.18-1",
         "santoku-sqlite >= 0.0.27-1",
         "santoku-sqlite-migrate >= 0.0.17-1",
       },
@@ -91,7 +93,7 @@ return {
       submake.target({ htmx_file }, {}, function ()
         sys.execute({
           "curl", "-sL", "-o", htmx_file,
-          "https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"
+          "https://unpkg.com/htmx.org@2.0.7/dist/htmx.min.js"
         })
       end)
       local idiomorph_file = fs.join(client_env.public_dir, "idiomorph-ext.min.js")

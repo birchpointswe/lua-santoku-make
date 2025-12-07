@@ -15,6 +15,7 @@
     ios_icon = client.opts.ios_icon,
     splash_screens = client.opts.splash_screens,
     head = [[
+      <meta name="htmx-config" content='{"defaultSwapStyle":"morph:outerHTML"}'>
       <link rel="stylesheet" href="/index.css">
       <script src="/htmx.min.js"></script>
       <script src="/idiomorph-ext.min.js"></script>
@@ -27,9 +28,21 @@ local routes = require("__NAME__.routes")
 
 return sw({
   service_worker_version = (<% return tostring(os.time()) %>),
+  version_check = (<% return version_check and ("\"" .. version_check .. "\"") or "nil" %>),
   sqlite = true,
   index_html = [[<% return index_html, false %>]],
   cached_files = {
+    "/",
+    "/index.html",
+    "/bundle.js",
+    "/bundle.wasm",
+    "/favicon.svg",
+    "/htmx.min.js",
+    "/idiomorph-ext.min.js",
+    "/icon-192.png",
+    "/icon-512.png",
+    "/index.css",
+    "/manifest.json",
     "/sqlite3.wasm",
     "/roboto-300.woff2",
     "/roboto-400.woff2",
