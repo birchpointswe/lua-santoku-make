@@ -23,4 +23,8 @@ end, it.ivals(run_env_scripts or {})))), "\n") %>
 mkdir -p logs
 touch logs/access.log logs/error.log
 
-exec openresty -p "$PWD" -c nginx.conf
+if [ "$1" = "--fg" ]; then
+  exec openresty -p "$PWD" -c nginx-fg.conf
+else
+  exec openresty -p "$PWD" -c nginx.conf
+fi

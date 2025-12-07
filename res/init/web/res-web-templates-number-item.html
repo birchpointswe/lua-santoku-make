@@ -1,6 +1,7 @@
-<li id="number-{{id}}" {{#oob}}hx-swap-oob="outerHTML"{{/oob}} data-sync="{{#needs_sync}}{{#just_dirtied}}just-dirtied{{/just_dirtied}}{{^just_dirtied}}dirty{{/just_dirtied}}{{/needs_sync}}{{^needs_sync}}{{#just_synced}}just-synced{{/just_synced}}{{^just_synced}}clean{{/just_synced}}{{/needs_sync}}" class="p-4 shrink-0 text-neutral-600 flex items-center gap-3">
+<li id="number-{{id}}" {{#oob}}hx-swap-oob="outerHTML"{{/oob}} data-sync="{{#no_session}}local{{/no_session}}{{^no_session}}{{#needs_sync}}{{#just_dirtied}}just-dirtied{{/just_dirtied}}{{^just_dirtied}}dirty{{/just_dirtied}}{{/needs_sync}}{{^needs_sync}}{{#just_synced}}just-synced{{/just_synced}}{{^just_synced}}clean{{/just_synced}}{{/needs_sync}}{{/no_session}}" class="p-4 shrink-0 text-neutral-600 flex items-center gap-3">
   <span class="relative h-5 w-5 shrink-0 [&>span]:absolute [&>span]:inset-0 [&>span>svg]:w-full [&>span>svg]:h-full">
-    <span class="opacity-100 scale-100 item-needs-sync:opacity-0 item-needs-sync:scale-75 item-just-synced:animate-[icon-fade-in_200ms_ease-out_forwards] item-just-dirtied:animate-[icon-fade-out_200ms_ease-out_forwards] text-emerald-500">{{>icons.check}}</span>
+    <span class="opacity-0 scale-75 item-local:opacity-100 item-local:scale-100 text-neutral-400">{{>icons.sync-warn}}</span>
+    <span class="opacity-0 scale-75 item-synced:opacity-100 item-synced:scale-100 item-just-synced:animate-[icon-fade-in_200ms_ease-out_forwards] item-just-dirtied:animate-[icon-fade-out_200ms_ease-out_forwards] text-emerald-500">{{>icons.check}}</span>
     <span class="opacity-0 scale-75 item-needs-sync:opacity-100 item-needs-sync:scale-100 item-just-synced:animate-[icon-fade-out_200ms_ease-out_forwards] item-just-dirtied:animate-[icon-fade-in_200ms_ease-out_forwards] text-amber-500">{{>icons.sync}}</span>
   </span>
   <div class="flex-1 min-w-0">
@@ -21,7 +22,7 @@
       hx-get="/number/delete?id={{id}}"
       hx-vals="js:{page: new URLSearchParams(window.location.search).get('page') || 1}"
       hx-target="#numbers"
-      hx-swap="morph:outerHTML">
+      hx-swap="outerHTML">
       {{>icons.x}}
     </button>
   </div>

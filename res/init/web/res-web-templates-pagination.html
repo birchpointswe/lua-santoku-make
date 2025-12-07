@@ -1,0 +1,21 @@
+<div id="pagination" hx-swap-oob="true" class="{{#show_pagination}}flex{{/show_pagination}}{{^show_pagination}}hidden{{/show_pagination}} fixed bottom-6 left-1/2 -translate-x-1/2 z-10 items-center gap-0.5 p-1 bg-slate-800 rounded-full shadow-lg">
+  <button
+    class="h-8 w-8 p-1.5 rounded-full border-0 outline-none bg-transparent text-white hover:bg-slate-600 active:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+    hx-get="/numbers?page={{prev_page}}"
+    hx-target="#numbers"
+    hx-swap="outerHTML"
+    hx-push-url="?page={{prev_page}}"
+    {{^has_prev}}disabled{{/has_prev}}>
+    {{>icons.chevron-left}}
+  </button>
+  <span class="text-xs text-white min-w-10 text-center font-medium">{{page}} / {{total_pages}}</span>
+  <button
+    class="h-8 w-8 p-1.5 rounded-full border-0 outline-none bg-transparent text-white hover:bg-slate-600 active:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+    hx-get="/numbers?page={{next_page}}"
+    hx-target="#numbers"
+    hx-swap="outerHTML"
+    hx-push-url="?page={{next_page}}"
+    {{^has_next}}disabled{{/has_next}}>
+    {{>icons.chevron-right}}
+  </button>
+</div>

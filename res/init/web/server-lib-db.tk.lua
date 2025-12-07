@@ -29,6 +29,17 @@ return function (db_file)
 
   sqlite_migrate(db, <% return t_migrations %>) -- luacheck: ignore
 
+  db.exec([[
+    create temporary table if not exists records_incoming (
+      id integer primary key,
+      data text,
+      created_at real,
+      updated_at real,
+      deleted integer,
+      hlc real
+    )
+  ]])
+
   M.db = db
 
   M.random_hex = db.getter("select lower(hex(randomblob(?)))")
@@ -49,40 +60,42 @@ return function (db_file)
     return insert_session(session_id)
   end
 
-  local apply_changes_insert = db.runner([[
-    insert or ignore into records (session_id, id, data, created_at, updated_at, deleted, hlc)
+  local clear_incoming = db.runner([[
+    delete from records_incoming
+  ]])
+
+  local populate_incoming = db.runner([[
+    insert into records_incoming (id, data, created_at, updated_at, deleted, hlc)
     select
-      ?1 as session_id,
-      json_extract(value, '$.id') as id,
-      json_extract(value, '$.data') as data,
-      json_extract(value, '$.created_at') as created_at,
-      json_extract(value, '$.updated_at') as updated_at,
-      json_extract(value, '$.deleted') as deleted,
-      json_extract(value, '$.hlc') as hlc
-    from json_each(?2)
+      json_extract(value, '$.id'),
+      json_extract(value, '$.data'),
+      json_extract(value, '$.created_at'),
+      json_extract(value, '$.updated_at'),
+      json_extract(value, '$.deleted'),
+      json_extract(value, '$.hlc')
+    from json_each(?1)
   ]])
 
-  local apply_changes_update = db.runner([[
+  local insert_from_incoming = db.runner([[
+    insert or ignore into records (session_id, id, data, created_at, updated_at, deleted, hlc)
+    select ?1, id, data, created_at, updated_at, deleted, hlc
+    from records_incoming
+  ]])
+
+  local update_from_incoming = db.runner([[
     update records set
-      data = json_extract(j.value, '$.data'),
-      created_at = json_extract(j.value, '$.created_at'),
-      updated_at = json_extract(j.value, '$.updated_at'),
-      deleted = json_extract(j.value, '$.deleted'),
-      hlc = json_extract(j.value, '$.hlc')
-    from json_each(?2) j
+      data = i.data,
+      created_at = i.created_at,
+      updated_at = i.updated_at,
+      deleted = i.deleted,
+      hlc = i.hlc
+    from records_incoming i
     where records.session_id = ?1
-    and records.id = json_extract(j.value, '$.id')
-    and json_extract(j.value, '$.hlc') > records.hlc
+      and records.id = i.id
+      and i.hlc > records.hlc
   ]])
 
-  M.apply_changes = function (session_id, changes)
-    return db.transaction(function ()
-      apply_changes_insert(session_id, changes)
-      apply_changes_update(session_id, changes)
-    end)
-  end
-
-  M.get_changes = db.getter([[
+  local get_changes_excluding_incoming = db.getter([[
     select json_group_array(json_object(
       'id', id,
       'data', data,
@@ -90,12 +103,23 @@ return function (db_file)
       'updated_at', updated_at,
       'deleted', deleted,
       'hlc', hlc))
-    from
-      records
-    where
-      session_id = ?1 and
-      hlc > ?2
+    from records
+    where session_id = ?1
+      and hlc > ?2
+      and id not in (select id from records_incoming)
   ]])
+
+  M.sync = function (session_id, changes, since)
+    return db.transaction(function ()
+      clear_incoming()
+      if changes then
+        populate_incoming(changes)
+        insert_from_incoming(session_id)
+        update_from_incoming(session_id)
+      end
+      return get_changes_excluding_incoming(session_id, since)
+    end)
+  end
 
   return M
 

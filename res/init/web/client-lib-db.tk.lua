@@ -14,17 +14,21 @@ local utc = require("santoku.utc")
 
 local PAGE_SIZE = 10
 
-local function format_record (rec)
+local function format_record (rec, has_auth, just_synced_ids)
   if not rec then return nil end
   rec.created_ats = utc.format(rec.created_at, "%Y-%m-%d %H:%M", true)
   rec.updated_ats = utc.format(rec.updated_at, "%Y-%m-%d %H:%M", true)
-  rec.needs_sync = not rec.synced_at or rec.synced_at < rec.updated_at
+  rec.no_session = not has_auth
+  rec.needs_sync = has_auth and (not rec.synced_at or rec.synced_at < rec.updated_at)
+  if just_synced_ids and just_synced_ids[rec.id] then
+    rec.just_synced = true
+  end
   return rec
 end
 
-local function format_records (recs)
+local function format_records (recs, has_auth, just_synced_ids)
   for i = 1, #recs do
-    format_record(recs[i])
+    format_record(recs[i], has_auth, just_synced_ids)
   end
   return recs
 end
@@ -43,6 +47,17 @@ return sqlite_worker("/__NAME__.db", function (ok, db, callback)
 
   migrate(db, <% return t_migrations %>) -- luacheck: ignore
 
+  db.exec([[
+    create temporary table if not exists records_incoming (
+      id integer primary key,
+      data text,
+      created_at real,
+      updated_at real,
+      deleted integer,
+      hlc real
+    )
+  ]])
+
   local M = {}
 
   local get_records_page = db.all([[
@@ -54,25 +69,53 @@ return sqlite_worker("/__NAME__.db", function (ok, db, callback)
   ]], true)
 
   local get_record_count = db.getter([[
-    select count(*) as total from records where not deleted
-  ]], true)
+    select count(*) from records where not deleted
+  ]])
 
-  local get_dirty_ids = db.all([[
-    select id from records
-    where (synced_at is null or synced_at < updated_at)
-    and not deleted
-  ]], true)
+  local get_max_hlc_incoming = db.getter([[
+    select max(hlc) from records_incoming
+  ]])
+
+  local get_dirty_ids_on_page = db.getter([[
+    select json_group_array(id) from (
+      select id from records
+      where not deleted
+      and (synced_at is null or synced_at < updated_at)
+      order by created_at desc, id desc
+      limit ?1 offset ?2
+    )
+  ]])
 
   M.get_numbers = function (page)
     page = tonumber(page) or 1
     if page < 1 then page = 1 end
     local offset = (page - 1) * PAGE_SIZE
-    local count_result = get_record_count()
-    local total = count_result and count_result.total or 0
+    local total = get_record_count() or 0
     local total_pages = math.max(1, math.ceil(total / PAGE_SIZE))
     if page > total_pages then page = total_pages end
+    local has_auth = M.has_authorization()
     return tpl["number-items"]({
-      numbers = format_records(get_records_page(PAGE_SIZE, offset) or {}),
+      numbers = format_records(get_records_page(PAGE_SIZE, offset) or {}, has_auth),
+      page = page,
+      total_pages = total_pages,
+      show_pagination = total_pages > 1,
+      has_prev = page > 1,
+      has_next = page < total_pages,
+      prev_page = page - 1,
+      next_page = page + 1
+    })
+  end
+
+  local function get_numbers_with_synced (page, just_synced_ids)
+    page = tonumber(page) or 1
+    if page < 1 then page = 1 end
+    local offset = (page - 1) * PAGE_SIZE
+    local total = get_record_count() or 0
+    local total_pages = math.max(1, math.ceil(total / PAGE_SIZE))
+    if page > total_pages then page = total_pages end
+    local has_auth = M.has_authorization()
+    return tpl["number-items"]({
+      numbers = format_records(get_records_page(PAGE_SIZE, offset) or {}, has_auth, just_synced_ids),
       page = page,
       total_pages = total_pages,
       show_pagination = total_pages > 1,
@@ -124,11 +167,11 @@ return sqlite_worker("/__NAME__.db", function (ok, db, callback)
   ]])
 
   M.create_number = function ()
-    return tpl["number-item"](format_record(create_number()))
+    return tpl["number-item"](format_record(create_number(), M.has_authorization()))
   end
 
   M.update_number = function (id)
-    return tpl["number-item"](format_record(update_number(id)))
+    return tpl["number-item"](format_record(update_number(id), M.has_authorization()))
   end
 
   M.delete_number = db.runner([[
@@ -151,35 +194,46 @@ return sqlite_worker("/__NAME__.db", function (ok, db, callback)
     where synced_at is null or synced_at < updated_at
   ]])
 
-  local apply_changes_insert = db.runner([[
-    insert or ignore into records (id, data, created_at, updated_at, deleted, synced_at, hlc)
+  local clear_incoming = db.runner([[
+    delete from records_incoming
+  ]])
+
+  local populate_incoming = db.runner([[
+    insert into records_incoming (id, data, created_at, updated_at, deleted, hlc)
     select
       json_extract(value, '$.id'),
       json_extract(value, '$.data'),
       json_extract(value, '$.created_at'),
       json_extract(value, '$.updated_at'),
       json_extract(value, '$.deleted'),
-      unixepoch('now', 'subsec'),
       json_extract(value, '$.hlc')
     from json_each(?1)
   ]])
 
-  local apply_changes_update = db.runner([[
-    update records set
-      data = json_extract(j.value, '$.data'),
-      created_at = json_extract(j.value, '$.created_at'),
-      updated_at = json_extract(j.value, '$.updated_at'),
-      deleted = json_extract(j.value, '$.deleted'),
-      synced_at = unixepoch('now', 'subsec'),
-      hlc = json_extract(j.value, '$.hlc')
-    from json_each(?1) j
-    where records.id = json_extract(j.value, '$.id')
-    and json_extract(j.value, '$.hlc') > records.hlc
+  local insert_from_incoming = db.runner([[
+    insert or ignore into records (id, data, created_at, updated_at, deleted, synced_at, hlc)
+    select id, data, created_at, updated_at, deleted, unixepoch('now', 'subsec'), hlc
+    from records_incoming
   ]])
 
-  M.apply_changes = function (changes)
-    apply_changes_insert(changes)
-    apply_changes_update(changes)
+  local update_from_incoming = db.runner([[
+    update records set
+      data = i.data,
+      created_at = i.created_at,
+      updated_at = i.updated_at,
+      deleted = i.deleted,
+      synced_at = unixepoch('now', 'subsec'),
+      hlc = i.hlc
+    from records_incoming i
+    where records.id = i.id
+      and i.hlc > records.hlc
+  ]])
+
+  local function apply_changes (changes)
+    clear_incoming()
+    populate_incoming(changes)
+    insert_from_incoming()
+    update_from_incoming()
   end
 
   M.mark_synced = db.runner([[
@@ -187,9 +241,9 @@ return sqlite_worker("/__NAME__.db", function (ok, db, callback)
     where synced_at is null or synced_at < updated_at
   ]])
 
-  M.has_unsynced = db.getter([[
-    select exists(select 1 from records where synced_at is null or synced_at < updated_at) as has_unsynced
-  ]], true)
+  local has_unsynced = db.getter([[
+    select exists(select 1 from records where synced_at is null or synced_at < updated_at)
+  ]])
 
   M.get_authorization = function ()
     return get_setting("authorization")
@@ -233,12 +287,10 @@ return sqlite_worker("/__NAME__.db", function (ok, db, callback)
   end
 
   local function get_sync_state_data ()
-    local unsynced_result = M.has_unsynced()
-    local has_unsynced = unsynced_result and unsynced_result.has_unsynced == 1 or false
     local has_auth = M.has_authorization()
     local auto_sync = M.get_auto_sync()
     return {
-      state = compute_state(has_auth, has_unsynced, auto_sync),
+      state = compute_state(has_auth, has_unsynced() == 1, auto_sync),
       auto_sync = auto_sync
     }
   end
@@ -258,6 +310,13 @@ return sqlite_worker("/__NAME__.db", function (ok, db, callback)
   end
 
   local function get_sync_state_oob ()
+    local has_auth = M.has_authorization()
+    if not has_auth then
+      return tpl["sync-state"]({
+        state = "error",
+        oob = true
+      })
+    end
     local auto_sync = M.get_auto_sync()
     return tpl["sync-state"]({
       state = auto_sync and "pending" or "dirty",
@@ -273,9 +332,10 @@ return sqlite_worker("/__NAME__.db", function (ok, db, callback)
   end
 
   M.update_number_with_state = function (id)
+    local has_auth = M.has_authorization()
     local already_dirty = was_dirty(id) == 1
-    local rec = format_record(update_number(id))
-    if not already_dirty then
+    local rec = format_record(update_number(id), has_auth)
+    if has_auth and not already_dirty then
       rec.just_dirtied = true
     end
     local html = tpl["number-item"](rec)
@@ -285,7 +345,16 @@ return sqlite_worker("/__NAME__.db", function (ok, db, callback)
   M.delete_number_with_state = function (id, page)
     M.delete_number(id)
     page = tonumber(page) or 1
-    return M.get_numbers(page) .. get_sync_state_oob()
+    local total = get_record_count() or 0
+    local redirect_page = nil
+    local offset = (page - 1) * PAGE_SIZE
+    if offset >= total and page > 1 then
+      redirect_page = page - 1
+    end
+    return {
+      html = M.get_numbers(page) .. get_sync_state_oob(),
+      redirect_page = redirect_page
+    }
   end
 
   M.get_auth_status = function ()
@@ -313,46 +382,29 @@ return sqlite_worker("/__NAME__.db", function (ok, db, callback)
   end
 
   M.complete_sync = function (server_changes_json, page)
-    M.apply_changes(server_changes_json)
+    page = tonumber(page) or 1
+    local offset = (page - 1) * PAGE_SIZE
+    local dirty_json = get_dirty_ids_on_page(PAGE_SIZE, offset) or "[]"
+    local just_synced_ids = {}
+    for id in string.gmatch(dirty_json, "%d+") do
+      just_synced_ids[tonumber(id)] = true
+    end
 
-    local dirty_set = {}
-    local dirty_records = get_dirty_ids() or {}
-    for i = 1, #dirty_records do
-      dirty_set[dirty_records[i].id] = true
+    apply_changes(server_changes_json)
+
+    local max_hlc = get_max_hlc_incoming()
+    if max_hlc then
+      M.set_last_sync(tostring(max_hlc))
     end
 
     M.mark_synced()
 
-    page = tonumber(page) or 1
-    if page < 1 then page = 1 end
-    local offset = (page - 1) * PAGE_SIZE
-    local count_result = get_record_count()
-    local total = count_result and count_result.total or 0
-    local total_pages = math.max(1, math.ceil(total / PAGE_SIZE))
-    if page > total_pages then page = total_pages end
-
-    local numbers = get_records_page(PAGE_SIZE, offset) or {}
-    for i = 1, #numbers do
-      format_record(numbers[i])
-      numbers[i].just_synced = dirty_set[numbers[i].id] == true
-    end
-
-    local numbers_html = tpl["number-items"]({
-      numbers = numbers,
-      page = page,
-      total_pages = total_pages,
-      show_pagination = total_pages > 1,
-      has_prev = page > 1,
-      has_next = page < total_pages,
-      prev_page = page - 1,
-      next_page = page + 1
-    })
     local sync_state = tpl["sync-state"]({
       state = "synced",
       auto_sync = M.get_auto_sync(),
       oob = true
     })
-    return numbers_html .. sync_state
+    return get_numbers_with_synced(page, just_synced_ids) .. sync_state
   end
 
   return callback(true, M)
