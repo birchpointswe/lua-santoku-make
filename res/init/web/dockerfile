@@ -4,7 +4,9 @@ env MAKE="make -j$(nproc)"
 env MAKEFLAGS="-j$(nproc)"
 
 run apt-get update && apt-get -y install --no-install-recommends \
-    git gnupg ca-certificates wget curl xz-utils
+    git gnupg ca-certificates wget curl xz-utils python3
+
+run ln -s /usr/bin/python3 /usr/bin/python
 
 run git clone https://github.com/emscripten-core/emsdk.git && \
     cd emsdk && ./emsdk install latest && ./emsdk activate latest
