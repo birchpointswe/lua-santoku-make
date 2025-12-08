@@ -1,6 +1,5 @@
 <%
   str = require("santoku.string")
-  squote = str.quote
   sys = require("santoku.system")
 %>
 
@@ -18,38 +17,17 @@ local fun = require("santoku.functional")
 local common = require("santoku.make.common")
 local wasm = require("santoku.make.wasm")
 local clean = require("santoku.make.clean")
-
 local arr = require("santoku.array")
-local amap = arr.map
-local spread = arr.spread
-local extend = arr.extend
-local push = arr.push
-local concat = arr.concat
-
-local iter = require("santoku.iter")
-local ivals = iter.ivals
-local pairs = iter.pairs
-local chain = iter.chain
-local map = iter.map
-local collect = iter.collect
-local filter = iter.filter
-local flatten = iter.flatten
-
+local it = require("santoku.iter")
 local str = require("santoku.string")
-local sinterp = str.interp
-local ssplits = str.splits
-local supper = str.upper
-local sformat = str.format
-local smatch = str.match
-local gsub = str.gsub
-local ssub = str.sub
-local from_base64 = str.from_base64
 
 local boilerplate_tar_b64 = <% -- luacheck: ignore
-  local tar = sys.popen({ "tar", "-C", "submodules/tokuboilerplate-lib", "--exclude", ".git", "-czf", "-", "." }, "r")
-  local content = tar:read("*a")
-  tar:close()
-  return squote(str.to_base64(content))
+  local fs = require("santoku.fs")
+  local tmp = fs.tmpname()
+  sys.execute({ "tar", "-C", "submodules/tokuboilerplate-lib", "--exclude", ".git", "-czf", tmp, "." })
+  local content = fs.readfile(tmp)
+  fs.rm(tmp)
+  return str.quote(str.to_base64(content))
 %>
 
 local function create (opts)
@@ -59,30 +37,31 @@ local function create (opts)
   local name = opts.name
   local dir = opts.dir or name
 
-  if not smatch(name, "^[a-z][a-z0-9%-]*$") then
+  if not str.match(name, "^[a-z][a-z0-9%-]*$") then
     err.error("Invalid name: must start with lowercase letter and contain only lowercase letters, numbers, and hyphens")
   end
 
   fs.mkdirp(dir)
-  local tar = sys.popen({ "tar", "-C", dir, "-xzf", "-" }, "w")
-  tar:write(from_base64(boilerplate_tar_b64))
-  tar:close()
+  local tmp = fs.tmpname()
+  fs.writefile(tmp, str.from_base64(boilerplate_tar_b64))
+  sys.execute({ "tar", "-C", dir, "-xzf", tmp })
+  fs.rm(tmp)
 
-  for _, f in ivals({
+  for _, f in it.ivals({
     "bin/tokuboilerplate-lib.lua",
     "lib/tokuboilerplate-lib.lua",
     "test/spec/tokuboilerplate-lib.lua",
   }) do
     local src = fs.join(dir, f)
     if fs.exists(src) then
-      fs.rename(src, fs.join(dir, gsub(f, "tokuboilerplate%-lib", name)))
+      fs.rename(src, fs.join(dir, str.gsub(f, "tokuboilerplate%-lib", name)))
     end
   end
 
   for fp in fs.files(dir, { recurse = true }) do
     local content = fs.readfile(fp)
     if content:find("tokuboilerplate%-lib") then
-      fs.writefile(fp, gsub(content, "tokuboilerplate%-lib", name))
+      fs.writefile(fp, str.gsub(content, "tokuboilerplate%-lib", name))
     end
   end
 
@@ -170,7 +149,7 @@ local function init (opts)
   local base_res, base_res_templated = get_files("res", true)
   local base_deps = get_files("deps")
 
-  local base_rockspec = sinterp("%s#(name)-%s#(version).rockspec", opts.config.env)
+  local base_rockspec = str.interp("%s#(name)-%s#(version).rockspec", opts.config.env)
   local base_makefile = "Makefile"
   local base_license = "LICENSE"
   local base_lib_makefile = "lib/Makefile"
@@ -186,70 +165,69 @@ local function init (opts)
 
   -- Filter out .wasm.lua test specs for native builds
   if not opts.wasm then
-    base_test_specs = collect(filter(function (fp)
-      return not smatch(fp, "%.wasm%.lua$")
-    end, ivals(base_test_specs)))
+    base_test_specs = it.collect(it.filter(function (fp)
+      return not str.match(fp, "%.wasm%.lua$")
+    end, it.ivals(base_test_specs)))
   end
 
   -- Helper to strip .wasm from filenames (for WASM builds)
   local function remove_wasm(fp)
-    return gsub(fp, "%.wasm%.", ".")
+    return str.gsub(fp, "%.wasm%.", ".")
   end
 
   local base_test_deps = get_files("test/deps")
   local base_test_res, base_test_res_templated = get_files("test/res", true)
 
-  local test_all_base_templated = extend({},
+  local test_all_base_templated = arr.extend({},
     base_bins, base_libs, base_deps,
     base_test_deps, base_res_templated, base_test_res_templated)
 
-  local test_all_base_copied = extend({},
+  local test_all_base_copied = arr.extend({},
     base_res, base_test_res)
 
   if opts.wasm then
-    -- Add JS files (bundler uses SINGLE_FILE so no separate .wasm)
-    extend(test_all_base_templated, collect(map(fun.compose(fs.stripextension, remove_wasm), ivals(base_test_specs))))
+    arr.extend(test_all_base_templated, it.collect(it.map(fun.compose(fs.stripextension, remove_wasm), it.ivals(base_test_specs))))
   else
-    extend(test_all_base_templated, base_test_specs)
+    arr.extend(test_all_base_templated, base_test_specs)
   end
 
-  local test_all = amap(amap(extend({},
+  local test_all = arr.map(arr.map(arr.extend({},
     test_all_base_templated,
     { base_rockspec, base_makefile,
       base_luarocks_cfg, base_luacheck_cfg,
       base_run_sh, base_check_sh },
     test_all_base_copied), remove_tk), test_dir)
 
-  local test_srcs = amap(amap(extend({},
+  local test_srcs = arr.map(arr.map(arr.extend({},
     base_bins, base_libs, base_deps, base_test_deps), test_dir), remove_tk)
 
-  local test_cfgs = amap(amap(push({},
+  local test_cfgs = arr.map(arr.map(arr.push({},
     base_rockspec, base_makefile, base_luarocks_cfg,
     base_luacheck_cfg, base_run_sh,
     base_check_sh), test_dir), remove_tk)
 
-  local build_all = amap(amap(extend({},
+  local build_all = arr.map(arr.map(arr.extend({},
     base_bins, base_libs, base_deps, opts.wasm and { base_luarocks_cfg } or {},
     base_res_templated, base_res,
     { base_rockspec, base_makefile }), remove_tk), build_dir)
 
   if #base_libs > 0 then
-    push(test_all, test_dir(base_lib_makefile))
-    push(test_cfgs, test_dir(base_lib_makefile))
-    push(build_all, build_dir(base_lib_makefile))
+    arr.push(test_all, test_dir(base_lib_makefile))
+    arr.push(test_cfgs, test_dir(base_lib_makefile))
+    arr.push(build_all, build_dir(base_lib_makefile))
   end
 
   if #base_bins > 0 then
-    push(test_all, test_dir(base_bin_makefile))
-    push(test_cfgs, test_dir(base_bin_makefile))
-    push(build_all, build_dir(base_bin_makefile))
+    arr.push(test_all, test_dir(base_bin_makefile))
+    arr.push(test_cfgs, test_dir(base_bin_makefile))
+    arr.push(build_all, build_dir(base_bin_makefile))
   end
 
-  push(test_all, test_dir(base_lua_modules_ok))
+  arr.push(test_all, test_dir(base_lua_modules_ok))
 
   if has_build_deps then
-    push(test_all, build_deps_ok)
-    push(build_all, build_deps_ok)
+    arr.push(test_all, build_deps_ok)
+    arr.push(build_all, build_deps_ok)
   end
 
   local base_env = {
@@ -262,7 +240,7 @@ local function init (opts)
     work_dir = opts.dir,
     var = function (n)
       err.assert(vdt.isstring(n))
-      return concat({ opts.config.env.variable_prefix, "_", n })
+      return arr.concat({ opts.config.env.variable_prefix, "_", n })
     end
   }
 
@@ -279,11 +257,11 @@ local function init (opts)
   }
 
   if opts.lua_path_extra then
-    test_env.lua_path = concat({ test_env.lua_path, ";", opts.lua_path_extra })
+    test_env.lua_path = arr.concat({ test_env.lua_path, ";", opts.lua_path_extra })
   end
 
   if opts.lua_cpath_extra then
-    test_env.lua_cpath = concat({ test_env.lua_cpath, ";", opts.lua_cpath_extra })
+    test_env.lua_cpath = arr.concat({ test_env.lua_cpath, ";", opts.lua_cpath_extra })
   end
 
   local build_env = {
@@ -297,7 +275,7 @@ local function init (opts)
   tbl.merge(build_env, opts.config.env, base_env)
 
   if opts.wasm then
-    for dir_fn, all, env in map(spread, ivals({
+    for dir_fn, all, env in it.map(arr.spread, it.ivals({
       { test_dir, test_all, test_env },
       { build_dir, build_all, build_env }
     })) do
@@ -309,37 +287,37 @@ local function init (opts)
 
   opts.config.env.variable_prefix =
     opts.config.env.variable_prefix or
-    supper((gsub(opts.config.env.name, "%W+", "_")))
+    str.upper(str.gsub(opts.config.env.name, "%W+", "_"))
 
-  for fp in flatten(map(ivals, ivals({ base_libs, base_bins, base_deps }))) do
+  for fp in it.flatten(it.map(it.ivals, it.ivals({ base_libs, base_bins, base_deps }))) do
     add_file_target(build_dir(remove_tk(fp)), fp, build_env)
   end
 
-  for fp in flatten(map(ivals, ivals({ base_libs, base_bins, base_deps, base_test_deps }))) do
+  for fp in it.flatten(it.map(it.ivals, it.ivals({ base_libs, base_bins, base_deps, base_test_deps }))) do
     add_file_target(test_dir(remove_tk(fp)), fp, test_env)
   end
 
   if not opts.wasm then
 
-    for fp in ivals(base_test_specs) do
+    for fp in it.ivals(base_test_specs) do
       add_file_target(test_dir(remove_tk(fp)), fp, test_env)
     end
 
   else
 
-    for fp in ivals(base_test_specs) do
+    for fp in it.ivals(base_test_specs) do
       add_file_target(test_dir("bundler-pre", remove_tk(fp)), fp, test_env)
     end
 
-    for fp in ivals(base_test_specs) do
+    for fp in it.ivals(base_test_specs) do
       target({ test_dir("bundler-post", fs.stripextension(remove_wasm(fp))) },
-        push(extend({ test_dir("bundler-pre", fp) },
+        arr.push(arr.extend({ test_dir("bundler-pre", fp) },
           test_cfgs), test_dir(base_lua_modules_ok)),
         function ()
-          local extra_cflags = extend({},
+          local extra_cflags = arr.extend({},
             tbl.get(test_env, "test", "cflags") or {},
             tbl.get(test_env, "test", "wasm", "cflags") or {})
-          local extra_ldflags = extend({},
+          local extra_ldflags = arr.extend({},
             tbl.get(test_env, "test", "ldflags") or {},
             tbl.get(test_env, "test", "wasm", "ldflags") or {})
           bundle(test_dir("bundler-pre", fp), test_dir("bundler-post", fs.dirname(fp)), {
@@ -356,8 +334,7 @@ local function init (opts)
         end)
     end
 
-    for fp in ivals(base_test_specs) do
-      -- Copy JS file (bundler uses SINGLE_FILE so no separate .wasm)
+    for fp in it.ivals(base_test_specs) do
       add_file_target(test_dir(fs.stripextension(remove_wasm(remove_tk(fp)))),
         test_dir("bundler-post", fs.stripextension(remove_wasm(fp))), test_env)
     end
@@ -366,77 +343,77 @@ local function init (opts)
 
   if fs.exists(base_license) then
     add_copied_target(build_dir(base_license), base_license)
-    push(build_all, build_dir(base_license))
+    arr.push(build_all, build_dir(base_license))
   end
 
-  for fp in ivals(base_res) do
+  for fp in it.ivals(base_res) do
     add_file_target(build_dir(remove_tk(fp)), fp, build_env)
   end
 
-  for fp in ivals(base_res_templated) do
+  for fp in it.ivals(base_res_templated) do
     add_file_target(build_dir(remove_tk(fp)), fp, build_env)
   end
 
-  for fp in ivals(base_res) do
+  for fp in it.ivals(base_res) do
     add_file_target(test_dir(remove_tk(fp)), fp, test_env)
   end
 
-  for fp in ivals(base_res_templated) do
+  for fp in it.ivals(base_res_templated) do
     add_file_target(test_dir(remove_tk(fp)), fp, test_env)
   end
 
-  for fp in ivals(base_test_res) do
+  for fp in it.ivals(base_test_res) do
     add_file_target(test_dir(remove_tk(fp)), fp, test_env)
   end
 
-  for fp in ivals(base_test_res_templated) do
+  for fp in it.ivals(base_test_res_templated) do
     add_file_target(test_dir(remove_tk(fp)), fp, test_env)
   end
 
   add_templated_target_base64(build_dir(base_rockspec),
-    <% return squote(to_base64(readfile("res/lib/template.rockspec"))) %>, build_env, -- luacheck: ignore
-    amap(amap(extend({}, base_libs, base_bins, base_deps, base_res, base_res_templated), remove_tk), build_dir))
+    <% return str.quote(str.to_base64(readfile("res/lib/template.rockspec"))) %>, build_env, -- luacheck: ignore
+    arr.map(arr.map(arr.extend({}, base_libs, base_bins, base_deps, base_res, base_res_templated), remove_tk), build_dir))
 
   add_templated_target_base64(build_dir(base_makefile),
-    <% return squote(to_base64(readfile("res/lib/luarocks.mk"))) %>, build_env) -- luacheck: ignore
+    <% return str.quote(str.to_base64(readfile("res/lib/luarocks.mk"))) %>, build_env) -- luacheck: ignore
 
   add_templated_target_base64(build_dir(base_lib_makefile),
-    <% return squote(to_base64(readfile("res/lib/lib.mk"))) %>, build_env) -- luacheck: ignore
+    <% return str.quote(str.to_base64(readfile("res/lib/lib.mk"))) %>, build_env) -- luacheck: ignore
 
   add_templated_target_base64(build_dir(base_bin_makefile),
-    <% return squote(to_base64(readfile("res/lib/bin.mk"))) %>, build_env) -- luacheck: ignore
+    <% return str.quote(str.to_base64(readfile("res/lib/bin.mk"))) %>, build_env) -- luacheck: ignore
 
   add_templated_target_base64(test_dir(base_rockspec),
-    <% return squote(to_base64(readfile("res/lib/template.rockspec"))) %>, test_env, -- luacheck: ignore
-    amap(amap(extend({}, base_libs, base_bins, base_deps, base_res, base_res_templated), remove_tk), test_dir))
+    <% return str.quote(str.to_base64(readfile("res/lib/template.rockspec"))) %>, test_env, -- luacheck: ignore
+    arr.map(arr.map(arr.extend({}, base_libs, base_bins, base_deps, base_res, base_res_templated), remove_tk), test_dir))
 
   add_templated_target_base64(test_dir(base_makefile),
-    <% return squote(to_base64(readfile("res/lib/luarocks.mk"))) %>, test_env) -- luacheck: ignore
+    <% return str.quote(str.to_base64(readfile("res/lib/luarocks.mk"))) %>, test_env) -- luacheck: ignore
 
   add_templated_target_base64(test_dir(base_lib_makefile),
-    <% return squote(to_base64(readfile("res/lib/lib.mk"))) %>, test_env) -- luacheck: ignore
+    <% return str.quote(str.to_base64(readfile("res/lib/lib.mk"))) %>, test_env) -- luacheck: ignore
 
   add_templated_target_base64(test_dir(base_bin_makefile),
-    <% return squote(to_base64(readfile("res/lib/bin.mk"))) %>, test_env) -- luacheck: ignore
+    <% return str.quote(str.to_base64(readfile("res/lib/bin.mk"))) %>, test_env) -- luacheck: ignore
 
   add_templated_target_base64(test_dir(base_luarocks_cfg),
-    <% return squote(to_base64(readfile("res/lib/luarocks.lua"))) %>, test_env) -- luacheck: ignore
+    <% return str.quote(str.to_base64(readfile("res/lib/luarocks.lua"))) %>, test_env) -- luacheck: ignore
 
   if opts.wasm then
     add_templated_target_base64(build_dir(base_luarocks_cfg),
-      <% return squote(to_base64(readfile("res/lib/luarocks.lua"))) %>, build_env) -- luacheck: ignore
+      <% return str.quote(str.to_base64(readfile("res/lib/luarocks.lua"))) %>, build_env) -- luacheck: ignore
   end
 
   add_templated_target_base64(test_dir(base_luacheck_cfg),
-    <% return squote(to_base64(readfile("res/lib/luacheck.lua"))) %>, test_env) -- luacheck: ignore
+    <% return str.quote(str.to_base64(readfile("res/lib/luacheck.lua"))) %>, test_env) -- luacheck: ignore
 
   add_templated_target_base64(test_dir(base_run_sh),
-    <% return squote(to_base64(readfile("res/lib/test-run.sh"))) %>, test_env) -- luacheck: ignore
+    <% return str.quote(str.to_base64(readfile("res/lib/test-run.sh"))) %>, test_env) -- luacheck: ignore
 
   add_templated_target_base64(test_dir(base_check_sh),
-    <% return squote(to_base64(readfile("res/lib/test-check.sh"))) %>, test_env) -- luacheck: ignore
+    <% return str.quote(str.to_base64(readfile("res/lib/test-check.sh"))) %>, test_env) -- luacheck: ignore
 
-  for flag in ivals({
+  for flag in it.ivals({
     "single", "skip_check", "lua",
     "lua_path_extra", "lua_cpath_extra"
   }) do
@@ -454,22 +431,20 @@ local function init (opts)
   end
 
   target(
-    amap({ base_run_sh, base_check_sh }, test_dir),
-    amap({
+    arr.map({ base_run_sh, base_check_sh }, test_dir),
+    arr.map({
       "skip_check.flag", "single.flag",
       "lua.flag", "lua_path_extra.flag", "lua_cpath_extra.flag" },
       work_dir))
 
   target(
-    amap({ base_lua_modules_ok }, test_dir),
-    push(extend({}, test_srcs, test_cfgs),
+    arr.map({ base_lua_modules_ok }, test_dir),
+    arr.push(arr.extend({}, test_srcs, test_cfgs),
       test_dir(base_luarocks_cfg)),
     function ()
       fs.mkdirp(test_dir())
       return fs.pushd(test_dir(), function ()
-        -- TODO: It would be nice if santoku ivals returned an empty iterator
-        -- for nil instead of erroring. It would allow omitting the {} below
-        local vars = collect(map(fun.bind(sformat, "%s=%s"), flatten(map(pairs, ivals({
+        local vars = it.collect(it.map(fun.bind(str.format, "%s=%s"), it.flatten(it.map(it.pairs, it.ivals({
           tbl.get(test_env, "luarocks", "env_vars") or {},
           tbl.get(test_env, "test", "luarocks", "env_vars") or {},
           opts.wasm and tbl.get(test_env, "test", "wasm", "luarocks", "env_vars") or {},
@@ -477,7 +452,7 @@ local function init (opts)
         })))))
         local lcfg = opts.luarocks_config or base_luarocks_cfg
         lcfg = lcfg and fs.absolute(lcfg) or nil
-        sys.execute(extend({
+        sys.execute(arr.extend({
           "luarocks", "make", fs.basename(base_rockspec),
           env = {
             LUAROCKS_CONFIG = lcfg,
@@ -499,7 +474,7 @@ local function init (opts)
         local config_file = fs.absolute(opts.config_file)
         local lua_modules_dir = fs.join(fs.absolute(build_deps_dir), "lua_modules")
         -- Generate minimal luarocks config for build deps
-        fs.writefile(build_deps_luarocks_cfg, sinterp([[
+        fs.writefile(build_deps_luarocks_cfg, str.interp([[
 rocks_trees = {
   { name = "build-deps",
     root = "%s#(lua_modules)"
@@ -538,7 +513,7 @@ rocks_provided = { lua = "5.1" }
   target({ "install" }, install_release_deps, function ()
     fs.mkdirp(build_dir())
     return fs.pushd(build_dir(), function ()
-      local vars = collect(map(fun.bind(sformat, "%s=%s"), flatten(map(pairs, ivals({
+      local vars = it.collect(it.map(fun.bind(str.format, "%s=%s"), it.flatten(it.map(it.pairs, it.ivals({
         tbl.get(build_env, "luarocks", "env_vars") or {},
         tbl.get(build_env, "build", "luarocks", "env_vars") or {},
         opts.wasm and tbl.get(build_env, "build", "wasm", "luarocks", "env_vars") or {},
@@ -546,7 +521,7 @@ rocks_provided = { lua = "5.1" }
       })))))
       local lcfg = opts.luarocks_config or (opts.wasm and base_luarocks_cfg) or nil
       lcfg = lcfg and fs.absolute(lcfg) or nil
-      sys.execute(extend({
+      sys.execute(arr.extend({
         "luarocks", "make", base_rockspec,
         env = {
           LUAROCKS_CONFIG = lcfg,
@@ -559,7 +534,7 @@ rocks_provided = { lua = "5.1" }
   target({ "install-deps" }, install_release_deps, function ()
     fs.mkdirp(build_dir())
     return fs.pushd(build_dir(), function ()
-      local vars = collect(map(fun.bind(sformat, "%s=%s"), flatten(map(pairs, ivals({
+      local vars = it.collect(it.map(fun.bind(str.format, "%s=%s"), it.flatten(it.map(it.pairs, it.ivals({
         tbl.get(build_env, "luarocks", "env_vars") or {},
         tbl.get(build_env, "build", "luarocks", "env_vars") or {},
         opts.wasm and tbl.get(build_env, "build", "wasm", "luarocks", "env_vars") or {},
@@ -567,7 +542,7 @@ rocks_provided = { lua = "5.1" }
       })))))
       local lcfg = opts.luarocks_config or (opts.wasm and base_luarocks_cfg) or nil
       lcfg = lcfg and fs.absolute(lcfg) or nil
-      sys.execute(extend({
+      sys.execute(arr.extend({
         "luarocks", "make", "--deps-only", base_rockspec,
         env = {
           LUAROCKS_CONFIG = lcfg,
@@ -580,20 +555,20 @@ rocks_provided = { lua = "5.1" }
   -- NOTE: pack/release not supported in wasm mode
   if not opts.wasm then
 
-    local release_tarball_dir = sinterp("%s#(name)-%s#(version)", opts.config.env)
+    local release_tarball_dir = str.interp("%s#(name)-%s#(version)", opts.config.env)
     local release_tarball = release_tarball_dir .. ".tar.gz"
-    local release_tarball_contents = push(amap(extend({}, base_bins, base_libs, base_deps), remove_tk), base_makefile)
+    local release_tarball_contents = arr.push(arr.map(arr.extend({}, base_bins, base_libs, base_deps), remove_tk), base_makefile)
 
     if #base_libs > 0 then
-      push(release_tarball_contents, base_lib_makefile)
+      arr.push(release_tarball_contents, base_lib_makefile)
     end
 
     if #base_bins > 0 then
-      push(release_tarball_contents, base_bin_makefile)
+      arr.push(release_tarball_contents, base_bin_makefile)
     end
 
     if fs.exists(base_license) then
-      push(release_tarball_contents, base_license)
+      arr.push(release_tarball_contents, base_license)
     end
 
     target({ "pack" }, install_release_deps, function ()
@@ -603,8 +578,8 @@ rocks_provided = { lua = "5.1" }
           fs.rm(release_tarball)
         end
         sys.execute({
-          "tar", "--dereference", "--transform", sformat("s#^#%s/#", release_tarball_dir),
-          "-czvf", release_tarball, spread(release_tarball_contents) })
+          "tar", "--dereference", "--transform", str.format("s#^#%s/#", release_tarball_dir),
+          "-czvf", release_tarball, arr.spread(release_tarball_contents) })
       end)
     end)
 
@@ -678,7 +653,7 @@ rocks_provided = { lua = "5.1" }
         varg.tup(function (ok, first, ...)
           if not ok then
             local msg = tostring(first)
-            if smatch(msg, "interrupt") or smatch(msg, "SIGINT") or smatch(msg, "signaled") then
+            if str.match(msg, "interrupt") or str.match(msg, "SIGINT") or str.match(msg, "signaled") then
               err.error(first, ...)
             end
             print(first, ...)
@@ -692,7 +667,7 @@ rocks_provided = { lua = "5.1" }
           if str.find(dfile, "%.d$") then
             local data = fs.readfile(dfile)
             local file_deps = tmpl.deserialize_deps(data)
-            for fp in iter.keys(file_deps) do
+            for fp in it.keys(file_deps) do
               local dir = fs.dirname(fp)
               if dir and dir ~= "" and dir ~= "." then
                 dfile_dirs[dir] = true
@@ -704,7 +679,7 @@ rocks_provided = { lua = "5.1" }
       varg.tup(function (ok, first, ...)
         if not ok then
           local msg = tostring(first)
-          if smatch(msg, "interrupt") or smatch(msg, "SIGINT") or smatch(msg, "signaled") then
+          if str.match(msg, "interrupt") or str.match(msg, "SIGINT") or str.match(msg, "signaled") then
             err.error(first, ...)
           end
         end
@@ -713,22 +688,22 @@ rocks_provided = { lua = "5.1" }
           "inotifywait", "-qr",
           "-e", "close_write", "-e", "modify",
           "-e", "move", "-e", "create", "-e", "delete",
-          spread(collect(filter(function (fp)
+          arr.spread(it.collect(it.filter(function (fp)
             return fs.exists(fp)
-          end, chain(fs.files("."), ivals({ "lib", "bin", "test", "res" }), iter.keys(dfile_dirs)))))
+          end, it.chain(fs.files("."), it.ivals({ "lib", "bin", "test", "res" }), it.keys(dfile_dirs)))))
         })
       end))
       sys.sleep(.25)
     end
   end)
 
-  for fp in ivals(targets) do
+  for fp in it.ivals(targets) do
     local dfile = fp .. ".d"
     if fs.exists(dfile) then
-      local chunks = map(ssub, map(function (line)
-        return ssplits(line, "%s*:%s*", false)
+      local chunks = it.map(str.sub, it.map(function (line)
+        return str.splits(line, "%s*:%s*", false)
       end, fs.lines(dfile)))
-      target(chunks(), collect(chunks))
+      target(chunks(), it.collect(chunks))
     end
   end
 
@@ -781,19 +756,19 @@ rocks_provided = { lua = "5.1" }
 
         if install_opts.bundle_flags then
           for flag in str.splits(install_opts.bundle_flags, "%s+") do
-            push(bundle_flags, flag)
+            arr.push(bundle_flags, flag)
           end
         end
 
         if install_opts.bundle_mods then
           for mod in str.splits(install_opts.bundle_mods, ",") do
-            push(bundle_mods, str.match(mod, "^%s*(.-)%s*$"))
+            arr.push(bundle_mods, str.match(mod, "^%s*(.-)%s*$"))
           end
         end
 
         if install_opts.bundle_ignores then
           for mod in str.splits(install_opts.bundle_ignores, ",") do
-            push(bundle_ignores, str.match(mod, "^%s*(.-)%s*$"))
+            arr.push(bundle_ignores, str.match(mod, "^%s*(.-)%s*$"))
           end
         end
 
