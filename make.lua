@@ -1,6 +1,6 @@
 local env = {
   name = "santoku-make",
-  version = "0.0.170-1",
+  version = "0.0.171-1",
   variable_prefix = "TK_MAKE",
   license = "MIT",
   public = true,
@@ -16,8 +16,6 @@ local env = {
   rules = {
     copy = {
       "nginx%.tk%.conf$",
-      "res/init/lib/",
-      "res/init/web/",
     }
   },
 }

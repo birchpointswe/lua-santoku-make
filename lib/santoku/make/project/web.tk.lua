@@ -1,9 +1,7 @@
 <%
   str = require("santoku.string")
   squote = str.quote
-  to_base64 = str.to_base64
-  fs = require("santoku.fs")
-  readfile = fs.readfile
+  sys = require("santoku.system")
 %>
 
 local bundle = require("santoku.bundle")
@@ -41,66 +39,12 @@ local from_base64 = str.from_base64
 
 local tmpl = require("santoku.template")
 
--- Embedded templates for web init
-local init_templates = {
-  -- Root level config
-  make_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/make.lua"))) %>), -- luacheck: ignore
-  make_common_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/make-common.lua"))) %>), -- luacheck: ignore
-  make_prod_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/make-prod.lua"))) %>), -- luacheck: ignore
-  -- Root level lib/bin/test
-  bin_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/bin.lua"))) %>), -- luacheck: ignore
-  lib_common_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/lib-common.lua"))) %>), -- luacheck: ignore
-  lib_web_templates_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/lib-web-templates.tk.lua"))) %>), -- luacheck: ignore
-  test_spec_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/test-spec.lua"))) %>), -- luacheck: ignore
-  -- Client
-  client_bin_bundle_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-bin-bundle.tk.lua"))) %>), -- luacheck: ignore
-  client_lib_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-lib.lua"))) %>), -- luacheck: ignore
-  client_lib_entry_sw_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-lib-entry-sw.tk.lua"))) %>), -- luacheck: ignore
-  client_lib_entry_main_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-lib-entry-main.lua"))) %>), -- luacheck: ignore
-  client_lib_db_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-lib-db.tk.lua"))) %>), -- luacheck: ignore
-  client_lib_routes_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-lib-routes.tk.lua"))) %>), -- luacheck: ignore
-  client_deps_sqlite_makefile = from_base64(<% return squote(to_base64(readfile("res/init/web/client-deps-sqlite-Makefile.tk"))) %>), -- luacheck: ignore
-  client_test_spec_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/client-test-spec.lua"))) %>), -- luacheck: ignore
-  client_static_index_html = from_base64(<% return squote(to_base64(readfile("res/init/web/client-static-index.tk.html"))) %>), -- luacheck: ignore
-  client_res_index_css = from_base64(<% return squote(to_base64(readfile("res/init/web/client-res-index.css"))) %>), -- luacheck: ignore
-  client_res_pre_js = from_base64(<% return squote(to_base64(readfile("res/init/web/client-res-pre.tk.js"))) %>), -- luacheck: ignore
-  client_static_manifest_json = from_base64(<% return squote(to_base64(readfile("res/init/web/client-static-manifest.tk.json"))) %>), -- luacheck: ignore
-  -- Server
-  server_bin_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-bin.lua"))) %>), -- luacheck: ignore
-  server_lib_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib.lua"))) %>), -- luacheck: ignore
-  server_lib_web_init_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib-web-init.lua"))) %>), -- luacheck: ignore
-  server_lib_web_sync_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib-web-sync.lua"))) %>), -- luacheck: ignore
-  server_lib_web_session_create_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib-web-session-create.lua"))) %>), -- luacheck: ignore
-  server_lib_db_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-lib-db.tk.lua"))) %>), -- luacheck: ignore
-  server_test_spec_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/server-test-spec.lua"))) %>), -- luacheck: ignore
-  -- Resources
-  res_server_migrations_sql = from_base64(<% return squote(to_base64(readfile("res/init/web/res-server-migrations-0.0.1.sql"))) %>), -- luacheck: ignore
-  res_client_migrations_sql = from_base64(<% return squote(to_base64(readfile("res/init/web/res-client-migrations-0.0.1.sql"))) %>), -- luacheck: ignore
-  res_templates_body_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-body.html"))) %>), -- luacheck: ignore
-  res_templates_sw_body_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-sw-body.html"))) %>), -- luacheck: ignore
-  res_templates_app_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-app.html"))) %>), -- luacheck: ignore
-  res_templates_number_item_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-number-item.html"))) %>), -- luacheck: ignore
-  res_templates_number_items_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-number-items.html"))) %>), -- luacheck: ignore
-  res_templates_pagination_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-pagination.html"))) %>), -- luacheck: ignore
-  res_templates_session_state_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-session-state.html"))) %>), -- luacheck: ignore
-  res_templates_sync_state_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-sync-state.html"))) %>), -- luacheck: ignore
-  res_templates_icon_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-icon.html"))) %>), -- luacheck: ignore
-  res_templates_number_item_delete_html = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-number-item-delete.html"))) %>), -- luacheck: ignore
-  res_templates_icons_sync_svg = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-icons-sync.svg"))) %>), -- luacheck: ignore
-  res_templates_icons_sync_warn_svg = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-icons-sync-warn.svg"))) %>), -- luacheck: ignore
-  res_templates_icons_check_svg = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-icons-check.svg"))) %>), -- luacheck: ignore
-  res_templates_icons_x_svg = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-icons-x.svg"))) %>), -- luacheck: ignore
-  res_templates_icons_question_svg = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-icons-question.svg"))) %>), -- luacheck: ignore
-  res_templates_icons_chevron_left_svg = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-icons-chevron-left.svg"))) %>), -- luacheck: ignore
-  res_templates_icons_chevron_right_svg = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-templates-icons-chevron-right.svg"))) %>), -- luacheck: ignore
-  res_tailwind_theme_css = from_base64(<% return squote(to_base64(readfile("res/init/web/res-tailwind-theme.css"))) %>), -- luacheck: ignore
-  res_icon_svg = from_base64(<% return squote(to_base64(readfile("res/init/web/res-icon.tk.svg"))) %>), -- luacheck: ignore
-  -- Common
-  gitignore = from_base64(<% return squote(to_base64(readfile("res/init/web/gitignore"))) %>), -- luacheck: ignore
-  res_web_template_loader_lua = from_base64(<% return squote(to_base64(readfile("res/init/web/res-web-template-loader.lua"))) %>), -- luacheck: ignore
-  dockerfile = from_base64(<% return squote(to_base64(readfile("res/init/web/dockerfile"))) %>), -- luacheck: ignore
-  toku_sh = from_base64(<% return squote(to_base64(readfile("res/init/web/toku.sh"))) %>), -- luacheck: ignore
-}
+local boilerplate_tar_b64 = <% -- luacheck: ignore
+  local tar = sys.popen({ "tar", "-C", "submodules/tokuboilerplate-web", "--exclude", ".git", "-czf", "-", "." }, "r")
+  local content = tar:read("*a")
+  tar:close()
+  return squote(str.to_base64(content))
+%>
 
 local function create (opts)
   err.assert(vdt.istable(opts), "opts must be a table")
@@ -109,86 +53,50 @@ local function create (opts)
   local name = opts.name
   local dir = opts.dir or name
 
-  -- Validate name format
   if not smatch(name, "^[a-z][a-z0-9%-]*$") then
     err.error("Invalid name: must start with lowercase letter and contain only lowercase letters, numbers, and hyphens")
   end
 
-  -- Create environment for template evaluation
-  local template_env = setmetatable({
-    name = name,
-  }, { __index = _G })
+  fs.mkdirp(dir)
+  local tar = sys.popen({ "tar", "-C", dir, "-xzf", "-" }, "w")
+  tar:write(from_base64(boilerplate_tar_b64))
+  tar:close()
 
-  -- Evaluate templates for full web project structure
-  local files = {
-    -- Root level config
-    ["make.lua"] = tmpl.render(init_templates.make_lua, template_env),
-    ["make.common.lua"] = tmpl.render(init_templates.make_common_lua, template_env),
-    ["make.prod.lua"] = init_templates.make_prod_lua,
-    -- Root level lib/bin/test
-    [fs.join("bin", name .. ".lua")] = tmpl.render(init_templates.bin_lua, template_env),
-    [fs.join("lib", name, "common.lua")] = tmpl.render(init_templates.lib_common_lua, template_env),
-    [fs.join("lib", name, "web", "templates.tk.lua")] = init_templates.lib_web_templates_lua,
-    [fs.join("test/spec", name .. ".lua")] = tmpl.render(init_templates.test_spec_lua, template_env),
-    -- Client
-    [fs.join("client/bin", "bundle.tk.lua")] = tmpl.render(init_templates.client_bin_bundle_lua, template_env),
-    [fs.join("client/lib", name .. ".lua")] = tmpl.render(init_templates.client_lib_lua, template_env),
-    [fs.join("client/lib", name, "sw.tk.lua")] = gsub(init_templates.client_lib_entry_sw_lua, "__NAME__", name),
-    [fs.join("client/lib", name, "main.lua")] = tmpl.render(init_templates.client_lib_entry_main_lua, template_env),
-    [fs.join("client/lib", name, "db.tk.lua")] = gsub(init_templates.client_lib_db_lua, "__NAME__", name),
-    [fs.join("client/lib", name, "routes.lua")] = gsub(init_templates.client_lib_routes_lua, "__NAME__", name),
-    [fs.join("client/deps/sqlite", "Makefile.tk")] = init_templates.client_deps_sqlite_makefile,
-    [fs.join("client/test/spec", name .. ".lua")] = tmpl.render(init_templates.client_test_spec_lua, template_env),
-    [fs.join("client/static", "index.tk.html")] = init_templates.client_static_index_html,
-    [fs.join("client/static", "manifest.tk.json")] = init_templates.client_static_manifest_json,
-    [fs.join("client/res", "index.css")] = init_templates.client_res_index_css,
-    [fs.join("client/res", "pre.tk.js")] = init_templates.client_res_pre_js,
-    -- Server
-    [fs.join("server/bin", name .. ".lua")] = tmpl.render(init_templates.server_bin_lua, template_env),
-    [fs.join("server/lib", name .. ".lua")] = tmpl.render(init_templates.server_lib_lua, template_env),
-    [fs.join("server/lib", name, "web", "init.lua")] = tmpl.render(init_templates.server_lib_web_init_lua, template_env),
-    [fs.join("server/lib", name, "web", "sync.lua")] = gsub(init_templates.server_lib_web_sync_lua, "__NAME__", name),
-    [fs.join("server/lib", name, "web", "session-create.lua")] = tmpl.render(init_templates.server_lib_web_session_create_lua, template_env),
-    [fs.join("server/lib", name, "db.tk.lua")] = init_templates.server_lib_db_lua,
-    [fs.join("server/test/spec", name .. ".lua")] = tmpl.render(init_templates.server_test_spec_lua, template_env),
-    -- Resources
-    [fs.join("res/server/migrations", "0.0.1.sql")] = init_templates.res_server_migrations_sql,
-    [fs.join("res/client/migrations", "0.0.1.sql")] = init_templates.res_client_migrations_sql,
-    [fs.join("res/web/templates", "body.html")] = init_templates.res_templates_body_html,
-    [fs.join("res/web/templates", "sw-body.html")] = init_templates.res_templates_sw_body_html,
-    [fs.join("res/web/templates", "app.html")] = tmpl.render(init_templates.res_templates_app_html, template_env),
-    [fs.join("res/web/templates", "number-item.html")] = init_templates.res_templates_number_item_html,
-    [fs.join("res/web/templates", "number-items.html")] = init_templates.res_templates_number_items_html,
-    [fs.join("res/web/templates", "pagination.html")] = init_templates.res_templates_pagination_html,
-    [fs.join("res/web/templates", "number-item-delete.html")] = init_templates.res_templates_number_item_delete_html,
-    [fs.join("res/web/templates", "session-state.html")] = init_templates.res_templates_session_state_html,
-    [fs.join("res/web/templates", "sync-state.html")] = init_templates.res_templates_sync_state_html,
-    [fs.join("res/web/templates", "icon.html")] = init_templates.res_templates_icon_html,
-    [fs.join("res/web/templates/icons", "sync.svg")] = init_templates.res_templates_icons_sync_svg,
-    [fs.join("res/web/templates/icons", "sync-warn.svg")] = init_templates.res_templates_icons_sync_warn_svg,
-    [fs.join("res/web/templates/icons", "check.svg")] = init_templates.res_templates_icons_check_svg,
-    [fs.join("res/web/templates/icons", "x.svg")] = init_templates.res_templates_icons_x_svg,
-    [fs.join("res/web/templates/icons", "question.svg")] = init_templates.res_templates_icons_question_svg,
-    [fs.join("res/web/templates/icons", "chevron-left.svg")] = init_templates.res_templates_icons_chevron_left_svg,
-    [fs.join("res/web/templates/icons", "chevron-right.svg")] = init_templates.res_templates_icons_chevron_right_svg,
-    [fs.join("res/tailwind", "theme.css")] = init_templates.res_tailwind_theme_css,
-    [fs.join("res", "icon.tk.svg")] = init_templates.res_icon_svg,
-    -- Common
-    [".gitignore"] = init_templates.gitignore,
-    [fs.join("res/web", "template-loader.lua")] = init_templates.res_web_template_loader_lua,
-    ["Dockerfile"] = init_templates.dockerfile,
-    ["toku.sh"] = init_templates.toku_sh,
-  }
-
-  -- Create directories and write files
-  local pairs = it.pairs
-  for fpath, content in pairs(files) do
-    local full_path = fs.join(dir, fpath)
-    fs.mkdirp(fs.dirname(full_path))
-    fs.writefile(full_path, content)
+  for _, d in ivals({
+    "server/lib/tokuboilerplate/web",
+    "server/lib/tokuboilerplate",
+    "client/lib/tokuboilerplate",
+    "lib/tokuboilerplate/web",
+    "lib/tokuboilerplate",
+  }) do
+    local src = fs.join(dir, d)
+    if fs.exists(src) then
+      fs.rename(src, fs.join(dir, gsub(d, "tokuboilerplate", name)))
+    end
   end
 
-  -- Initialize git if requested
+  for _, f in ivals({
+    "bin/tokuboilerplate.lua",
+    "server/bin/tokuboilerplate.lua",
+    "client/lib/tokuboilerplate.lua",
+    "server/lib/tokuboilerplate.lua",
+    "test/spec/tokuboilerplate.lua",
+    "client/test/spec/tokuboilerplate.lua",
+    "server/test/spec/tokuboilerplate.lua",
+  }) do
+    local src = fs.join(dir, f)
+    if fs.exists(src) then
+      fs.rename(src, fs.join(dir, gsub(f, "tokuboilerplate", name)))
+    end
+  end
+
+  for fp in fs.files(dir, { recurse = true }) do
+    local content = fs.readfile(fp)
+    if content:find("tokuboilerplate") then
+      fs.writefile(fp, gsub(content, "tokuboilerplate", name))
+    end
+  end
+
   if opts.git ~= false then
     sys.execute({ "git", "init", dir })
   end
@@ -361,6 +269,12 @@ local function init (opts)
     return fs.stripparts(fs.stripextensions(fp) .. ".wasm", 2)
   end, ivals(base_client_bins)))
 
+  local public_files = extend({},
+    amap(amap(extend({}, base_client_static, base_client_assets), function (fp)
+      return fs.stripparts(fp, 2)
+    end), remove_tk),
+    amap(extend({}, base_client_pages, base_client_wasm), remove_tk))
+
   local version_check = opts.config.env.version_check
   if version_check == true then
     version_check = opts.config.env.version
@@ -372,6 +286,7 @@ local function init (opts)
     root_dir = fs.cwd(),
     skip_check = opts.skip_check,
     version_check = version_check,
+    public_files = public_files,
     var = function (n)
       err.assert(vdt.isstring(n))
       return concat({ opts.config.env.variable_prefix, "_", n })

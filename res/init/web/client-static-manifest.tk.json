@@ -1,8 +1,0 @@
-<% return require("santoku.web.pwa.manifest")({
-  name = client.opts.title,
-  short_name = client.opts.short_name or client.opts.title,
-  description = client.opts.description,
-  theme_color = client.opts.theme_color,
-  background_color = client.opts.background_color or client.opts.theme_color,
-  icons = client.opts.manifest_icons,
-}) %>

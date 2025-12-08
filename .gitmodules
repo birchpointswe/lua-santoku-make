@@ -1,0 +1,6 @@
+[submodule "submodules/tokuboilerplate-web"]
+	path = submodules/tokuboilerplate-web
+	url = git@github.com:treadwelllane/tokuboilerplate-web.git
+[submodule "submodules/tokuboilerplate-lib"]
+	path = submodules/tokuboilerplate-lib
+	url = git@github.com:treadwelllane/tokuboilerplate-lib.git
