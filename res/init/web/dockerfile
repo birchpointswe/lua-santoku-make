@@ -13,7 +13,11 @@ run git clone https://github.com/emscripten-core/emsdk.git && \
 env PATH=$PATH:/emsdk/upstream/emscripten:/emsdk/node/16.20.0_64bit/bin/
 
 run wget -O - https://openresty.org/package/pubkey.gpg | apt-key add - && \
-    echo "deb http://openresty.org/package/debian bookworm openresty" > /etc/apt/sources.list.d/openresty.list
+    if [ "$(dpkg --print-architecture)" = "arm64" ]; then \
+      echo "deb http://openresty.org/package/arm64/debian bookworm openresty" > /etc/apt/sources.list.d/openresty.list; \
+    else \
+      echo "deb http://openresty.org/package/debian bookworm openresty" > /etc/apt/sources.list.d/openresty.list; \
+    fi
 
 run apt-get update && apt-get -y install --no-install-recommends \
     gcc g++ make perl pkg-config swig \
@@ -28,14 +32,15 @@ run wget https://www.sqlite.org/2024/sqlite-autoconf-3470200.tar.gz && \
     cd sqlite-autoconf-3470200 && ./configure && make && make install && \
     cd / && rm -rf sqlite-autoconf-3470200*
 
-run luarocks install santoku-cli 0.0.315-1 && \
+run luarocks install santoku-cli 0.0.316-1 && \
     luarocks install lua-cjson && \
     luarocks install luacheck
 
 run npm -g install tailwindcss @tailwindcss/cli
 
-run ln -sv /usr/include/x86_64-linux-gnu/openblas-pthread /usr/include/x86_64-linux-gnu/openblas && \
-    ln -sv /usr/include/lapacke.h /usr/include/x86_64-linux-gnu/openblas
+run ARCH_DIR=$(if [ "$(dpkg --print-architecture)" = "arm64" ]; then echo "aarch64-linux-gnu"; else echo "x86_64-linux-gnu"; fi) && \
+    ln -sv /usr/include/$ARCH_DIR/openblas-pthread /usr/include/$ARCH_DIR/openblas && \
+    ln -sv /usr/include/lapacke.h /usr/include/$ARCH_DIR/openblas
 
 env OPENRESTY_DIR=/usr/local/openresty
 entrypoint [ "toku" ]
