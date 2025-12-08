@@ -1,8 +1,0 @@
-<span
-  id="sync-state"
-  class="hidden"
-  data-state="{{state}}"
-  {{#auto_sync}}data-auto-sync{{/auto_sync}}
-  {{#oob}}hx-swap-oob="outerHTML"{{/oob}}
-  {{#trigger_sync}}hx-on::load="htmx.trigger(document.getElementById('sync-debouncer'), 'sync-requested')"{{/trigger_sync}}>
-</span>

@@ -1,5 +1,0 @@
-local sqlite_proxy = require("santoku.web.sqlite.proxy")
-local app = require("<% return name %>")
-sqlite_proxy("/bundle.js", function ()
-  print(app.hello())
-end)
