@@ -22,6 +22,7 @@ LIB_CXX = $(filter-out %.wasm.cpp, $(shell find * -name '*.cpp'))
 endif
 
 LIB_O = $(patsubst %.wasm.o,%.o,$(LIB_C:.c=.o) $(LIB_CXX:.cpp=.o))
+LIB_D = $(LIB_O:.o=.d)
 LIB_SO = $(LIB_O:.o=.$(LIB_EXTENSION))
 LIB_H = $(shell find * -name '*.h')
 
