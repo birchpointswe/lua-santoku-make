@@ -152,6 +152,36 @@ local function get_files(dir, config, check_tpl)
   end, fs.files(dir, true))), tpl
 end
 
+local function compute_file_hash(filepath)
+  local handle = io.popen("sha256sum " .. str.quote(filepath))
+  local output = handle:read("*a")
+  handle:close()
+  local hash = str.match(output, "^(%x+)")
+  return str.sub(hash, 1, 12)
+end
+
+local function hash_filename(filepath, hash)
+  local dir = fs.dirname(filepath)
+  local base = fs.basename(filepath)
+  local name, ext = str.match(base, "^(.+)(%.[^.]+)$")
+  if not name then
+    name, ext = base, ""
+  end
+  local hashed_name = name .. "." .. hash .. ext
+  return dir and dir ~= "" and dir ~= "." and fs.join(dir, hashed_name) or hashed_name
+end
+
+local text_extensions = {
+  html = true, htm = true, css = true, js = true, json = true,
+  xml = true, svg = true, txt = true, md = true, lua = true,
+  map = true,
+}
+
+local function is_text_file(filepath)
+  local ext = str.match(filepath, "%.([^.]+)$")
+  return ext and text_extensions[str.lower(ext)]
+end
+
 return {
   get_action = get_action,
   force_template = force_template,
@@ -165,4 +195,7 @@ return {
   get_lua_path = get_lua_path,
   get_lua_cpath = get_lua_cpath,
   get_files = get_files,
+  compute_file_hash = compute_file_hash,
+  hash_filename = hash_filename,
+  is_text_file = is_text_file,
 }

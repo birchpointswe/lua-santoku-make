@@ -167,17 +167,51 @@ local function init (opts)
     return test_dist_dir("public",...)
   end
 
-  local function dist_dir_client_stripped (...)
-    return dist_dir("public", varg.map(function (fp)
+  -- Hash public files is always enabled (no longer configurable)
+
+  local function dist_dir_staging (...)
+    return dist_dir("public-staging", ...)
+  end
+
+  local function test_dist_dir_staging (...)
+    return test_dist_dir("public-staging", ...)
+  end
+
+  local function dist_dir_staging_stripped (...)
+    return dist_dir("public-staging", varg.map(function (fp)
       return fs.stripparts(fp, 2)
     end, ...))
   end
 
-  local function test_dist_dir_client_stripped (...)
-    return test_dist_dir("public", varg.map(function (fp)
+  local function test_dist_dir_staging_stripped (...)
+    return test_dist_dir("public-staging", varg.map(function (fp)
       return fs.stripparts(fp, 2)
     end, ...))
   end
+
+  local registered_public_files = {}
+
+  local function register_public_file (filename)
+    registered_public_files[filename] = true
+  end
+
+  local function make_hashed (get_manifest_path)
+    return function (filename)
+      local manifest_path = get_manifest_path()
+      if fs.exists(manifest_path) then
+        local manifest = dofile(manifest_path)
+        if manifest[filename] then
+          return manifest[filename]
+        end
+      end
+      return filename
+    end
+  end
+
+  local hashed = make_hashed(function () return dist_dir("hash-manifest-static.lua") end)
+  local test_hashed = make_hashed(function () return test_dist_dir("hash-manifest-static.lua") end)
+  local hashed_full = make_hashed(function () return dist_dir("hash-manifest.lua") end)
+  local test_hashed_full = make_hashed(function () return test_dist_dir("hash-manifest.lua") end)
 
   local function remove_tk(fp)
     return common.remove_tk(fp, opts.config)
@@ -224,11 +258,13 @@ local function init (opts)
   local base_server_run_sh = "run.sh"
   local base_server_nginx_cfg = "nginx.conf"
   local base_server_nginx_fg_cfg = "nginx-fg.conf"
-  local base_server_init_test_lua = "init-test.lua"
-  local base_server_init_worker_test_lua = "init-worker-test.lua"
   local base_server_luarocks_cfg = "luarocks.lua"
   local base_server_lua_modules = "lua_modules"
   local base_server_lua_modules_ok = "lua_modules.ok"
+
+  local base_server_nginx_user = fs.exists("server/nginx.tk.conf") and "server/nginx.tk.conf"
+    or fs.exists("server/nginx.conf") and "server/nginx.conf"
+    or nil
 
   local base_client_static = get_files("client/static")
   local base_client_assets = get_files("client/assets")
@@ -253,24 +289,23 @@ local function init (opts)
     return fs.stripparts(fs.stripextensions(fp) .. ".wasm", 2)
   end, it.ivals(base_client_bins)))
 
-  local public_files = arr.extend({},
-    arr.map(arr.map(arr.extend({}, base_client_static, base_client_assets), function (fp)
-      return fs.stripparts(fp, 2)
-    end), remove_tk),
-    arr.map(arr.extend({}, base_client_pages, base_client_wasm), remove_tk))
+  local public_files_static = arr.map(arr.map(arr.extend({}, base_client_static, base_client_assets), function (fp)
+    return fs.stripparts(fp, 2)
+  end), remove_tk)
 
-  local version_check = opts.config.env.version_check
-  if version_check == true then
-    version_check = opts.config.env.version
-  elseif type(version_check) ~= "string" then
-    version_check = nil
-  end
+  local public_files_wasm = arr.map(arr.extend({}, base_client_pages, base_client_wasm), remove_tk)
+
+  local public_files = arr.extend({}, public_files_static, public_files_wasm)
+
+  local public_files_static_for_precache = public_files_static
 
   local base_env = {
     root_dir = fs.cwd(),
     skip_check = opts.skip_check,
-    version_check = version_check,
     public_files = public_files,
+    public_files_static_for_precache = public_files_static_for_precache,
+    registered_public_files = registered_public_files,
+    hash_public = true,
     var = function (n)
       err.assert(vdt.isstring(n))
       return arr.concat({ opts.config.env.variable_prefix, "_", n })
@@ -283,11 +318,12 @@ local function init (opts)
     target = "build",
     libs = base_server_libs,
     dist_dir = dist_dir(),
-    public_dir = dist_dir_client(),
+    public_dir = dist_dir_staging(),
     work_dir = server_dir(),
     openresty_dir = opts.openresty_dir,
     lua_modules = dist_dir(base_server_lua_modules),
     luarocks_cfg = server_dir(base_server_luarocks_cfg),
+    hashed = hashed,
   }
 
   local test_server_env = {
@@ -296,7 +332,7 @@ local function init (opts)
     target = "test-build",
     libs = base_server_libs,
     dist_dir = test_dist_dir(),
-    public_dir = test_dist_dir_client(),
+    public_dir = test_dist_dir_staging(),
     work_dir = test_server_dir(),
     openresty_dir = opts.openresty_dir,
     luarocks_cfg = test_server_dir(base_server_luarocks_cfg),
@@ -304,6 +340,7 @@ local function init (opts)
     lua_path = get_lua_path(test_dist_dir()),
     lua_cpath = get_lua_cpath(test_dist_dir()),
     lua_modules = test_dist_dir(base_server_lua_modules),
+    hashed = test_hashed,
   }
 
   local client_env = {
@@ -311,13 +348,16 @@ local function init (opts)
     component = "client",
     target = "build",
     dist_dir = dist_dir(),
-    public_dir = dist_dir_client(),
+    public_dir = dist_dir_staging(),
+    static_files_ok = dist_dir("static-files.ok"),
+    hash_precache_js = dist_dir("hash-precache.js"),
     work_dir = client_dir(),
     bundler_post_dir = client_dir("bundler-post"),
     build_dir = client_dir("build", "default-wasm", "build"),
     lua_path = get_lua_path(client_dir("build", "default-wasm", "build")),
     lua_cpath = get_lua_cpath(client_dir("build", "default-wasm", "build")),
     luarocks_cfg = client_dir("build", "default-wasm", "build", base_server_luarocks_cfg),
+    hashed = hashed,
   }
 
   local test_client_env = {
@@ -325,13 +365,16 @@ local function init (opts)
     component = "client",
     target = "test-build",
     dist_dir = test_dist_dir(),
-    public_dir = test_dist_dir_client(),
+    public_dir = test_dist_dir_staging(),
+    static_files_ok = test_dist_dir("static-files.ok"),
+    hash_precache_js = test_dist_dir("hash-precache.js"),
     work_dir = test_client_dir(),
     bundler_post_dir = test_client_dir("bundler-post"),
     build_dir = test_client_dir("build", "default-wasm", "build"),
     lua_path = get_lua_path(test_client_dir("build", "default-wasm", "build")),
     lua_cpath = get_lua_cpath(test_client_dir("build", "default-wasm", "build")),
     luarocks_cfg = test_client_dir("build", "default-wasm", "build", base_server_luarocks_cfg),
+    hashed = test_hashed,
   }
 
   local root_env = {
@@ -340,6 +383,7 @@ local function init (opts)
     target = "build",
     dist_dir = dist_dir(),
     work_dir = work_dir(),
+    hashed = hashed,
   }
 
   local test_root_env = {
@@ -351,6 +395,7 @@ local function init (opts)
     lua = env.interpreter()[1],
     lua_path = get_lua_path(work_dir("test", "build")),
     lua_cpath = get_lua_cpath(work_dir("test", "build")),
+    hashed = test_hashed,
   }
 
   -- Merge base_env into all environments (root_dir, var(), etc.)
@@ -371,7 +416,12 @@ local function init (opts)
     root_env, test_root_env,
   }
   for _, e in ipairs(all_envs) do
-    e.client = client_cfg
+    e.client = tbl.merge({}, client_cfg, {
+      public_files = public_files,
+      public_files_static_for_precache = public_files_static_for_precache,
+      registered_public_files = registered_public_files,
+      hash_public = true,
+    })
     e.server = server_cfg
     e.name = opts.config.env.name
     e.version = opts.config.env.version
@@ -438,25 +488,6 @@ rocks_provided = { lua = "5.1" }
   add_templated_target_base64(test_server_dir(base_server_run_sh),
     <% return str.quote(str.to_base64(readfile("res/web/run.sh"))) %>, test_server_env) -- luacheck: ignore
 
-  add_templated_target_base64(server_dir(base_server_nginx_cfg),
-    <% return str.quote(str.to_base64(readfile("res/web/nginx.tk.conf"))) %>, server_env, -- luacheck: ignore
-    { server_dir(base_server_lua_modules_ok) })
-
-  add_templated_target_base64(server_dir(base_server_nginx_fg_cfg),
-    <% return str.quote(str.to_base64(readfile("res/web/nginx.tk.conf"))) %>, tbl.merge({ console_logs = true }, server_env), -- luacheck: ignore
-    { server_dir(base_server_lua_modules_ok) })
-
-  add_templated_target_base64(test_server_dir(base_server_nginx_cfg),
-    <% return str.quote(str.to_base64(readfile("res/web/nginx.tk.conf"))) %>, test_server_env, -- luacheck: ignore
-    { test_server_dir(base_server_lua_modules_ok),
-      test_server_dir(base_server_init_test_lua),
-      test_server_dir(base_server_init_worker_test_lua) })
-
-  add_templated_target_base64(test_server_dir(base_server_nginx_fg_cfg),
-    <% return str.quote(str.to_base64(readfile("res/web/nginx.tk.conf"))) %>, tbl.merge({ console_logs = true }, test_server_env), -- luacheck: ignore
-    { test_server_dir(base_server_lua_modules_ok),
-      test_server_dir(base_server_init_test_lua),
-      test_server_dir(base_server_init_worker_test_lua) })
 
   add_templated_target_base64(server_dir(base_server_luarocks_cfg),
     <% return str.quote(str.to_base64(readfile("res/web/luarocks.lua"))) %>, server_env) -- luacheck: ignore
@@ -464,45 +495,13 @@ rocks_provided = { lua = "5.1" }
   add_templated_target_base64(test_server_dir(base_server_luarocks_cfg),
     <% return str.quote(str.to_base64(readfile("res/web/luarocks.lua"))) %>, test_server_env) -- luacheck: ignore
 
-  add_templated_target_base64(test_server_dir(base_server_init_test_lua),
-    <% return str.quote(str.to_base64(readfile("res/web/init-test.lua"))) %>, test_server_env) -- luacheck: ignore
-
-  add_templated_target_base64(test_server_dir(base_server_init_worker_test_lua),
-    <% return str.quote(str.to_base64(readfile("res/web/init-worker-test.lua"))) %>, test_server_env) -- luacheck: ignore
-
   add_copied_target(
     dist_dir(base_server_run_sh),
     server_dir(base_server_run_sh))
 
   add_copied_target(
-    dist_dir(base_server_nginx_cfg),
-    server_dir(base_server_nginx_cfg))
-
-  add_copied_target(
-    dist_dir(base_server_nginx_fg_cfg),
-    server_dir(base_server_nginx_fg_cfg))
-
-  add_copied_target(
-    test_dist_dir(base_server_init_test_lua),
-    test_server_dir(base_server_init_test_lua))
-
-  add_copied_target(
-    test_dist_dir(base_server_init_worker_test_lua),
-    test_server_dir(base_server_init_worker_test_lua))
-
-  add_copied_target(
     test_dist_dir(base_server_run_sh),
     test_server_dir(base_server_run_sh))
-
-  add_copied_target(
-    test_dist_dir(base_server_nginx_cfg),
-    test_server_dir(base_server_nginx_cfg),
-    { test_dist_dir(base_server_init_test_lua), test_dist_dir(base_server_init_worker_test_lua) })
-
-  add_copied_target(
-    test_dist_dir(base_server_nginx_fg_cfg),
-    test_server_dir(base_server_nginx_fg_cfg),
-    { test_dist_dir(base_server_init_test_lua), test_dist_dir(base_server_init_worker_test_lua) })
 
   for flag in it.ivals({
     "skip_check"
@@ -519,10 +518,6 @@ rocks_provided = { lua = "5.1" }
       end
     end
   end
-
-  target(
-    arr.map({ base_server_init_test_lua, base_server_init_worker_test_lua }, test_server_dir),
-    arr.map({ "skip_check.flag" }, work_dir))
 
   for fp in it.ivals(base_server_libs) do
     add_file_target(server_dir_stripped(remove_tk(fp)), fp, server_env)
@@ -572,18 +567,28 @@ rocks_provided = { lua = "5.1" }
     add_file_target(test_client_dir_stripped(remove_tk(fp)), fp, test_client_env)
   end
 
-  for ddir, ddir_stripped, cdir, cdir_stripped, env in it.map(arr.spread, it.ivals({
-    { dist_dir_client, dist_dir_client_stripped, client_dir,
-      client_dir_stripped, client_env },
-    { test_dist_dir_client, test_dist_dir_client_stripped,
-      test_client_dir, test_client_dir_stripped, test_client_env }
+  for staging_dir, staging_dir_stripped, cdir, cdir_stripped, env, final_dir, hash_static_ok, hash_static_manifest, static_files_ok, hash_precache_js in it.map(arr.spread, it.ivals({
+    { dist_dir_staging, dist_dir_staging_stripped,
+      client_dir, client_dir_stripped, client_env,
+      dist_dir_client,
+      dist_dir("hash-static.ok"),
+      dist_dir("hash-manifest-static.lua"),
+      dist_dir("static-files.ok"),
+      dist_dir("hash-precache.js") },
+    { test_dist_dir_staging, test_dist_dir_staging_stripped,
+      test_client_dir, test_client_dir_stripped, test_client_env,
+      test_dist_dir_client,
+      test_dist_dir("hash-static.ok"),
+      test_dist_dir("hash-manifest-static.lua"),
+      test_dist_dir("static-files.ok"),
+      test_dist_dir("hash-precache.js") }
   })) do
 
-    fs.mkdirp(ddir())
+    fs.mkdirp(staging_dir())
     fs.mkdirp(cdir())
 
     for fp in it.ivals(base_client_assets) do
-      add_copied_target(ddir_stripped(remove_tk(fp)), fp,
+      add_copied_target(staging_dir_stripped(remove_tk(fp)), fp,
         { cdir(base_client_lua_modules_deps_ok) })
     end
 
@@ -592,7 +597,7 @@ rocks_provided = { lua = "5.1" }
       add_file_target(cdir(remove_tk(fp)), cdir_stripped(fp), env,
         arr.extend({ cdir(base_client_lua_modules_deps_ok) },
           arr.map(arr.map(arr.extend({}, base_client_res, base_client_res_templated), remove_tk), cdir_stripped)))
-      add_copied_target(ddir_stripped(remove_tk(fp)),
+      add_copied_target(staging_dir_stripped(remove_tk(fp)),
         cdir(remove_tk(fp)))
     end
 
@@ -662,6 +667,9 @@ rocks_provided = { lua = "5.1" }
           local luac_bin = fs.join(lua_dir, "bin", "luac")
           local extra_cflags = arr.extend({}, extra_rule_cflags, tbl.get(env, "cxxflags") or {})
           local extra_ldflags = arr.extend({}, extra_rule_ldflags, tbl.get(env, "ldflags") or {})
+          if hash_precache_js and fs.exists(hash_precache_js) then
+            arr.extend(extra_ldflags, { "--pre-js", hash_precache_js })
+          end
           local use_files = tbl.get(env, "client", "files")
           common.with_build_deps(has_build_deps and build_deps_dir or nil, function ()
             bundle(pre, fs.dirname(post), {
@@ -678,8 +686,8 @@ rocks_provided = { lua = "5.1" }
           end)
         end)
       end)
-      add_copied_target(ddir(fp), post)
-      local wasm_dest = fs.join(fs.dirname(ddir(fp)), fs.stripextensions(fs.basename(ddir(fp))) .. ".wasm")
+      add_copied_target(staging_dir(fp), post)
+      local wasm_dest = fs.join(fs.dirname(staging_dir(fp)), fs.stripextensions(fs.basename(staging_dir(fp))) .. ".wasm")
       local wasm_src = post .. ".wasm"
       add_copied_target(wasm_dest, wasm_src)
     end
@@ -697,6 +705,9 @@ rocks_provided = { lua = "5.1" }
             name = opts.config.env.name .. "-client",
             version = opts.config.env.version,
             rules = opts.config.env.rules,
+            public_files_static_for_precache = public_files_static_for_precache,
+            registered_public_files = registered_public_files,
+            hashed = env.environment == "test" and test_hashed or hashed,
           }, opts.config.env.client or {}, env),
         }
         fs.mkdirp(cdir())
@@ -719,7 +730,7 @@ rocks_provided = { lua = "5.1" }
 
     target(
       { cdir(base_client_lua_modules_ok) },
-      arr.extend({ opts.config_file, cdir(base_client_lua_modules_deps_ok) },
+      arr.extend({ opts.config_file, cdir(base_client_lua_modules_deps_ok), hash_static_ok },
         has_build_deps and { build_deps_ok } or {},
         arr.map(arr.extend({}, base_client_bins, base_client_libs, base_client_deps), cdir_stripped),
         arr.map(arr.map(arr.extend({}, base_root_libs, base_root_res), remove_tk), cdir)),
@@ -732,6 +743,9 @@ rocks_provided = { lua = "5.1" }
             name = opts.config.env.name .. "-client",
             version = opts.config.env.version,
             rules = opts.config.env.rules,
+            public_files_static_for_precache = public_files_static_for_precache,
+            registered_public_files = registered_public_files,
+            hashed = env.environment == "test" and test_hashed or hashed,
           }, opts.config.env.client or {}, env),
         }
         fs.mkdirp(cdir())
@@ -751,6 +765,133 @@ rocks_provided = { lua = "5.1" }
           fs.touch(base_client_lua_modules_ok)
         end)
       end)
+
+    local static_staging_files = arr.extend({},
+      arr.map(arr.map(arr.extend({}, base_client_static, base_client_assets), staging_dir_stripped), remove_tk))
+    local wasm_staging_files = arr.extend({},
+      arr.map(arr.map(arr.extend({}, base_client_pages, base_client_wasm), staging_dir), remove_tk))
+    local is_main = env.environment == "main"
+    local hash_ok = is_main and dist_dir("hash.ok") or test_dist_dir("hash.ok")
+    local hash_manifest = is_main and dist_dir("hash-manifest.lua") or test_dist_dir("hash-manifest.lua")
+
+    target(
+      { hash_static_ok },
+      arr.extend({}, static_staging_files, { static_files_ok }),
+        function ()
+          local manifest = {}
+          local files_to_hash = {}
+          for _, fp in ipairs(static_staging_files) do
+            local rel = str.stripprefix(fp, staging_dir() .. "/")
+            files_to_hash[rel] = fp
+          end
+          for rel in pairs(registered_public_files) do
+            local fp = staging_dir(rel)
+            if fs.exists(fp) then
+              files_to_hash[rel] = fp
+            end
+          end
+          for rel, fp in pairs(files_to_hash) do
+            local hash = common.compute_file_hash(fp)
+            local hashed_rel = common.hash_filename(rel, hash)
+            manifest[rel] = hashed_rel
+          end
+          local manifest_content = "return {\n"
+          for orig, h in pairs(manifest) do
+            manifest_content = manifest_content .. str.format("  [%q] = %q,\n", orig, h)
+          end
+          manifest_content = manifest_content .. "}\n"
+          fs.writefile(hash_static_manifest, manifest_content)
+          local js_parts = { "self.HASH_MANIFEST = {" }
+          local first = true
+          for orig, h in pairs(manifest) do
+            if not first then arr.push(js_parts, ",") end
+            first = false
+            arr.push(js_parts, str.format("[atob(%q)]:%q", str.to_base64(orig), h))
+          end
+          for _, wasm_file in ipairs(public_files_wasm) do
+            if not first then arr.push(js_parts, ",") end
+            first = false
+            arr.push(js_parts, str.format("[atob(%q)]:%q", str.to_base64(wasm_file), wasm_file))
+          end
+          arr.push(js_parts, "};")
+          fs.writefile(hash_precache_js, arr.concat(js_parts, ""))
+          fs.touch(hash_static_ok)
+        end)
+
+      target(
+        { hash_ok },
+        arr.extend({ hash_static_ok }, wasm_staging_files),
+        function ()
+          local static_manifest = fs.exists(hash_static_manifest) and dofile(hash_static_manifest) or {}
+          local mapping = {}
+          local manifest = {}
+          local function make_placeholder(filename)
+            local name, ext = str.match(filename, "^(.+)%.([^.]+)$")
+            if name and ext then
+              return name .. ".____________." .. ext
+            else
+              return filename .. ".____________"
+            end
+          end
+          for rel, hashed_rel in pairs(static_manifest) do
+            local tag = make_placeholder(rel)
+            mapping[tag] = hashed_rel
+            manifest[rel] = hashed_rel
+          end
+          local files_to_hash = {}
+          for rel in pairs(static_manifest) do
+            local fp = staging_dir(rel)
+            if fs.exists(fp) then
+              files_to_hash[rel] = fp
+            end
+          end
+          for _, fp in ipairs(wasm_staging_files) do
+            local rel = str.stripprefix(fp, staging_dir() .. "/")
+            files_to_hash[rel] = fp
+          end
+          for rel, fp in pairs(files_to_hash) do
+            if not manifest[rel] then
+              local hash = common.compute_file_hash(fp)
+              local hashed_rel = common.hash_filename(rel, hash)
+              manifest[rel] = hashed_rel
+            end
+            local tag = make_placeholder(rel)
+            mapping[tag] = manifest[rel]
+          end
+          for rel, fp in pairs(files_to_hash) do
+            local hashed_rel = manifest[rel]
+            local dest = final_dir(hashed_rel)
+            fs.mkdirp(fs.dirname(dest))
+            fs.writefile(dest, fs.readfile(fp))
+          end
+          local function escape_pattern(s)
+            return str.gsub(s, "[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%1")
+          end
+          for rel in pairs(files_to_hash) do
+            local hashed_rel = manifest[rel]
+            local dest = final_dir(hashed_rel)
+            if common.is_text_file(dest) then
+              local content = fs.readfile(dest)
+              for tag, h in pairs(mapping) do
+                content = str.gsub(content, escape_pattern(tag), h)
+              end
+              for orig, h in pairs(manifest) do
+                content = str.gsub(content, "\"" .. escape_pattern(orig) .. "\"", "\"" .. h .. "\"")
+                content = str.gsub(content, "'" .. escape_pattern(orig) .. "'", "'" .. h .. "'")
+                content = str.gsub(content, "\"/" .. escape_pattern(orig) .. "\"", "\"/" .. h .. "\"")
+                content = str.gsub(content, "'/" .. escape_pattern(orig) .. "'", "'/" .. h .. "'")
+              end
+              fs.writefile(dest, content)
+            end
+          end
+          local manifest_content = "return {\n"
+          for orig, h in pairs(manifest) do
+            manifest_content = manifest_content .. str.format("  [%q] = %q,\n", orig, h)
+          end
+          manifest_content = manifest_content .. "}\n"
+          fs.writefile(hash_manifest, manifest_content)
+          fs.touch(hash_ok)
+        end)
 
   end
 
@@ -819,35 +960,126 @@ rocks_provided = { lua = "5.1" }
       end)
     end)
 
+  local function compute_nginx_context(e, nginx_cfg)
+    local modules = {}
+    for _, mod in ipairs(nginx_cfg.modules or {}) do
+      local path = env.searchpath(mod, fs.join(e.dist_dir, "lua_modules/share/lua/5.1/?.lua"))
+      modules[mod] = path and str.stripprefix(path, e.dist_dir .. "/") or nil
+    end
+    return {
+      nginx = nginx_cfg,
+      modules = modules,
+      lua_package_path = "lua_modules/share/lua/5.1/?.lua;lua_modules/share/lua/5.1/?/init.lua;" .. (opts.openresty_dir or "") .. "/lualib/?.lua;" .. (opts.openresty_dir or "") .. "/lualib/?/init.lua;;",
+      lua_package_cpath = "lua_modules/lib/lua/5.1/?.so;" .. (opts.openresty_dir or "") .. "/lualib/?.so;;",
+      openresty_dir = opts.openresty_dir,
+    }
+  end
+
+  if base_server_nginx_user then
+    local nginx_is_template = str.find(base_server_nginx_user, "%.tk%.")
+
+    local function render_nginx(src, dest, e, nginx_ctx, hashed_fn)
+      fs.mkdirp(fs.dirname(dest))
+      local env_with_nginx = tbl.assign({}, e, { nginx = nginx_ctx })
+      env_with_nginx.hashed = hashed_fn
+      if nginx_is_template then
+        local t, ds = common.with_build_deps(has_build_deps and build_deps_dir or nil, function ()
+          return tmpl.renderfile(src, env_with_nginx, _G)
+        end)
+        fs.writefile(dest, t)
+        fs.writefile(dest .. ".d", tmpl.serialize_deps(src, dest, ds))
+      else
+        fs.writefile(dest, fs.readfile(src))
+      end
+    end
+
+    local nginx_deps = { server_dir(base_server_lua_modules_ok), dist_dir("hash.ok"), base_server_nginx_user }
+    if has_build_deps then
+      arr.push(nginx_deps, build_deps_ok)
+    end
+
+    target({ server_dir(base_server_nginx_cfg) }, nginx_deps,
+      function ()
+        local nginx_cfg = opts.config.env.nginx or {}
+        local ctx = compute_nginx_context(server_env, nginx_cfg)
+        ctx.console_logs = false
+        render_nginx(base_server_nginx_user, server_dir(base_server_nginx_cfg), server_env, ctx, hashed_full)
+      end)
+
+    target({ server_dir(base_server_nginx_fg_cfg) }, nginx_deps,
+      function ()
+        local nginx_cfg = opts.config.env.nginx or {}
+        local ctx = compute_nginx_context(server_env, nginx_cfg)
+        ctx.console_logs = true
+        render_nginx(base_server_nginx_user, server_dir(base_server_nginx_fg_cfg), server_env, ctx, hashed_full)
+      end)
+
+    add_copied_target(dist_dir(base_server_nginx_cfg), server_dir(base_server_nginx_cfg))
+    add_copied_target(dist_dir(base_server_nginx_fg_cfg), server_dir(base_server_nginx_fg_cfg))
+
+    local test_nginx_deps = { test_server_dir(base_server_lua_modules_ok), test_dist_dir("hash.ok"), base_server_nginx_user }
+    if has_build_deps then
+      arr.push(test_nginx_deps, build_deps_ok)
+    end
+
+    target({ test_server_dir(base_server_nginx_cfg) }, test_nginx_deps,
+      function ()
+        local nginx_cfg = opts.config.env.nginx or {}
+        local ctx = compute_nginx_context(test_server_env, nginx_cfg)
+        ctx.console_logs = false
+        render_nginx(base_server_nginx_user, test_server_dir(base_server_nginx_cfg), test_server_env, ctx, test_hashed_full)
+      end)
+
+    target({ test_server_dir(base_server_nginx_fg_cfg) }, test_nginx_deps,
+      function ()
+        local nginx_cfg = opts.config.env.nginx or {}
+        local ctx = compute_nginx_context(test_server_env, nginx_cfg)
+        ctx.console_logs = true
+        render_nginx(base_server_nginx_user, test_server_dir(base_server_nginx_fg_cfg), test_server_env, ctx, test_hashed_full)
+      end)
+
+    add_copied_target(test_dist_dir(base_server_nginx_cfg), test_server_dir(base_server_nginx_cfg))
+    add_copied_target(test_dist_dir(base_server_nginx_fg_cfg), test_server_dir(base_server_nginx_fg_cfg))
+  end
+
+  local build_deps_list = {
+    dist_dir(base_server_run_sh),
+    server_dir(base_server_lua_modules_ok),
+    client_dir(base_client_lua_modules_ok),
+    dist_dir("hash.ok") }
+
+  local test_build_deps_list = {
+    test_dist_dir(base_server_run_sh),
+    test_server_dir(base_server_lua_modules_ok),
+    test_client_dir(base_client_lua_modules_ok),
+    test_dist_dir("hash.ok") }
+
+  if base_server_nginx_user then
+    arr.push(build_deps_list, dist_dir(base_server_nginx_cfg))
+    arr.push(build_deps_list, dist_dir(base_server_nginx_fg_cfg))
+    arr.push(test_build_deps_list, test_dist_dir(base_server_nginx_cfg))
+    arr.push(test_build_deps_list, test_dist_dir(base_server_nginx_fg_cfg))
+  end
+
   target(
     { "build" },
-    arr.extend({
-      dist_dir(base_server_run_sh),
-      dist_dir(base_server_nginx_cfg),
-      dist_dir(base_server_nginx_fg_cfg),
-      server_dir(base_server_lua_modules_ok),
-      client_dir(base_client_lua_modules_ok) },
+    arr.extend(build_deps_list,
       arr.map(arr.map(arr.extend({},
         base_client_static, base_client_assets),
-        dist_dir_client_stripped), remove_tk),
+        dist_dir_staging_stripped), remove_tk),
       arr.map(arr.map(arr.extend({},
         base_client_pages, base_client_wasm),
-        dist_dir_client), remove_tk)), true)
+        dist_dir_staging), remove_tk)), true)
 
   target(
     { "test-build" },
-    arr.extend({
-      test_dist_dir(base_server_run_sh),
-      test_dist_dir(base_server_nginx_cfg),
-      test_dist_dir(base_server_nginx_fg_cfg),
-      test_server_dir(base_server_lua_modules_ok),
-      test_client_dir(base_client_lua_modules_ok) },
+    arr.extend(test_build_deps_list,
       arr.map(arr.map(arr.extend({},
         base_client_static, base_client_assets),
-        test_dist_dir_client_stripped), remove_tk),
+        test_dist_dir_staging_stripped), remove_tk),
       arr.map(arr.map(arr.extend({},
         base_client_pages, base_client_wasm),
-        test_dist_dir_client), remove_tk)), true)
+        test_dist_dir_staging), remove_tk)), true)
 
   target(
     { "start" },
@@ -1116,8 +1348,8 @@ rocks_provided = { lua = "5.1" }
 
   local configure = tbl.get(opts, "config", "env", "configure")
   if configure then
-    configure(submake, { root = root_env, client = client_env, server = server_env })
-    configure(submake, { root = test_root_env, client = test_client_env, server = test_server_env })
+    configure(submake, { root = root_env, client = client_env, server = server_env }, register_public_file)
+    configure(submake, { root = test_root_env, client = test_client_env, server = test_server_env }, register_public_file)
   end
 
   return {
