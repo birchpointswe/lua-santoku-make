@@ -960,14 +960,20 @@ rocks_provided = { lua = "5.1" }
       end)
     end)
 
-  local function compute_nginx_context(e, nginx_cfg)
+  local function compute_nginx_context(e, nginx_cfg, foreground)
     local modules = {}
     for _, mod in ipairs(nginx_cfg.modules or {}) do
       local path = env.searchpath(mod, fs.join(e.dist_dir, "lua_modules/share/lua/5.1/?.lua"))
       modules[mod] = path and str.stripprefix(path, e.dist_dir .. "/") or nil
     end
     return {
-      nginx = nginx_cfg,
+      nginx = tbl.merge({
+        foreground = foreground,
+        daemon = "off",
+        pid = "server.pid",
+        error_log = foreground and "stderr" or "logs/error.log",
+        access_log = "logs/access.log",
+      }, nginx_cfg),
       modules = modules,
       lua_package_path = "lua_modules/share/lua/5.1/?.lua;lua_modules/share/lua/5.1/?/init.lua;" .. (opts.openresty_dir or "") .. "/lualib/?.lua;" .. (opts.openresty_dir or "") .. "/lualib/?/init.lua;;",
       lua_package_cpath = "lua_modules/lib/lua/5.1/?.so;" .. (opts.openresty_dir or "") .. "/lualib/?.so;;",
@@ -1001,16 +1007,14 @@ rocks_provided = { lua = "5.1" }
     target({ server_dir(base_server_nginx_cfg) }, nginx_deps,
       function ()
         local nginx_cfg = opts.config.env.nginx or {}
-        local ctx = compute_nginx_context(server_env, nginx_cfg)
-        ctx.console_logs = false
+        local ctx = compute_nginx_context(server_env, nginx_cfg, false)
         render_nginx(base_server_nginx_user, server_dir(base_server_nginx_cfg), server_env, ctx, hashed_full)
       end)
 
     target({ server_dir(base_server_nginx_fg_cfg) }, nginx_deps,
       function ()
         local nginx_cfg = opts.config.env.nginx or {}
-        local ctx = compute_nginx_context(server_env, nginx_cfg)
-        ctx.console_logs = true
+        local ctx = compute_nginx_context(server_env, nginx_cfg, true)
         render_nginx(base_server_nginx_user, server_dir(base_server_nginx_fg_cfg), server_env, ctx, hashed_full)
       end)
 
@@ -1025,16 +1029,14 @@ rocks_provided = { lua = "5.1" }
     target({ test_server_dir(base_server_nginx_cfg) }, test_nginx_deps,
       function ()
         local nginx_cfg = opts.config.env.nginx or {}
-        local ctx = compute_nginx_context(test_server_env, nginx_cfg)
-        ctx.console_logs = false
+        local ctx = compute_nginx_context(test_server_env, nginx_cfg, false)
         render_nginx(base_server_nginx_user, test_server_dir(base_server_nginx_cfg), test_server_env, ctx, test_hashed_full)
       end)
 
     target({ test_server_dir(base_server_nginx_fg_cfg) }, test_nginx_deps,
       function ()
         local nginx_cfg = opts.config.env.nginx or {}
-        local ctx = compute_nginx_context(test_server_env, nginx_cfg)
-        ctx.console_logs = true
+        local ctx = compute_nginx_context(test_server_env, nginx_cfg, true)
         render_nginx(base_server_nginx_user, test_server_dir(base_server_nginx_fg_cfg), test_server_env, ctx, test_hashed_full)
       end)
 
