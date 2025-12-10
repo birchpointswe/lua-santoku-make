@@ -9,12 +9,12 @@ local arr = require("santoku.array")
 -- Determine action for a file: "copy", "template", or "ignore"
 local function get_action(fp, config)
   config = config or {}
-  local rules = tbl.get(config, "env", "rules") or config.rules or {}
-  local exclude = tbl.get(rules, "exclude") or {}
+  local rules = tbl.get(config, {"env", "rules"}) or config.rules or {}
+  local exclude = tbl.get(rules, {"exclude"}) or {}
   for i = 1, #exclude do
     if str.match(fp, exclude[i]) then return "ignore" end
   end
-  local copy = tbl.get(rules, "copy") or {}
+  local copy = tbl.get(rules, {"copy"}) or {}
   for i = 1, #copy do
     if str.match(fp, copy[i]) then return "copy" end
   end
@@ -27,8 +27,8 @@ end
 -- Check if file matches rules.template pattern
 local function force_template(fp, config)
   config = config or {}
-  local rules = tbl.get(config, "env", "rules") or config.rules or {}
-  local template = tbl.get(rules, "template") or {}
+  local rules = tbl.get(config, {"env", "rules"}) or config.rules or {}
+  local template = tbl.get(rules, {"template"}) or {}
   for i = 1, #template do
     if str.match(fp, template[i]) then return true end
   end

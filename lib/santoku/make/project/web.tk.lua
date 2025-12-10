@@ -233,7 +233,7 @@ local function init (opts)
   -- Build dependencies directory (host-native, for template processing)
   local build_deps_dir = work_dir("build-deps")
   local build_deps_ok = work_dir("build-deps.ok")
-  local build_deps = tbl.get(opts, "config", "env", "build", "dependencies") or {}
+  local build_deps = tbl.get(opts, {"config", "env", "build", "dependencies"}) or {}
   local has_build_deps = #build_deps > 0
 
   local function add_file_target(dest, src, env, extra_srcs)
@@ -663,7 +663,7 @@ rocks_provided = { lua = "5.1" }
       end
       local extra_rule_cflags = {}
       local extra_rule_ldflags = {}
-      for k, v in pairs(tbl.get(env, "rules") or {}) do
+      for k, v in pairs(tbl.get(env, {"rules"}) or {}) do
         if (type(k) == "string" and str.find(post, k)) or (type(k) == "function" and k(post)) then
           if v.cxxflags then arr.copy(extra_rule_cflags, v.cxxflags) end
           if v.ldflags then arr.copy(extra_rule_ldflags, v.ldflags) end
@@ -674,12 +674,12 @@ rocks_provided = { lua = "5.1" }
         fs.pushd(cdir("build", "default-wasm", nested_env), function ()
           local lua_dir = cdir("build", "default-wasm", nested_env, "lua-5.1.5")
           local luac_bin = fs.join(lua_dir, "bin", "luac")
-          local extra_cflags = arr.flatten({extra_rule_cflags, tbl.get(env, "cxxflags") or {}})
-          local extra_ldflags = arr.flatten({extra_rule_ldflags, tbl.get(env, "ldflags") or {}})
+          local extra_cflags = arr.flatten({extra_rule_cflags, tbl.get(env, {"cxxflags"}) or {}})
+          local extra_ldflags = arr.flatten({extra_rule_ldflags, tbl.get(env, {"ldflags"}) or {}})
           if hash_precache_js and fs.exists(hash_precache_js) then
             arr.push(extra_ldflags, "--pre-js", hash_precache_js)
           end
-          local use_files = tbl.get(env, "client", "files")
+          local use_files = tbl.get(env, {"client", "files"})
           common.with_build_deps(has_build_deps and build_deps_dir or nil, function ()
             bundle(pre, fs.dirname(post), {
               cc = "emcc",
@@ -1363,7 +1363,7 @@ rocks_provided = { lua = "5.1" }
     end
   end
 
-  local configure = tbl.get(opts, "config", "env", "configure")
+  local configure = tbl.get(opts, {"config", "env", "configure"})
   if configure then
     configure(submake, { root = root_env, client = client_env, server = server_env }, register_public_file)
     configure(submake, { root = test_root_env, client = test_client_env, server = test_server_env }, register_public_file)

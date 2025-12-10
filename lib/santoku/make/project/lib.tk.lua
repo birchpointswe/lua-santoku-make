@@ -114,7 +114,7 @@ local function init (opts)
   -- Build dependencies directory (host-native, for template processing)
   local build_deps_dir = work_dir("build-deps")
   local build_deps_ok = work_dir("build-deps.ok")
-  local build_deps = tbl.get(opts, "config", "env", "build", "dependencies") or {}
+  local build_deps = tbl.get(opts, {"config", "env", "build", "dependencies"}) or {}
   local has_build_deps = #build_deps > 0
 
   local function add_file_target(dest, src, env, extra_srcs)
@@ -322,11 +322,11 @@ local function init (opts)
         arr.flatten({ test_dir("bundler-pre", fp), test_cfgs, test_dir(base_lua_modules_ok) }),
         function ()
           local extra_cflags = arr.flatten({
-            tbl.get(test_env, "test", "cflags") or {},
-            tbl.get(test_env, "test", "wasm", "cflags") or {}})
+            tbl.get(test_env, {"test", "cflags"}) or {},
+            tbl.get(test_env, {"test", "wasm", "cflags"}) or {}})
           local extra_ldflags = arr.flatten({
-            tbl.get(test_env, "test", "ldflags") or {},
-            tbl.get(test_env, "test", "wasm", "ldflags") or {}})
+            tbl.get(test_env, {"test", "ldflags"}) or {},
+            tbl.get(test_env, {"test", "wasm", "ldflags"}) or {}})
           bundle(test_dir("bundler-pre", fp), test_dir("bundler-post", fs.dirname(fp)), {
             cc = "emcc",
             close = false,
@@ -452,10 +452,10 @@ local function init (opts)
       return fs.pushd(test_dir(), function ()
         local vars = {}
         local env_tables = {
-          tbl.get(test_env, "luarocks", "env_vars") or {},
-          tbl.get(test_env, "test", "luarocks", "env_vars") or {},
-          opts.wasm and tbl.get(test_env, "test", "wasm", "luarocks", "env_vars") or {},
-          not opts.wasm and tbl.get(test_env, "test", "native", "luarocks", "env_vars") or {},
+          tbl.get(test_env, {"luarocks", "env_vars"}) or {},
+          tbl.get(test_env, {"test", "luarocks", "env_vars"}) or {},
+          opts.wasm and tbl.get(test_env, {"test", "wasm", "luarocks", "env_vars"}) or {},
+          not opts.wasm and tbl.get(test_env, {"test", "native", "luarocks", "env_vars"}) or {},
         }
         for _, env_tbl in ipairs(env_tables) do
           for k, v in pairs(env_tbl) do
@@ -527,10 +527,10 @@ rocks_provided = { lua = "5.1" }
     return fs.pushd(build_dir(), function ()
       local vars = {}
       local env_tables = {
-        tbl.get(build_env, "luarocks", "env_vars") or {},
-        tbl.get(build_env, "build", "luarocks", "env_vars") or {},
-        opts.wasm and tbl.get(build_env, "build", "wasm", "luarocks", "env_vars") or {},
-        not opts.wasm and tbl.get(build_env, "build", "native", "luarocks", "env_vars") or {}
+        tbl.get(build_env, {"luarocks", "env_vars"}) or {},
+        tbl.get(build_env, {"build", "luarocks", "env_vars"}) or {},
+        opts.wasm and tbl.get(build_env, {"build", "wasm", "luarocks", "env_vars"}) or {},
+        not opts.wasm and tbl.get(build_env, {"build", "native", "luarocks", "env_vars"}) or {}
       }
       for _, env_tbl in ipairs(env_tables) do
         for k, v in pairs(env_tbl) do
@@ -554,10 +554,10 @@ rocks_provided = { lua = "5.1" }
     return fs.pushd(build_dir(), function ()
       local vars = {}
       local env_tables = {
-        tbl.get(build_env, "luarocks", "env_vars") or {},
-        tbl.get(build_env, "build", "luarocks", "env_vars") or {},
-        opts.wasm and tbl.get(build_env, "build", "wasm", "luarocks", "env_vars") or {},
-        not opts.wasm and tbl.get(build_env, "build", "native", "luarocks", "env_vars") or {}
+        tbl.get(build_env, {"luarocks", "env_vars"}) or {},
+        tbl.get(build_env, {"build", "luarocks", "env_vars"}) or {},
+        opts.wasm and tbl.get(build_env, {"build", "wasm", "luarocks", "env_vars"}) or {},
+        not opts.wasm and tbl.get(build_env, {"build", "native", "luarocks", "env_vars"}) or {}
       }
       for _, env_tbl in ipairs(env_tables) do
         for k, v in pairs(env_tbl) do
@@ -750,7 +750,7 @@ rocks_provided = { lua = "5.1" }
     end
   end
 
-  local configure = tbl.get(opts, "config", "env", "configure")
+  local configure = tbl.get(opts, {"config", "env", "configure"})
   if configure then
     configure(submake, { root = build_env })
     configure(submake, { root = test_env })
