@@ -1,36 +1,38 @@
 -- Common utilities shared between lib and web project builders
 
 local fs = require("santoku.fs")
-local fun = require("santoku.functional")
 local tmpl = require("santoku.template")
 local str = require("santoku.string")
 local tbl = require("santoku.table")
-local varg = require("santoku.varg")
 local arr = require("santoku.array")
-local iter = require("santoku.iter")
 
 -- Determine action for a file: "copy", "template", or "ignore"
 local function get_action(fp, config)
   config = config or {}
-  local match_fp = fun.bind(str.match, fp)
   local rules = tbl.get(config, "env", "rules") or config.rules or {}
-  if iter.find(match_fp, iter.ivals(tbl.get(rules, "exclude") or {})) then
-    return "ignore"
-  elseif iter.find(match_fp, iter.ivals(tbl.get(rules, "copy") or {}))
-    or not (str.find(fp, "%.tk$") or str.find(fp, "%.tk%."))
-  then
-    return "copy"
-  else
-    return "template"
+  local exclude = tbl.get(rules, "exclude") or {}
+  for i = 1, #exclude do
+    if str.match(fp, exclude[i]) then return "ignore" end
   end
+  local copy = tbl.get(rules, "copy") or {}
+  for i = 1, #copy do
+    if str.match(fp, copy[i]) then return "copy" end
+  end
+  if not (str.find(fp, "%.tk$") or str.find(fp, "%.tk%.")) then
+    return "copy"
+  end
+  return "template"
 end
 
 -- Check if file matches rules.template pattern
 local function force_template(fp, config)
   config = config or {}
-  local match_fp = fun.bind(str.match, fp)
   local rules = tbl.get(config, "env", "rules") or config.rules or {}
-  return iter.find(match_fp, iter.ivals(tbl.get(rules, "template") or {}))
+  local template = tbl.get(rules, "template") or {}
+  for i = 1, #template do
+    if str.match(fp, template[i]) then return true end
+  end
+  return false
 end
 
 -- Remove .tk extension from template files
@@ -42,8 +44,7 @@ end
 
 -- Create a target that copies a file
 local function add_copied_target(target_fn, dest, src, extra_srcs)
-  extra_srcs = extra_srcs or {}
-  target_fn({ dest }, arr.extend({ src }, extra_srcs), function ()
+  target_fn({ dest }, arr.flatten({ src, extra_srcs or {} }), function ()
     fs.mkdirp(fs.dirname(dest))
     fs.writefile(dest, fs.readfile(src))
   end)
@@ -58,9 +59,12 @@ end
 local function get_require_paths(prefix, ...)
   local pfx = prefix and fs.join(prefix, "lua_modules") or "lua_modules"
   local ver = get_lua_version()
-  return arr.concat(varg.reduce(function (t, n)
-    return arr.push(t, fs.join(pfx, str.format(n, ver)))
-  end, {}, ...), ";")
+  local t = {}
+  for i = 1, select("#", ...) do
+    local n = select(i, ...)
+    arr.push(t, fs.join(pfx, str.format(n, ver)))
+  end
+  return arr.concat(t, ";")
 end
 
 -- Get LUA_PATH for a prefix
@@ -90,26 +94,21 @@ local function with_build_deps(build_deps_dir, fn)
   local deps_cpath = get_lua_cpath(build_deps_dir)
   package.path = deps_path .. ";" .. old_path
   package.cpath = deps_cpath .. ";" .. old_cpath
-  return varg.tup(function (...)
+  return (function (...)
     package.path = old_path
     package.cpath = old_cpath
     return ...
-  end, fn())
+  end)(fn())
 end
 
 -- Create a target that processes a file (copy or template)
 local function add_file_target(target_fn, dest, src, env, config, config_file, extra_srcs, build_deps_dir, build_deps_ok)
-  extra_srcs = extra_srcs or {}
   local action = get_action(src, config)
   if action == "copy" then
     return add_copied_target(target_fn, dest, src, extra_srcs)
   elseif action == "template" then
     dest = str.gsub(dest, "%.tk", "")
-    local deps = arr.extend({ src, config_file }, extra_srcs)
-    if build_deps_ok then
-      arr.push(deps, build_deps_ok)
-    end
-    target_fn({ dest }, deps, function ()
+    target_fn({ dest }, arr.flatten({ src, config_file, extra_srcs or {}, build_deps_ok or {} }), function ()
       fs.mkdirp(fs.dirname(dest))
       local t, ds = with_build_deps(build_deps_dir, function ()
         return tmpl.renderfile(src, env, _G)
@@ -122,12 +121,7 @@ end
 
 -- Create a target from base64-encoded template data
 local function add_templated_target_base64(target_fn, dest, data, env, config_file, extra_srcs, build_deps_dir, build_deps_ok)
-  extra_srcs = extra_srcs or {}
-  local deps = arr.extend({ config_file }, extra_srcs)
-  if build_deps_ok then
-    arr.push(deps, build_deps_ok)
-  end
-  target_fn({ dest }, deps, function ()
+  target_fn({ dest }, arr.flatten({ config_file, extra_srcs or {}, build_deps_ok or {} }), function ()
     fs.mkdirp(fs.dirname(dest))
     local t, ds = with_build_deps(build_deps_dir, function ()
       return tmpl.render(str.from_base64(data), env, _G)
@@ -143,13 +137,15 @@ local function get_files(dir, config, check_tpl)
   if not fs.exists(dir) then
     return {}, tpl
   end
-  return iter.collect(iter.filter(function (fp)
+  local result = {}
+  for fp in fs.files(dir, true) do
     if check_tpl and force_template(fp, config) then
       arr.push(tpl, fp)
-      return false
+    elseif get_action(fp, config) ~= "ignore" then
+      arr.push(result, fp)
     end
-    return get_action(fp, config) ~= "ignore"
-  end, fs.files(dir, true))), tpl
+  end
+  return result, tpl
 end
 
 local function compute_file_hash(filepath)

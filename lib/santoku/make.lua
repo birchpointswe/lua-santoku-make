@@ -14,12 +14,7 @@ local fs = require("santoku.fs")
 local exists = fs.exists
 local readfile = fs.readfile
 
-local iter = require("santoku.iter")
-local ivals = iter.ivals
-local keys = iter.keys
-
 local arr = require("santoku.array")
-local extend = arr.extend
 
 local huge = math.huge
 local max = math.max
@@ -40,13 +35,10 @@ return function ()
     if not (fn == nil or fn == true) then
       assert(hascall(fn))
     end
-    for t in ivals(ts) do
-      local tt = targets[t] or {}
-      local td = deps[t] or {}
-      extend(tt, ts)
-      extend(td, ds)
-      targets[t] = tt
-      deps[t] = td
+    for i = 1, #ts do
+      local t = ts[i]
+      targets[t] = arr.flatten({ targets[t] or {}, ts })
+      deps[t] = arr.flatten({ deps[t] or {}, ds })
       if fn ~= nil then
         assert(fns[t] == nil, "target already has a registered function or is registered as phony", t)
         fns[t] = fn
@@ -62,7 +54,7 @@ return function ()
     local data = readfile(dfile)
     local file_deps = deserialize_deps(data)
     local maxtime = -huge
-    for fp in keys(file_deps) do
+    for fp in pairs(file_deps) do
       if exists(fp) then
         maxtime = max(maxtime, modtime(fp))
       end
@@ -74,7 +66,8 @@ return function ()
 
     local maxtime = -huge
 
-    for t in ivals(ts) do
+    for i = 1, #ts do
+      local t = ts[i]
 
       local tc = cache[t]
 

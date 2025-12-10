@@ -49,16 +49,16 @@ inject_flags = function (env, wasm_env)
         local wasm_flags = { cflags = {}, cxxflags = {}, ldflags = {} }
         for k, v in pairs(env or {}) do
           if (type(k) == "string" and str.find(fp, k)) or (type(k) == "function" and k(fp)) then
-            if v.cflags then arr.extend(flags.cflags, v.cflags) end
-            if v.cxxflags then arr.extend(flags.cxxflags, v.cxxflags) end
-            if v.ldflags then arr.extend(flags.ldflags, v.ldflags) end
+            if v.cflags then arr.copy(flags.cflags, v.cflags) end
+            if v.cxxflags then arr.copy(flags.cxxflags, v.cxxflags) end
+            if v.ldflags then arr.copy(flags.ldflags, v.ldflags) end
           end
         end
         for k, v in pairs(wasm_env or {}) do
           if (type(k) == "string" and str.find(fp, k)) or (type(k) == "function" and k(fp)) then
-            if v.cflags then arr.extend(wasm_flags.cflags, v.cflags) end
-            if v.cxxflags then arr.extend(wasm_flags.cxxflags, v.cxxflags) end
-            if v.ldflags then arr.extend(wasm_flags.ldflags, v.ldflags) end
+            if v.cflags then arr.copy(wasm_flags.cflags, v.cflags) end
+            if v.cxxflags then arr.copy(wasm_flags.cxxflags, v.cxxflags) end
+            if v.ldflags then arr.copy(wasm_flags.ldflags, v.ldflags) end
           end
         end
         -- Emit rules with ifdef for wasm vs native flags

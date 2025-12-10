@@ -1,6 +1,5 @@
 local fs = require("santoku.fs")
 local sys = require("santoku.system")
-local iter = require("santoku.iter")
 local arr = require("santoku.array")
 local str = require("santoku.string")
 local err = require("santoku.error")
@@ -80,7 +79,7 @@ local function clean_lib(opts)
 
   remove_matching(work_dir, "%.d$", dry_run, removed)
 
-  for _, subdir in iter.ivals({ "lib", "bin", "test/res" }) do
+  for _, subdir in ipairs({ "lib", "bin", "test/res" }) do
     remove_matching(fs.join(test_dir, subdir), "%.lua$", dry_run, removed)
     remove_matching(fs.join(build_dir, subdir), "%.lua$", dry_run, removed)
   end
@@ -122,7 +121,7 @@ local function clean_web(opts)
     remove_if_exists(fs.join(work_dir, "build-deps-luarocks.lua"), dry_run, removed)
   end
 
-  for _, env_dir in iter.ivals({ test_dir, main_dir }) do
+  for _, env_dir in ipairs({ test_dir, main_dir }) do
     if env_dir then
       if clean_server then
         local server_dir = fs.join(env_dir, "server")

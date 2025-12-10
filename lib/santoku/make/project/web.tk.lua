@@ -8,7 +8,6 @@ local env = require("santoku.env")
 local make = require("santoku.make")
 local sys = require("santoku.system")
 local tbl = require("santoku.table")
-local varg = require("santoku.varg")
 local vdt = require("santoku.validate")
 local err = require("santoku.error")
 local fs = require("santoku.fs")
@@ -16,14 +15,14 @@ local common = require("santoku.make.common")
 local wasm = require("santoku.make.wasm")
 local clean = require("santoku.make.clean")
 local arr = require("santoku.array")
-local it = require("santoku.iter")
 local str = require("santoku.string")
 local tmpl = require("santoku.template")
+local spread = arr.spread
 
 local boilerplate_tar_b64 = <% -- luacheck: ignore
   local fs = require("santoku.fs")
   local tmp = fs.tmpname()
-  sys.execute({ "tar", "-C", "submodules/tokuboilerplate-web", "--exclude", ".git", "-czf", tmp, "." })
+  sys.execute({ "tar", "-C", "submodules/tokuboilerplate-web", "--exclude", ".git", "--exclude", "build", "-czf", tmp, "." })
   local content = fs.readfile(tmp)
   fs.rm(tmp)
   return str.quote(str.to_base64(content))
@@ -46,20 +45,18 @@ local function create (opts)
   sys.execute({ "tar", "-C", dir, "-xzf", tmp })
   fs.rm(tmp)
 
-  for _, d in it.ivals({
-    "server/lib/tokuboilerplate/web",
+  for _, d in ipairs({
     "server/lib/tokuboilerplate",
     "client/lib/tokuboilerplate",
-    "lib/tokuboilerplate/web",
     "lib/tokuboilerplate",
   }) do
     local src = fs.join(dir, d)
     if fs.exists(src) then
-      fs.rename(src, fs.join(dir, str.gsub(d, "tokuboilerplate", name)))
+      fs.mv(src, fs.join(dir, (str.gsub(d, "tokuboilerplate", name))))
     end
   end
 
-  for _, f in it.ivals({
+  for _, f in ipairs({
     "bin/tokuboilerplate.lua",
     "server/bin/tokuboilerplate.lua",
     "client/lib/tokuboilerplate.lua",
@@ -70,14 +67,14 @@ local function create (opts)
   }) do
     local src = fs.join(dir, f)
     if fs.exists(src) then
-      fs.rename(src, fs.join(dir, str.gsub(f, "tokuboilerplate", name)))
+      fs.mv(src, fs.join(dir, (str.gsub(f, "tokuboilerplate", name))))
     end
   end
 
   for fp in fs.files(dir, { recurse = true }) do
     local content = fs.readfile(fp)
     if content:find("tokuboilerplate") then
-      fs.writefile(fp, str.gsub(content, "tokuboilerplate", name))
+      fs.writefile(fp, (str.gsub(content, "tokuboilerplate", name)))
     end
   end
 
@@ -120,9 +117,11 @@ local function init (opts)
   end
 
   local function server_dir_stripped (...)
-    return server_dir(varg.map(function (fp)
-      return str.stripprefix(fp, "server/")
-    end, ...))
+    local t = {}
+    for i = 1, select("#", ...) do
+      t[i] = str.stripprefix(select(i, ...), "server/")
+    end
+    return server_dir(spread(t))
   end
 
   local function test_dist_dir (...)
@@ -134,9 +133,11 @@ local function init (opts)
   end
 
   local function test_server_dir_stripped (...)
-    return test_server_dir(varg.map(function (fp)
-      return str.stripprefix(fp, "server/")
-    end, ...))
+    local t = {}
+    for i = 1, select("#", ...) do
+      t[i] = str.stripprefix(select(i, ...), "server/")
+    end
+    return test_server_dir(spread(t))
   end
 
   local function client_dir (...)
@@ -144,9 +145,11 @@ local function init (opts)
   end
 
   local function client_dir_stripped (...)
-    return client_dir(varg.map(function (fp)
-      return str.stripprefix(fp, "client/")
-    end, ...))
+    local t = {}
+    for i = 1, select("#", ...) do
+      t[i] = str.stripprefix(select(i, ...), "client/")
+    end
+    return client_dir(spread(t))
   end
 
   local function test_client_dir (...)
@@ -154,9 +157,11 @@ local function init (opts)
   end
 
   local function test_client_dir_stripped (...)
-    return test_client_dir(varg.map(function (fp)
-      return str.stripprefix(fp, "client/")
-    end, ...))
+    local t = {}
+    for i = 1, select("#", ...) do
+      t[i] = str.stripprefix(select(i, ...), "client/")
+    end
+    return test_client_dir(spread(t))
   end
 
   local function dist_dir_client (...)
@@ -178,15 +183,19 @@ local function init (opts)
   end
 
   local function dist_dir_staging_stripped (...)
-    return dist_dir("public-staging", varg.map(function (fp)
-      return fs.stripparts(fp, 2)
-    end, ...))
+    local t = {}
+    for i = 1, select("#", ...) do
+      t[i] = fs.stripparts(select(i, ...), 2)
+    end
+    return dist_dir("public-staging", spread(t))
   end
 
   local function test_dist_dir_staging_stripped (...)
-    return test_dist_dir("public-staging", varg.map(function (fp)
-      return fs.stripparts(fp, 2)
-    end, ...))
+    local t = {}
+    for i = 1, select("#", ...) do
+      t[i] = fs.stripparts(select(i, ...), 2)
+    end
+    return test_dist_dir("public-staging", spread(t))
   end
 
   local registered_public_files = {}
@@ -281,21 +290,23 @@ local function init (opts)
   local base_client_lua_modules_ok = "lua_modules.ok"
   local base_client_lua_modules_deps_ok = "lua_modules.deps.ok"
 
-  local base_client_pages = it.collect(it.map(function (fp)
-    return fs.stripparts(fs.stripextensions(fp) .. ".js", 2)
-  end, it.ivals(base_client_bins)))
+  local base_client_pages = {}
+  for i = 1, #base_client_bins do
+    base_client_pages[i] = fs.stripparts(fs.stripextensions(base_client_bins[i]) .. ".js", 2)
+  end
 
-  local base_client_wasm = it.collect(it.map(function (fp)
-    return fs.stripparts(fs.stripextensions(fp) .. ".wasm", 2)
-  end, it.ivals(base_client_bins)))
+  local base_client_wasm = {}
+  for i = 1, #base_client_bins do
+    base_client_wasm[i] = fs.stripparts(fs.stripextensions(base_client_bins[i]) .. ".wasm", 2)
+  end
 
-  local public_files_static = arr.map(arr.map(arr.extend({}, base_client_static, base_client_assets), function (fp)
+  local public_files_static = arr.map(arr.map(arr.flatten({base_client_static, base_client_assets}), function (fp)
     return fs.stripparts(fp, 2)
   end), remove_tk)
 
-  local public_files_wasm = arr.map(arr.extend({}, base_client_pages, base_client_wasm), remove_tk)
+  local public_files_wasm = arr.map(arr.flatten({base_client_pages, base_client_wasm}), remove_tk)
 
-  local public_files = arr.extend({}, public_files_static, public_files_wasm)
+  local public_files = arr.flatten({public_files_static, public_files_wasm})
 
   local public_files_static_for_precache = public_files_static
 
@@ -503,7 +514,7 @@ rocks_provided = { lua = "5.1" }
     test_dist_dir(base_server_run_sh),
     test_server_dir(base_server_run_sh))
 
-  for flag in it.ivals({
+  for _, flag in ipairs({
     "skip_check"
   }) do
     local fp = work_dir(flag .. ".flag")
@@ -519,55 +530,55 @@ rocks_provided = { lua = "5.1" }
     end
   end
 
-  for fp in it.ivals(base_server_libs) do
+  for _, fp in ipairs(base_server_libs) do
     add_file_target(server_dir_stripped(remove_tk(fp)), fp, server_env)
   end
 
-  for fp in it.ivals(base_server_libs) do
+  for _, fp in ipairs(base_server_libs) do
     add_file_target(test_server_dir_stripped(remove_tk(fp)), fp, test_server_env)
   end
 
-  for fp in it.ivals(base_root_libs) do
+  for _, fp in ipairs(base_root_libs) do
     add_file_target(server_dir(remove_tk(fp)), fp, server_env)
   end
 
-  for fp in it.ivals(base_root_libs) do
+  for _, fp in ipairs(base_root_libs) do
     add_file_target(test_server_dir(remove_tk(fp)), fp, test_server_env)
   end
 
-  for fp in it.ivals(base_root_res) do
+  for _, fp in ipairs(base_root_res) do
     add_file_target(server_dir(remove_tk(fp)), fp, server_env)
   end
 
-  for fp in it.ivals(base_root_res) do
+  for _, fp in ipairs(base_root_res) do
     add_file_target(test_server_dir(remove_tk(fp)), fp, test_server_env)
   end
 
-  for fp in it.ivals(base_server_deps) do
+  for _, fp in ipairs(base_server_deps) do
     add_file_target(server_dir_stripped(remove_tk(fp)), fp, server_env)
   end
 
-  for fp in it.ivals(base_server_deps) do
+  for _, fp in ipairs(base_server_deps) do
     add_file_target(test_server_dir_stripped(remove_tk(fp)), fp, test_server_env)
   end
 
-  for fp in it.ivals(base_server_test_specs) do
+  for _, fp in ipairs(base_server_test_specs) do
     add_file_target(test_server_dir_stripped(remove_tk(fp)), fp, test_server_env)
   end
 
-  for fp in it.ivals(base_server_test_res) do
+  for _, fp in ipairs(base_server_test_res) do
     add_file_target(test_server_dir_stripped(remove_tk(fp)), fp, test_server_env)
   end
 
-  for fp in it.ivals(base_server_test_res_templated) do
+  for _, fp in ipairs(base_server_test_res_templated) do
     add_file_target(test_server_dir_stripped(remove_tk(fp)), fp, test_server_env)
   end
 
-  for fp in it.ivals(base_client_test_specs) do
+  for _, fp in ipairs(base_client_test_specs) do
     add_file_target(test_client_dir_stripped(remove_tk(fp)), fp, test_client_env)
   end
 
-  for staging_dir, staging_dir_stripped, cdir, cdir_stripped, env, final_dir, hash_static_ok, hash_static_manifest, static_files_ok, hash_precache_js in it.map(arr.spread, it.ivals({
+  local env_configs = {
     { dist_dir_staging, dist_dir_staging_stripped,
       client_dir, client_dir_stripped, client_env,
       dist_dir_client,
@@ -582,65 +593,67 @@ rocks_provided = { lua = "5.1" }
       test_dist_dir("hash-manifest-static.lua"),
       test_dist_dir("static-files.ok"),
       test_dist_dir("hash-precache.js") }
-  })) do
+  }
+  for _, config in ipairs(env_configs) do
+    local staging_dir, staging_dir_stripped, cdir, cdir_stripped, env, final_dir, hash_static_ok, hash_static_manifest, static_files_ok, hash_precache_js = spread(config)
 
     fs.mkdirp(staging_dir())
     fs.mkdirp(cdir())
 
-    for fp in it.ivals(base_client_assets) do
+    for _, fp in ipairs(base_client_assets) do
       add_copied_target(staging_dir_stripped(remove_tk(fp)), fp,
         { cdir(base_client_lua_modules_deps_ok) })
     end
 
-    for fp in it.ivals(base_client_static) do
+    for _, fp in ipairs(base_client_static) do
       add_copied_target(cdir_stripped(fp), fp)
       add_file_target(cdir(remove_tk(fp)), cdir_stripped(fp), env,
-        arr.extend({ cdir(base_client_lua_modules_deps_ok) },
-          arr.map(arr.map(arr.extend({}, base_client_res, base_client_res_templated), remove_tk), cdir_stripped)))
+        arr.push({ cdir(base_client_lua_modules_deps_ok) },
+          arr.spread(arr.map(arr.map(arr.flatten({base_client_res, base_client_res_templated}), remove_tk), cdir_stripped))))
       add_copied_target(staging_dir_stripped(remove_tk(fp)),
         cdir(remove_tk(fp)))
     end
 
-    for fp in it.ivals(base_client_deps) do
+    for _, fp in ipairs(base_client_deps) do
       add_copied_target(cdir_stripped(fp), fp,
-        arr.extend({ cdir(base_client_lua_modules_deps_ok) },
-          arr.map(arr.map(arr.extend({}, base_client_res, base_client_res_templated), remove_tk), cdir_stripped)))
+        arr.push({ cdir(base_client_lua_modules_deps_ok) },
+          arr.spread(arr.map(arr.map(arr.flatten({base_client_res, base_client_res_templated}), remove_tk), cdir_stripped))))
     end
 
-    for fp in it.ivals(base_client_libs) do
+    for _, fp in ipairs(base_client_libs) do
       add_copied_target(cdir_stripped(fp), fp,
-        arr.extend({ cdir(base_client_lua_modules_deps_ok) },
-          arr.map(arr.map(arr.extend({}, base_client_res, base_client_res_templated), remove_tk), cdir_stripped)))
+        arr.push({ cdir(base_client_lua_modules_deps_ok) },
+          arr.spread(arr.map(arr.map(arr.flatten({base_client_res, base_client_res_templated}), remove_tk), cdir_stripped))))
     end
 
-    for fp in it.ivals(base_root_libs) do
+    for _, fp in ipairs(base_root_libs) do
       add_file_target(cdir(remove_tk(fp)), fp, env,
-        arr.extend({ cdir(base_client_lua_modules_deps_ok) },
-          arr.map(arr.map(arr.extend({}, base_client_res, base_client_res_templated), remove_tk), cdir_stripped),
-          arr.map(arr.map(arr.extend({}, base_root_res), remove_tk), cdir)))
+        arr.push(arr.push({ cdir(base_client_lua_modules_deps_ok) },
+          arr.spread(arr.map(arr.map(arr.flatten({base_client_res, base_client_res_templated}), remove_tk), cdir_stripped))),
+          arr.spread(arr.map(arr.map(arr.copy({}, base_root_res), remove_tk), cdir))))
     end
 
-    for fp in it.ivals(base_root_res) do
+    for _, fp in ipairs(base_root_res) do
       add_file_target(cdir(remove_tk(fp)), fp, env)
     end
 
-    for fp in it.ivals(base_client_bins) do
+    for _, fp in ipairs(base_client_bins) do
       add_copied_target(cdir_stripped(fp), fp,
-        arr.extend({ cdir(base_client_lua_modules_deps_ok) },
-          arr.map(arr.map(arr.extend({}, base_client_res, base_client_res_templated), remove_tk), cdir_stripped)))
+        arr.push({ cdir(base_client_lua_modules_deps_ok) },
+          arr.spread(arr.map(arr.map(arr.flatten({base_client_res, base_client_res_templated}), remove_tk), cdir_stripped))))
     end
 
-    for fp in it.ivals(base_client_res) do
+    for _, fp in ipairs(base_client_res) do
       add_file_target(cdir_stripped(remove_tk(fp)), fp, env,
-        arr.map(arr.extend({}, base_client_static), cdir_stripped))
+        arr.map(arr.copy({}, base_client_static), cdir_stripped))
     end
 
-    for fp in it.ivals(base_client_res_templated) do
+    for _, fp in ipairs(base_client_res_templated) do
       add_file_target(cdir_stripped(remove_tk(fp)), fp, env,
-        arr.map(arr.extend({}, base_client_static), cdir_stripped))
+        arr.map(arr.copy({}, base_client_static), cdir_stripped))
     end
 
-    for fp in it.ivals(base_client_pages) do
+    for _, fp in ipairs(base_client_pages) do
       local nested_env = env.environment == "test" and "test" or "build"
       local pre = cdir("build", "default-wasm", nested_env, "bin", fs.stripextensions(fp)) .. ".lua"
       local post = cdir("bundler-post", fs.stripextensions(fp))
@@ -650,14 +663,10 @@ rocks_provided = { lua = "5.1" }
       end
       local extra_rule_cflags = {}
       local extra_rule_ldflags = {}
-      for k, v in it.pairs(tbl.get(env, "rules") or {}) do
+      for k, v in pairs(tbl.get(env, "rules") or {}) do
         if (type(k) == "string" and str.find(post, k)) or (type(k) == "function" and k(post)) then
-          if v.cxxflags then
-            arr.extend(extra_rule_cflags, v.cxxflags)
-          end
-          if v.ldflags then
-            arr.extend(extra_rule_ldflags, v.ldflags)
-          end
+          if v.cxxflags then arr.copy(extra_rule_cflags, v.cxxflags) end
+          if v.ldflags then arr.copy(extra_rule_ldflags, v.ldflags) end
         end
       end
       target({ post }, deps, function ()
@@ -665,10 +674,10 @@ rocks_provided = { lua = "5.1" }
         fs.pushd(cdir("build", "default-wasm", nested_env), function ()
           local lua_dir = cdir("build", "default-wasm", nested_env, "lua-5.1.5")
           local luac_bin = fs.join(lua_dir, "bin", "luac")
-          local extra_cflags = arr.extend({}, extra_rule_cflags, tbl.get(env, "cxxflags") or {})
-          local extra_ldflags = arr.extend({}, extra_rule_ldflags, tbl.get(env, "ldflags") or {})
+          local extra_cflags = arr.flatten({extra_rule_cflags, tbl.get(env, "cxxflags") or {}})
+          local extra_ldflags = arr.flatten({extra_rule_ldflags, tbl.get(env, "ldflags") or {}})
           if hash_precache_js and fs.exists(hash_precache_js) then
-            arr.extend(extra_ldflags, { "--pre-js", hash_precache_js })
+            arr.push(extra_ldflags, "--pre-js", hash_precache_js)
           end
           local use_files = tbl.get(env, "client", "files")
           common.with_build_deps(has_build_deps and build_deps_dir or nil, function ()
@@ -694,8 +703,8 @@ rocks_provided = { lua = "5.1" }
 
     target(
       { cdir(base_client_lua_modules_deps_ok) },
-      arr.extend({ opts.config_file },
-        arr.map(arr.extend({}, arr.map(arr.extend({}, base_client_res), remove_tk), arr.map(arr.extend({}, base_client_res_templated), remove_tk)), cdir_stripped)),
+      arr.push({ opts.config_file },
+        arr.spread(arr.map(arr.flatten({arr.map(arr.copy({}, base_client_res), remove_tk), arr.map(arr.copy({}, base_client_res_templated), remove_tk)}), cdir_stripped))),
       function ()
         local nested_env = env.environment == "test" and "test" or "build"
         local config_file = fs.absolute(opts.config_file)
@@ -730,10 +739,10 @@ rocks_provided = { lua = "5.1" }
 
     target(
       { cdir(base_client_lua_modules_ok) },
-      arr.extend({ opts.config_file, cdir(base_client_lua_modules_deps_ok), hash_static_ok },
-        has_build_deps and { build_deps_ok } or {},
-        arr.map(arr.extend({}, base_client_bins, base_client_libs, base_client_deps), cdir_stripped),
-        arr.map(arr.map(arr.extend({}, base_root_libs, base_root_res), remove_tk), cdir)),
+      arr.push(arr.push(arr.push({ opts.config_file, cdir(base_client_lua_modules_deps_ok), hash_static_ok },
+        arr.spread(has_build_deps and { build_deps_ok } or {})),
+        arr.spread(arr.map(arr.flatten({base_client_bins, base_client_libs, base_client_deps}), cdir_stripped))),
+        arr.spread(arr.map(arr.map(arr.flatten({base_root_libs, base_root_res}), remove_tk), cdir))),
       function ()
         local nested_env = env.environment == "test" and "test" or "build"
         local config_file = fs.absolute(opts.config_file)
@@ -766,17 +775,17 @@ rocks_provided = { lua = "5.1" }
         end)
       end)
 
-    local static_staging_files = arr.extend({},
-      arr.map(arr.map(arr.extend({}, base_client_static, base_client_assets), staging_dir_stripped), remove_tk))
-    local wasm_staging_files = arr.extend({},
-      arr.map(arr.map(arr.extend({}, base_client_pages, base_client_wasm), staging_dir), remove_tk))
+    local static_staging_files =
+      arr.map(arr.map(arr.flatten({base_client_static, base_client_assets}), staging_dir_stripped), remove_tk)
+    local wasm_staging_files =
+      arr.map(arr.map(arr.flatten({base_client_pages, base_client_wasm}), staging_dir), remove_tk)
     local is_main = env.environment == "main"
     local hash_ok = is_main and dist_dir("hash.ok") or test_dist_dir("hash.ok")
     local hash_manifest = is_main and dist_dir("hash-manifest.lua") or test_dist_dir("hash-manifest.lua")
 
     target(
       { hash_static_ok },
-      arr.extend({}, static_staging_files, { static_files_ok }),
+      arr.push(arr.copy({}, static_staging_files), static_files_ok),
         function ()
           local manifest = {}
           local files_to_hash = {}
@@ -820,7 +829,7 @@ rocks_provided = { lua = "5.1" }
 
       target(
         { hash_ok },
-        arr.extend({ hash_static_ok }, wasm_staging_files),
+        arr.flatten({ hash_static_ok, wasm_staging_files }),
         function ()
           local static_manifest = fs.exists(hash_static_manifest) and dofile(hash_static_manifest) or {}
           local mapping = {}
@@ -897,9 +906,9 @@ rocks_provided = { lua = "5.1" }
 
   target(
     { server_dir(base_server_lua_modules_ok) },
-    arr.extend({ server_dir(base_server_luarocks_cfg) },
-      arr.map(arr.map(arr.extend({}, base_server_libs, base_server_deps), server_dir_stripped), remove_tk),
-      arr.map(arr.map(arr.extend({}, base_root_libs, base_root_res), server_dir), remove_tk)),
+    arr.push(arr.push({ server_dir(base_server_luarocks_cfg) },
+      arr.spread(arr.map(arr.map(arr.flatten({base_server_libs, base_server_deps}), server_dir_stripped), remove_tk))),
+      arr.spread(arr.map(arr.map(arr.flatten({base_root_libs, base_root_res}), server_dir), remove_tk))),
     function ()
       local config_file = fs.absolute(opts.config_file)
       local config = {
@@ -928,9 +937,9 @@ rocks_provided = { lua = "5.1" }
 
   target(
     { test_server_dir(base_server_lua_modules_ok) },
-    arr.extend({ test_server_dir(base_server_luarocks_cfg) },
-      arr.map(arr.map(arr.extend({}, base_server_libs, base_server_deps), test_server_dir_stripped), remove_tk),
-      arr.map(arr.map(arr.extend({}, base_root_libs, base_root_res), test_server_dir), remove_tk)),
+    arr.push(arr.push({ test_server_dir(base_server_luarocks_cfg) },
+      arr.spread(arr.map(arr.map(arr.flatten({base_server_libs, base_server_deps}), test_server_dir_stripped), remove_tk))),
+      arr.spread(arr.map(arr.map(arr.flatten({base_root_libs, base_root_res}), test_server_dir), remove_tk))),
     function ()
       local config_file = fs.absolute(opts.config_file)
       local config = {
@@ -1065,23 +1074,19 @@ rocks_provided = { lua = "5.1" }
 
   target(
     { "build" },
-    arr.extend(build_deps_list,
-      arr.map(arr.map(arr.extend({},
-        base_client_static, base_client_assets),
-        dist_dir_staging_stripped), remove_tk),
-      arr.map(arr.map(arr.extend({},
-        base_client_pages, base_client_wasm),
-        dist_dir_staging), remove_tk)), true)
+    arr.push(arr.push(build_deps_list,
+      arr.spread(arr.map(arr.map(arr.flatten({base_client_static, base_client_assets}),
+        dist_dir_staging_stripped), remove_tk))),
+      arr.spread(arr.map(arr.map(arr.flatten({base_client_pages, base_client_wasm}),
+        dist_dir_staging), remove_tk))), true)
 
   target(
     { "test-build" },
-    arr.extend(test_build_deps_list,
-      arr.map(arr.map(arr.extend({},
-        base_client_static, base_client_assets),
-        test_dist_dir_staging_stripped), remove_tk),
-      arr.map(arr.map(arr.extend({},
-        base_client_pages, base_client_wasm),
-        test_dist_dir_staging), remove_tk)), true)
+    arr.push(arr.push(test_build_deps_list,
+      arr.spread(arr.map(arr.map(arr.flatten({base_client_static, base_client_assets}),
+        test_dist_dir_staging_stripped), remove_tk))),
+      arr.spread(arr.map(arr.map(arr.flatten({base_client_pages, base_client_wasm}),
+        test_dist_dir_staging), remove_tk))), true)
 
   target(
     { "start" },
@@ -1144,10 +1149,10 @@ rocks_provided = { lua = "5.1" }
 
   target(
     { "test" },
-    arr.extend(
+    arr.push(arr.push(
       { test_client_dir(base_client_lua_modules_ok) },
-      arr.map(arr.map(arr.extend({}, base_server_test_specs, base_server_test_res_templated, base_server_test_res), remove_tk), test_server_dir_stripped),
-      arr.map(arr.map(arr.extend({}, base_client_test_specs), remove_tk), test_client_dir_stripped)),
+      arr.spread(arr.map(arr.map(arr.flatten({base_server_test_specs, base_server_test_res_templated, base_server_test_res}), remove_tk), test_server_dir_stripped))),
+      arr.spread(arr.map(arr.map(arr.copy({}, base_client_test_specs), remove_tk), test_client_dir_stripped))),
     function (_, _, iterating)
       local config_file = fs.absolute(opts.config_file)
 
@@ -1243,14 +1248,13 @@ rocks_provided = { lua = "5.1" }
     end)
 
   target({ "iterate" }, {}, function (_, _)
-    varg.tup(function (ok, ...)
+    (function (ok, ...)
       if not ok then
         err.error("inotify not found", ...)
       end
-    end, err.pcall(sys.execute, { "sh", "-c", "type inotifywait >/dev/null 2>/dev/null" }))
+    end)(err.pcall(sys.execute, { "sh", "-c", "type inotifywait >/dev/null 2>/dev/null" }))
     local config_mtime = fs.exists(opts.config_file) and require("santoku.make.posix").time(opts.config_file) or nil
     while true do
-      -- Check if config file changed - if so, need to restart
       if config_mtime then
         local new_mtime = fs.exists(opts.config_file) and require("santoku.make.posix").time(opts.config_file) or nil
         if new_mtime and new_mtime > config_mtime then
@@ -1258,27 +1262,25 @@ rocks_provided = { lua = "5.1" }
           config_mtime = new_mtime
         end
       end
-      varg.tup(function (ok, first, ...)
+      (function (ok, first, ...)
         if not ok then
           if first == "fatal" then
             err.error(first, ...)
           end
-          -- Check for interrupt signal
           local msg = tostring(first)
           if str.match(msg, "interrupt") or str.match(msg, "SIGINT") then
             err.error(first, ...)
           end
           print(first, ...)
         end
-      end, err.pcall(build, { "test" }, opts.verbosity, true))
-      -- Collect directories from .d files
+      end)(err.pcall(build, { "test" }, opts.verbosity, true))
       local dfile_dirs = {}
       err.pcall(function ()
         for dfile in fs.files(work_dir(), true) do
           if str.find(dfile, "%.d$") then
             local data = fs.readfile(dfile)
             local file_deps = tmpl.deserialize_deps(data)
-            for fp in it.keys(file_deps) do
+            for fp in pairs(file_deps) do
               local dir = fs.dirname(fp)
               if dir and dir ~= "" and dir ~= "." then
                 dfile_dirs[dir] = true
@@ -1287,21 +1289,29 @@ rocks_provided = { lua = "5.1" }
           end
         end
       end)
-      varg.tup(function (ok, first, ...)
+      ;(function (ok, first, ...)
         if not ok then
           local msg = tostring(first)
           if str.match(msg, "interrupt") or str.match(msg, "SIGINT") or str.match(msg, "signaled") then
             err.error(first, ...)
           end
         end
-      end, err.pcall(function ()
+      end)(err.pcall(function ()
+        local watch_dirs = { "client", "server", "res", "lib", "bin", "test", opts.config_file }
+        for dir in pairs(dfile_dirs) do
+          watch_dirs[#watch_dirs + 1] = dir
+        end
+        local existing_dirs = {}
+        for i = 1, #watch_dirs do
+          if fs.exists(watch_dirs[i]) then
+            existing_dirs[#existing_dirs + 1] = watch_dirs[i]
+          end
+        end
         sys.execute({
           "inotifywait", "-qr",
           "-e", "close_write", "-e", "modify",
           "-e", "move", "-e", "create", "-e", "delete",
-          arr.spread(it.collect(it.filter(function (fp)
-            return fs.exists(fp)
-          end, it.chain(it.ivals({ "client", "server", "res", "lib", "bin", "test", opts.config_file }), it.keys(dfile_dirs)))))
+          arr.spread(existing_dirs)
         })
       end))
       sys.sleep(.25)
@@ -1337,14 +1347,19 @@ rocks_provided = { lua = "5.1" }
     end)
   end)
 
-  -- Load .d file dependencies (tracks files read during template expansion)
-  for fp in it.ivals(submake.targets) do
+  for _, fp in ipairs(submake.targets) do
     local dfile = fp .. ".d"
     if fs.exists(dfile) then
-      local chunks = it.map(str.sub, it.map(function (line)
-        return str.splits(line, "%s*:%s*", false)
-      end, fs.lines(dfile)))
-      target(chunks(), it.collect(chunks))
+      local all_chunks = {}
+      for line in fs.lines(dfile) do
+        local parts = str.splits(line, "%s*:%s*", false)
+        for i = 1, #parts do
+          all_chunks[#all_chunks + 1] = str.sub(parts[i])
+        end
+      end
+      if #all_chunks > 0 then
+        target({ all_chunks[1] }, arr.slice(all_chunks, 2))
+      end
     end
   end
 

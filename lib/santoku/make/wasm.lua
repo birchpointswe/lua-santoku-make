@@ -52,26 +52,16 @@ end
 -- Get standard emcc bundle flags for WASM builds
 -- context: "test" adds node filesystem support, "build" is for production
 local function get_bundle_flags(lua_dir, context, extra_cflags, extra_ldflags)
-  extra_cflags = extra_cflags or {}
-  extra_ldflags = extra_ldflags or {}
-
-  local flags = {
+  return arr.flatten({
     "-sASSERTIONS",
     "-sALLOW_MEMORY_GROWTH",
     "-I" .. fs.join(lua_dir, "include"),
     "-L" .. fs.join(lua_dir, "lib"),
-  }
-
-  -- Test context needs node filesystem access and single file for simplicity
-  if context == "test" then
-    arr.extend(flags, { "-sSINGLE_FILE", "-lnodefs.js", "-lnoderawfs.js" })
-  end
-
-  arr.extend(flags, { "-llua", "-lm" })
-  arr.extend(flags, extra_cflags)
-  arr.extend(flags, extra_ldflags)
-
-  return flags
+    context == "test" and { "-sSINGLE_FILE", "-lnodefs.js", "-lnoderawfs.js" } or {},
+    "-llua", "-lm",
+    extra_cflags or {},
+    extra_ldflags or {},
+  })
 end
 
 -- Create a node wrapper script for a WASM executable
@@ -154,7 +144,7 @@ local function build_embed(entry_lua, outdir, opts)
   fs.writefile(outcfp, c_code)
 
   -- Build with emcc, embedding the lua_modules directory and entry file
-  local args = {
+  local args = arr.flatten({
     "emcc",
     outcfp,
     "-sALLOW_MEMORY_GROWTH",
@@ -163,10 +153,9 @@ local function build_embed(entry_lua, outdir, opts)
     "-llua", "-lm",
     "--embed-file", lua_modules_dir .. "@/lua_modules",
     "--embed-file", entry_lua .. "@" .. entry_vfs_path,
-  }
-
-  arr.extend(args, extra_flags)
-  arr.push(args, "-o", outmainfp)
+    extra_flags,
+    "-o", outmainfp,
+  })
 
   print(arr.concat(args, " "))
   sys.execute(args)
