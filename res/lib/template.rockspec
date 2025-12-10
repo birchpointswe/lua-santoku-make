@@ -6,13 +6,6 @@
   get = tbl.get
 
   arr = require("santoku.array")
-  concat = arr.concat
-
-  iter = require("santoku.iter")
-  map = iter.map
-  flatten = iter.flatten
-  ivals = iter.ivals
-  collect = iter.collect
 
   serialize = require("santoku.serialize")
   serialize_table_contents = serialize.serialize_table_contents
@@ -32,21 +25,41 @@ description = {
 }
 
 dependencies = {
-  <% return concat(collect(map(squote, flatten(map(ivals, ivals({
+  <%
+    local dep_sources = {
       dependencies or {},
       environment == "test" and get(test or {}, "dependencies") or {},
       environment == "test" and wasm and get(test or {}, "wasm", "dependencies") or {},
       environment == "test" and not wasm and get(test or {}, "native", "dependencies") or {}
-    }))))), ",\n") %>
+    }
+    local deps = {}
+    for i = 1, #dep_sources do
+      local src = dep_sources[i]
+      for j = 1, #src do
+        deps[#deps + 1] = squote(src[j])
+      end
+    end
+    return arr.concat(deps, ",\n")
+  %>
 }
 
 external_dependencies = {
-  <% return concat(collect(map(serialize_table_contents, flatten(map(ivals, ivals({
+  <%
+    local ext_sources = {
       get(dependencies or {}, "external") or {},
       environment == "test" and get(test or {}, "dependencies", "external") or {},
       environment == "test" and wasm and get(test or {}, "wasm", "dependencies", "external") or {},
       environment == "test" and not wasm and get(test or {}, "native", "dependencies", "external") or {}
-    }))))), ",\n") %>
+    }
+    local ext_deps = {}
+    for i = 1, #ext_sources do
+      local src = ext_sources[i]
+      for j = 1, #src do
+        ext_deps[#ext_deps + 1] = serialize_table_contents(src[j])
+      end
+    end
+    return arr.concat(ext_deps, ",\n")
+  %>
 }
 
 build = {

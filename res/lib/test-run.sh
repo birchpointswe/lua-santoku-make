@@ -1,15 +1,7 @@
 #!/bin/sh
 
 <%
-  iter = require("santoku.iter")
-  collect = iter.collect
-  map = iter.map
-  pairs = iter.pairs
-  ivals = iter.ivals
-  filter = iter.filter
-
   arr = require("santoku.array")
-  concat = arr.concat
 
   str = require("santoku.string")
   sisempty = str.isempty
@@ -24,15 +16,24 @@ export LUA='<% return lua %>'
 export LUA_PATH='<% return lua_path %>'
 export LUA_CPATH='<% return lua_cpath %>'
 
-<% return concat(collect(map(function (k, v)
-    return sformat("export %s=%s", k, squote(v))
-  end, pairs(get(test or {}, "env_vars") or {}))), "\n") %>
+<%
+  local env_lines = {}
+  for k, v in pairs(get(test or {}, "env_vars") or {}) do
+    env_lines[#env_lines + 1] = sformat("export %s=%s", k, squote(v))
+  end
+  return arr.concat(env_lines, "\n")
+%>
 
-<% return concat(collect(map(function (env)
-    return ". " .. env
-  end, filter(function (e)
-    return not sisempty(e)
-  end, ivals(get(test or {}, "env_scripts") or {})))), "\n") %>
+<%
+  local script_lines = {}
+  local scripts = get(test or {}, "env_scripts") or {}
+  for i = 1, #scripts do
+    if not sisempty(scripts[i]) then
+      script_lines[#script_lines + 1] = ". " .. scripts[i]
+    end
+  end
+  return arr.concat(script_lines, "\n")
+%>
 
 echo
 
