@@ -17,6 +17,8 @@ local clean = require("santoku.make.clean")
 local arr = require("santoku.array")
 local str = require("santoku.string")
 local tmpl = require("santoku.template")
+local rand = require("santoku.random")
+local fun = require("santoku.functional")
 local spread = arr.spread
 
 local boilerplate_tar_b64 = <% -- luacheck: ignore
@@ -834,14 +836,12 @@ rocks_provided = { lua = "5.1" }
           local static_manifest = fs.exists(hash_static_manifest) and dofile(hash_static_manifest) or {}
           local mapping = {}
           local manifest = {}
+          local build_id = rand.alnum(24)
           local function make_placeholder(filename)
-            local name, ext = str.match(filename, "^(.+)%.([^.]+)$")
-            if name and ext then
-              return name .. ".____________." .. ext
-            else
-              return filename .. ".____________"
-            end
+            return "___SANTOKU_" .. build_id .. "_" .. str.gsub(filename, "[^%w]", "_") .. "___"
           end
+          arr.ieach(fun.take(fs.rm, 1), fs.files(final_dir(), true))
+          fs.rmdirs(final_dir())
           for rel, hashed_rel in pairs(static_manifest) do
             local tag = make_placeholder(rel)
             mapping[tag] = hashed_rel
