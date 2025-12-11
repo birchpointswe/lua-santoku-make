@@ -51,7 +51,7 @@ local function create (opts)
   }) do
     local src = fs.join(dir, f)
     if fs.exists(src) then
-      fs.rename(src, fs.join(dir, str.gsub(f, "tokuboilerplate%-lib", name)))
+      fs.mv(src, fs.join(dir, str.gsub(f, "tokuboilerplate%-lib", name)))
     end
   end
 
