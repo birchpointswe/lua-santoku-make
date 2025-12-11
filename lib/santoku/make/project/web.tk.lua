@@ -840,8 +840,10 @@ rocks_provided = { lua = "5.1" }
           local function make_placeholder(filename)
             return "___SANTOKU_" .. build_id .. "_" .. str.gsub(filename, "[^%w]", "_") .. "___"
           end
-          arr.ieach(fun.take(fs.rm, 1), fs.files(final_dir(), true))
-          fs.rmdirs(final_dir())
+          if fs.exists(final_dir()) then
+            arr.ieach(fun.take(fs.rm, 1), fs.files(final_dir(), true))
+            fs.rmdirs(final_dir())
+          end
           for rel, hashed_rel in pairs(static_manifest) do
             local tag = make_placeholder(rel)
             mapping[tag] = hashed_rel
