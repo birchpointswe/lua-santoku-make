@@ -21,14 +21,14 @@ local rand = require("santoku.random")
 local fun = require("santoku.functional")
 local spread = arr.spread
 
-local boilerplate_tar_b64 = <% -- luacheck: ignore
+local boilerplate_tar_b64 = <%
   local fs = require("santoku.fs")
   local tmp = fs.tmpname()
   sys.execute({ "tar", "-C", "submodules/tokuboilerplate-web", "--exclude", ".git", "--exclude", "build", "-czf", tmp, "." })
   local content = fs.readfile(tmp)
   fs.rm(tmp)
   return str.quote(str.to_base64(content))
-%>
+%>; -- luacheck: ignore
 
 local function create (opts)
   err.assert(vdt.istable(opts), "opts must be a table")
@@ -59,8 +59,6 @@ local function create (opts)
   end
 
   for _, f in ipairs({
-    "bin/tokuboilerplate.lua",
-    "server/bin/tokuboilerplate.lua",
     "client/lib/tokuboilerplate.lua",
     "server/lib/tokuboilerplate.lua",
     "test/spec/tokuboilerplate.lua",
@@ -77,6 +75,14 @@ local function create (opts)
     local content = fs.readfile(fp)
     if content:find("tokuboilerplate") then
       fs.writefile(fp, (str.gsub(content, "tokuboilerplate", name)))
+    end
+  end
+
+  local upper_name = str.upper(str.gsub(name, "%-", "_"))
+  for fp in fs.files(dir, { recurse = true }) do
+    local content = fs.readfile(fp)
+    if content:find("TOKUBOILERPLATE") then
+      fs.writefile(fp, (str.gsub(content, "TOKUBOILERPLATE", upper_name)))
     end
   end
 
@@ -174,8 +180,6 @@ local function init (opts)
     return test_dist_dir("public",...)
   end
 
-
-
   local function dist_dir_staging (...)
     return dist_dir("public-staging", ...)
   end
@@ -231,7 +235,6 @@ local function init (opts)
   local function add_copied_target(dest, src, extra_srcs)
     return common.add_copied_target(target, dest, src, extra_srcs)
   end
-
 
   local build_deps_dir = work_dir("build-deps")
   local build_deps_ok = work_dir("build-deps.ok")
@@ -411,15 +414,12 @@ local function init (opts)
     hashed = test_hashed,
   }
 
-
   tbl.merge(server_env, base_env)
   tbl.merge(test_server_env, base_env)
   tbl.merge(client_env, base_env)
   tbl.merge(test_client_env, base_env)
   tbl.merge(root_env, base_env)
   tbl.merge(test_root_env, base_env)
-
-
 
   local client_cfg = opts.config.env.client or {}
   local server_cfg = opts.config.env.server or {}
@@ -436,10 +436,10 @@ local function init (opts)
       hash_public = true,
     })
     e.server = server_cfg
+    e.nginx = opts.config.env.nginx or {}
     e.name = opts.config.env.name
     e.version = opts.config.env.version
   end
-
   for _, e in ipairs({ client_env, test_client_env }) do
     e.rules = client_cfg.rules
     e.ldflags = client_cfg.ldflags
@@ -455,7 +455,6 @@ local function init (opts)
     opts.config.env.variable_prefix or
     str.upper(str.gsub(opts.config.env.name, "%W+", "_"))
 
-
   local build_deps_luarocks_cfg = work_dir("build-deps-luarocks.lua")
   if has_build_deps then
     target(
@@ -465,7 +464,6 @@ local function init (opts)
         fs.mkdirp(build_deps_dir)
         local config_file = fs.absolute(opts.config_file)
         local lua_modules_dir = fs.join(fs.absolute(build_deps_dir), "lua_modules")
-
         fs.writefile(build_deps_luarocks_cfg, str.interp([[
 rocks_trees = {
   { name = "build-deps",
@@ -685,7 +683,6 @@ rocks_provided = { lua = "5.1" }
           common.with_build_deps(has_build_deps and build_deps_dir or nil, function ()
             bundle(pre, fs.dirname(post), {
               cc = "emcc",
-
               luac = not use_files and (luac_bin .. " -s -o %output %input") or nil,
               binary = not use_files,
               files = use_files,
@@ -997,7 +994,8 @@ rocks_provided = { lua = "5.1" }
 
     local function render_nginx(src, dest, e, nginx_ctx, hashed_fn)
       fs.mkdirp(fs.dirname(dest))
-      local env_with_nginx = tbl.assign({}, e, { nginx = nginx_ctx })
+      local env_with_nginx = tbl.merge({}, nginx_ctx, e)
+      env_with_nginx.nginx = nginx_ctx
       env_with_nginx.hashed = hashed_fn
       if nginx_is_template then
         local t, ds = common.with_build_deps(has_build_deps and build_deps_dir or nil, function ()
@@ -1120,7 +1118,6 @@ rocks_provided = { lua = "5.1" }
       end)
     end)
 
-
   local function get_single_target(single)
     if not single then return nil, nil end
     if str.match(single, "^client/test/") or str.match(single, "^client/") then
@@ -1136,10 +1133,8 @@ rocks_provided = { lua = "5.1" }
 
   local single_target, single_path = get_single_target(opts.single)
 
-
   local run_root = opts.test_root or (not opts.test_client and not opts.test_server and not single_target)
   local run_server = opts.test_server or (not opts.test_root and not opts.test_client and not single_target)
-
 
   if single_target == "root" then
     run_root, run_server = true, false
@@ -1157,15 +1152,12 @@ rocks_provided = { lua = "5.1" }
       arr.spread(arr.map(arr.map(arr.copy({}, base_client_test_specs), remove_tk), test_client_dir_stripped))),
     function (_, _, iterating)
       local config_file = fs.absolute(opts.config_file)
-
-
       if run_root and #base_root_test_specs > 0 then
         local root_config = {
           type = "lib",
           env = tbl.merge({
             name = opts.config.env.name,
             version = opts.config.env.version,
-            configure = nil,
           }, opts.config.env),
         }
         require("santoku.make.project").init({
@@ -1177,15 +1169,9 @@ rocks_provided = { lua = "5.1" }
         }).test()
       end
 
-
-
-
       if run_server and #base_server_test_specs > 0 then
-
         build({ "stop", "test-stop" }, opts.verbosity)
         build({ "test-start" }, opts.verbosity)
-
-
         sys.sleep(0.5)
         local pid_file = test_dist_dir("server.pid")
         if not fs.exists(pid_file) then
@@ -1195,13 +1181,10 @@ rocks_provided = { lua = "5.1" }
         if not pid then
           err.error("fatal", "Server failed to start: invalid pid file")
         end
-
         local alive = err.pcall(sys.execute, { "kill", "-0", pid })
         if not alive then
           err.error("fatal", "Server failed to start: process died immediately (check nginx error log)")
         end
-
-
         local tail_pid_file = test_dist_dir("logs", "tail.pid")
         if opts.show_logs then
           local tail_running = false
