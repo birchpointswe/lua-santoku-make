@@ -18,14 +18,14 @@ local clean = require("santoku.make.clean")
 local arr = require("santoku.array")
 local str = require("santoku.string")
 
-local boilerplate_tar_b64 = <% -- luacheck: ignore
+local boilerplate_tar_b64 = <%
   local fs = require("santoku.fs")
   local tmp = fs.tmpname()
   sys.execute({ "tar", "-C", "submodules/tokuboilerplate-lib", "--exclude", ".git", "-czf", tmp, "." })
   local content = fs.readfile(tmp)
   fs.rm(tmp)
   return str.quote(str.to_base64(content))
-%>
+%>; -- luacheck: ignore
 
 local function create (opts)
   err.assert(vdt.istable(opts), "opts must be a table")
@@ -44,21 +44,30 @@ local function create (opts)
   sys.execute({ "tar", "-C", dir, "-xzf", tmp })
   fs.rm(tmp)
 
+  for _, d in ipairs({
+    "lib/tokuboilerplate",
+  }) do
+    local src = fs.join(dir, d)
+    if fs.exists(src) then
+      fs.mv(src, fs.join(dir, str.gsub(d, "tokuboilerplate", name)))
+    end
+  end
+
   for _, f in ipairs({
-    "bin/tokuboilerplate-lib.lua",
-    "lib/tokuboilerplate-lib.lua",
-    "test/spec/tokuboilerplate-lib.lua",
+    "bin/tokuboilerplate.lua",
+    "lib/tokuboilerplate.lua",
+    "test/spec/tokuboilerplate.lua",
   }) do
     local src = fs.join(dir, f)
     if fs.exists(src) then
-      fs.mv(src, fs.join(dir, str.gsub(f, "tokuboilerplate%-lib", name)))
+      fs.mv(src, fs.join(dir, str.gsub(f, "tokuboilerplate", name)))
     end
   end
 
   for fp in fs.files(dir, { recurse = true }) do
     local content = fs.readfile(fp)
-    if content:find("tokuboilerplate%-lib") then
-      fs.writefile(fp, str.gsub(content, "tokuboilerplate%-lib", name))
+    if content:find("tokuboilerplate") then
+      fs.writefile(fp, str.gsub(content, "tokuboilerplate", name))
     end
   end
 
@@ -170,7 +179,6 @@ local function init (opts)
     base_test_specs = filtered
   end
 
-  -- Helper to strip .wasm from filenames (for WASM builds)
   local function remove_wasm(fp)
     return str.gsub(fp, "%.wasm%.", ".")
   end
@@ -576,7 +584,6 @@ rocks_provided = { lua = "5.1" }
     end)
   end)
 
-  -- NOTE: pack/release not supported in wasm mode
   if not opts.wasm then
 
     local release_tarball_dir = str.interp("%s#(name)-%s#(version)", opts.config.env)
@@ -776,51 +783,40 @@ rocks_provided = { lua = "5.1" }
     install = function (install_opts)
       install_opts = install_opts or {}
       if install_opts.bundled then
-        -- Bundled install: compile bin/*.lua to standalone executables
         build(tbl.assign({ "install-deps" }, install_opts), install_opts.verbosity)
-
         local bin_dir = "bin"
         if not fs.exists(bin_dir) then
           err.error("No bin/ directory found for bundled install")
         end
-
         local prefix = install_opts.prefix or env.var("PREFIX", fs.join(env.var("HOME", "/tmp"), ".local"))
         local bin_prefix = fs.join(prefix, "bin")
         fs.mkdirp(bin_prefix)
-
         local bundle_dir = build_dir("bundled")
         fs.mkdirp(bundle_dir)
-
-        -- Determine compiler and flags
         local cc = install_opts.bundle_cc
         local bundle_flags = {}
         local bundle_mods = {}
         local bundle_ignores = { "debug" }
-
         if install_opts.bundle_flags then
           local parts = str.splits(install_opts.bundle_flags, "%s+")
           for i = 1, #parts do
             arr.push(bundle_flags, parts[i])
           end
         end
-
         if install_opts.bundle_mods then
           local parts = str.splits(install_opts.bundle_mods, ",")
           for i = 1, #parts do
             arr.push(bundle_mods, str.match(parts[i], "^%s*(.-)%s*$"))
           end
         end
-
         if install_opts.bundle_ignores then
           local parts = str.splits(install_opts.bundle_ignores, ",")
           for i = 1, #parts do
             arr.push(bundle_ignores, str.match(parts[i], "^%s*(.-)%s*$"))
           end
         end
-
         if install_opts.wasm then
           cc = cc or "emcc"
-          -- For WASM, use wasm module flags if not specified
           if #bundle_flags == 0 then
             local lua_dir = build_dir("lua-5.1.5")
             bundle_flags = wasm.get_bundle_flags(lua_dir, "build", {}, {})
@@ -828,8 +824,6 @@ rocks_provided = { lua = "5.1" }
         else
           cc = cc or env.var("CC", "cc")
         end
-
-        -- Bundle each executable in bin/
         for fp in fs.files(bin_dir) do
           if str.match(fp, "%.lua$") then
             local basename = fs.stripextensions(fs.basename(fp))
@@ -842,8 +836,6 @@ rocks_provided = { lua = "5.1" }
               flags = bundle_flags,
               outprefix = basename,
             })
-
-            -- Copy to prefix
             if install_opts.wasm then
               local js_file = fs.join(bundle_dir, basename .. ".js")
               local dest_js = fs.join(bin_prefix, basename .. ".js")
@@ -859,7 +851,6 @@ rocks_provided = { lua = "5.1" }
           end
         end
       else
-        -- Regular luarocks install
         build(tbl.assign({ "install" }, install_opts), install_opts.verbosity)
       end
     end,
@@ -883,7 +874,7 @@ rocks_provided = { lua = "5.1" }
       clean_opts = clean_opts or {}
       return clean.lib({
         dir = opts.dir,
-        env = clean_opts.env,  -- nil = all envs with --all, otherwise use project env
+        env = clean_opts.env,
         all = clean_opts.all,
         deps = clean_opts.deps,
         dry_run = clean_opts.dry_run,
