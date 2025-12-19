@@ -34,13 +34,13 @@ run wget -O - https://openresty.org/package/pubkey.gpg | apt-key add - \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /usr/share/doc /usr/share/man /usr/share/info \
     && rm -rf /usr/share/locale/* \
-    && find /usr -name "*.a" ! -name "libc_nonshared.a" ! -name "libpthread_nonshared.a" -delete 2>/dev/null || true
+    && find /usr -name "*.a" ! -name "libc_nonshared.a" ! -name "libpthread_nonshared.a" -delete 2>/dev/null
 
 run wget https://www.sqlite.org/2024/sqlite-autoconf-3470200.tar.gz \
     && tar xf sqlite-autoconf-3470200.tar.gz \
     && cd sqlite-autoconf-3470200 && ./configure && make && make install \
     && cd / && rm -rf sqlite-autoconf-3470200* \
-    && strip /usr/local/lib/libsqlite3.so* 2>/dev/null || true
+    && strip /usr/local/lib/libsqlite3.so* 2>/dev/null
 
 run luarocks install santoku-cli 0.0.331-1 \
     && luarocks install lua-cjson \
