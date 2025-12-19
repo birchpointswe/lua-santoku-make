@@ -26,7 +26,7 @@ run wget -O - https://openresty.org/package/pubkey.gpg | apt-key add - \
        fi \
     && apt-get update && apt-get -y install --no-install-recommends \
        gcc g++ make perl pkg-config swig \
-       luarocks npm \
+       luarocks npm build-essential \
        python3 python3-dev python3-pip python3-venv libpython3-dev \
        libmariadb-dev-compat libxml2-dev libopenblas-dev liblapacke-dev \
        librsvg2-bin imagemagick inotify-tools procps vim xxd \
