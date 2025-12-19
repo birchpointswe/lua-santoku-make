@@ -30,11 +30,14 @@ if [ -z "$cmd" ]; then
   fi
 fi
 
-cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/toku-web"
-mkdir -p "$cache_dir"
-$cmd build -t toku-web -f "$script_dir"/toku-web.dockerfile . --iidfile "$cache_dir"/image.id
+if ! $cmd image exists toku-web 2>/dev/null && ! $cmd images -q toku-web | grep -q .; then
+  echo "Image 'toku-web' not found. Build it first:" >&2
+  echo "  $cmd build -t toku-web -f $script_dir/toku-web.dockerfile ." >&2
+  exit 1
+fi
+
 userns=""
 if [ "$cmd" = "podman" ]; then
   userns="--userns=keep-id"
 fi
-$cmd run $userns $docker_opts -ti -v "$(pwd)":/app -w /app --rm $(cat "$cache_dir"/image.id) "$@"
+$cmd run $userns $docker_opts -ti -v "$(pwd)":/app -w /app --rm toku-web "$@"
