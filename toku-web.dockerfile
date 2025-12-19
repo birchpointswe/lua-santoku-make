@@ -1,7 +1,6 @@
 from debian:bookworm-slim
 
-env MAKE="make -j$(nproc)"
-env MAKEFLAGS="-j$(nproc)"
+env MAKEFLAGS="-j4"
 env PATH=$PATH:/emsdk/upstream/emscripten:/emsdk/node/22.16.0_64bit/bin/
 env OPENRESTY_DIR=/usr/local/openresty
 
