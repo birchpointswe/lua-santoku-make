@@ -32,7 +32,7 @@ fi
 
 cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/toku-web"
 mkdir -p "$cache_dir"
-$cmd build -f "$script_dir"/toku-web.dockerfile . --iidfile "$cache_dir"/image.id
+$cmd build -t toku-web -f "$script_dir"/toku-web.dockerfile . --iidfile "$cache_dir"/image.id
 userns=""
 if [ "$cmd" = "podman" ]; then
   userns="--userns=keep-id"
