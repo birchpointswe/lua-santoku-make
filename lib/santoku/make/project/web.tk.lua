@@ -838,7 +838,16 @@ rocks_provided = { lua = "5.1" }
             return "___SANTOKU_" .. build_id .. "_" .. str.gsub(filename, "[^%w]", "_") .. "___"
           end
           if fs.exists(final_dir()) then
-            arr.ieach(fun.take(fs.rm, 1), fs.files(final_dir(), true))
+            local preserve = tbl.get(opts, { "config", "env", "server", "preserve_public" }) or {}
+            local function prune_preserved(path)
+              local rel = str.stripprefix(path, final_dir() .. "/")
+              for i = 1, #preserve do
+                if str.match(rel, "^" .. preserve[i]) then
+                  return true
+                end
+              end
+            end
+            arr.ieach(fun.take(fs.rm, 1), fs.files(final_dir(), true, prune_preserved))
             fs.rmdirs(final_dir())
           end
           for rel, hashed_rel in pairs(static_manifest) do
