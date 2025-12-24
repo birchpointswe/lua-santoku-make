@@ -897,6 +897,8 @@ rocks_provided = { lua = "5.1" }
                 content = str.gsub(content, "'" .. escape_pattern(orig) .. "'", "'" .. h .. "'")
                 content = str.gsub(content, "\"/" .. escape_pattern(orig) .. "\"", "\"/" .. h .. "\"")
                 content = str.gsub(content, "'/" .. escape_pattern(orig) .. "'", "'/" .. h .. "'")
+                content = str.gsub(content, "url%(/" .. escape_pattern(orig) .. "%)", "url(/" .. h .. ")")
+                content = str.gsub(content, "url%(" .. escape_pattern(orig) .. "%)", "url(" .. h .. ")")
               end
               fs.writefile(dest, content)
             end
