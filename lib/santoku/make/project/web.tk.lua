@@ -616,14 +616,12 @@ rocks_provided = { lua = "5.1" }
 
     for _, fp in ipairs(base_client_deps) do
       add_copied_target(cdir_stripped(fp), fp,
-        arr.push({ cdir(base_client_lua_modules_deps_ok) },
-          arr.spread(arr.map(arr.map(arr.flatten({base_client_res, base_client_res_templated}), remove_tk), cdir_stripped))))
+        arr.map(arr.map(arr.flatten({base_client_res, base_client_res_templated}), remove_tk), cdir_stripped))
     end
 
     for _, fp in ipairs(base_client_libs) do
       add_copied_target(cdir_stripped(fp), fp,
-        arr.push({ cdir(base_client_lua_modules_deps_ok) },
-          arr.spread(arr.map(arr.map(arr.flatten({base_client_res, base_client_res_templated}), remove_tk), cdir_stripped))))
+        arr.map(arr.map(arr.flatten({base_client_res, base_client_res_templated}), remove_tk), cdir_stripped))
     end
 
     for _, fp in ipairs(base_root_libs) do
@@ -639,8 +637,7 @@ rocks_provided = { lua = "5.1" }
 
     for _, fp in ipairs(base_client_bins) do
       add_copied_target(cdir_stripped(fp), fp,
-        arr.push({ cdir(base_client_lua_modules_deps_ok) },
-          arr.spread(arr.map(arr.map(arr.flatten({base_client_res, base_client_res_templated}), remove_tk), cdir_stripped))))
+        arr.map(arr.map(arr.flatten({base_client_res, base_client_res_templated}), remove_tk), cdir_stripped))
     end
 
     for _, fp in ipairs(base_client_res) do
