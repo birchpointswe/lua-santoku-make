@@ -241,7 +241,7 @@ local function init (opts)
   end
 
   local base_env = {
-    wasm = opts.wasm,
+    is_wasm = opts.wasm,
     skip_check = opts.skip_check,
     single = opts.single and remove_tk(opts.single) or nil,
     bins = base_bins,

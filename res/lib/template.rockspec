@@ -29,8 +29,8 @@ dependencies = {
     local dep_sources = {
       dependencies or {},
       environment == "test" and get(test or {}, {"dependencies"}) or {},
-      environment == "test" and wasm and get(test or {}, {"wasm", "dependencies"}) or {},
-      environment == "test" and not wasm and get(test or {}, {"native", "dependencies"}) or {}
+      environment == "test" and is_wasm and get(test or {}, {"wasm", "dependencies"}) or {},
+      environment == "test" and not is_wasm and get(test or {}, {"native", "dependencies"}) or {}
     }
     local deps = {}
     for i = 1, #dep_sources do
@@ -48,8 +48,8 @@ external_dependencies = {
     local ext_sources = {
       get(dependencies or {}, {"external"}) or {},
       environment == "test" and get(test or {}, {"dependencies", "external"}) or {},
-      environment == "test" and wasm and get(test or {}, {"wasm", "dependencies", "external"}) or {},
-      environment == "test" and not wasm and get(test or {}, {"native", "dependencies", "external"}) or {}
+      environment == "test" and is_wasm and get(test or {}, {"wasm", "dependencies", "external"}) or {},
+      environment == "test" and not is_wasm and get(test or {}, {"native", "dependencies", "external"}) or {}
     }
     local ext_deps = {}
     for i = 1, #ext_sources do

@@ -37,7 +37,7 @@ export LUA_CPATH='<% return lua_cpath %>'
 
 echo
 
-<% push(wasm) %>
+<% push(is_wasm) %>
 
 <% push(single) %>
 TEST="<% return single %>"
@@ -48,7 +48,7 @@ toku test -s -i "node --expose-gc" test/spec
 status_tst=$?
 <% pop() %>
 
-<% pop() push(not wasm) %>
+<% pop() push(not is_wasm) %>
 
 MODS=""
 

@@ -120,35 +120,45 @@ LIB_LDFLAGS := $(addprefix -L, $(LUA_LIBDIR)) <% return arr.concat(ldflags or {}
 
 <% -- flags for build/test environments (non-wasm-specific) %>
 <% push(environment == "build") %>
-LIB_CFLAGS += <% return arr.concat(tbl.get(build or {}, "cflags") or {}, " ") %>
-LIB_CXXFLAGS += <% return arr.concat(tbl.get(build or {}, "cxxflags") or {}, " ") %>
-LIB_LDFLAGS += <% return arr.concat(tbl.get(build or {}, "ldflags") or {}, " ") %>
+LIB_CFLAGS += <% return arr.concat(tbl.get(build or {}, {"cflags"}) or {}, " ") %>
+LIB_CXXFLAGS += <% return arr.concat(tbl.get(build or {}, {"cxxflags"}) or {}, " ") %>
+LIB_LDFLAGS += <% return arr.concat(tbl.get(build or {}, {"ldflags"}) or {}, " ") %>
 <% pop() push(environment == "test") %>
-LIB_CFLAGS += <% return arr.concat(tbl.get(test or {}, "cflags") or {}, " ") %>
-LIB_CXXFLAGS += <% return arr.concat(tbl.get(test or {}, "cxxflags") or {}, " ") %>
-LIB_LDFLAGS += <% return arr.concat(tbl.get(test or {}, "ldflags") or {}, " ") %>
+LIB_CFLAGS += <% return arr.concat(tbl.get(test or {}, {"cflags"}) or {}, " ") %>
+LIB_CXXFLAGS += <% return arr.concat(tbl.get(test or {}, {"cxxflags"}) or {}, " ") %>
+LIB_LDFLAGS += <% return arr.concat(tbl.get(test or {}, {"ldflags"}) or {}, " ") %>
 <% pop() %>
 
 <% -- wasm vs native flags, selected at make time %>
 ifdef _WASM
+<% -- top-level wasm flags (apply to both build and test) %>
+LIB_CFLAGS += <% return arr.concat(tbl.get(wasm or {}, {"cflags"}) or {}, " ") %>
+LIB_CXXFLAGS += <% return arr.concat(tbl.get(wasm or {}, {"cxxflags"}) or {}, " ") %>
+LIB_LDFLAGS += <% return arr.concat(tbl.get(wasm or {}, {"ldflags"}) or {}, " ") %>
+<% -- environment-specific wasm flags %>
 <% push(environment == "build") %>
-LIB_CFLAGS += <% return arr.concat(tbl.get(build or {}, "wasm", "cflags") or {}, " ") %>
-LIB_CXXFLAGS += <% return arr.concat(tbl.get(build or {}, "wasm", "cxxflags") or {}, " ") %>
-LIB_LDFLAGS += <% return arr.concat(tbl.get(build or {}, "wasm", "ldflags") or {}, " ") %>
+LIB_CFLAGS += <% return arr.concat(tbl.get(build or {}, {"wasm", "cflags"}) or {}, " ") %>
+LIB_CXXFLAGS += <% return arr.concat(tbl.get(build or {}, {"wasm", "cxxflags"}) or {}, " ") %>
+LIB_LDFLAGS += <% return arr.concat(tbl.get(build or {}, {"wasm", "ldflags"}) or {}, " ") %>
 <% pop() push(environment == "test") %>
-LIB_CFLAGS += <% return arr.concat(tbl.get(test or {}, "wasm", "cflags") or {}, " ") %>
-LIB_CXXFLAGS += <% return arr.concat(tbl.get(test or {}, "wasm", "cxxflags") or {}, " ") %>
-LIB_LDFLAGS += <% return arr.concat(tbl.get(test or {}, "wasm", "ldflags") or {}, " ") %>
+LIB_CFLAGS += <% return arr.concat(tbl.get(test or {}, {"wasm", "cflags"}) or {}, " ") %>
+LIB_CXXFLAGS += <% return arr.concat(tbl.get(test or {}, {"wasm", "cxxflags"}) or {}, " ") %>
+LIB_LDFLAGS += <% return arr.concat(tbl.get(test or {}, {"wasm", "ldflags"}) or {}, " ") %>
 <% pop() %>
 else
+<% -- top-level native flags (apply to both build and test) %>
+LIB_CFLAGS += <% return arr.concat(tbl.get(native or {}, {"cflags"}) or {}, " ") %>
+LIB_CXXFLAGS += <% return arr.concat(tbl.get(native or {}, {"cxxflags"}) or {}, " ") %>
+LIB_LDFLAGS += <% return arr.concat(tbl.get(native or {}, {"ldflags"}) or {}, " ") %>
+<% -- environment-specific native flags %>
 <% push(environment == "build") %>
-LIB_CFLAGS += <% return arr.concat(tbl.get(build or {}, "native", "cflags") or {}, " ") %>
-LIB_CXXFLAGS += <% return arr.concat(tbl.get(build or {}, "native", "cxxflags") or {}, " ") %>
-LIB_LDFLAGS += <% return arr.concat(tbl.get(build or {}, "native", "ldflags") or {}, " ") %>
+LIB_CFLAGS += <% return arr.concat(tbl.get(build or {}, {"native", "cflags"}) or {}, " ") %>
+LIB_CXXFLAGS += <% return arr.concat(tbl.get(build or {}, {"native", "cxxflags"}) or {}, " ") %>
+LIB_LDFLAGS += <% return arr.concat(tbl.get(build or {}, {"native", "ldflags"}) or {}, " ") %>
 <% pop() push(environment == "test") %>
-LIB_CFLAGS += <% return arr.concat(tbl.get(test or {}, "native", "cflags") or {}, " ") %>
-LIB_CXXFLAGS += <% return arr.concat(tbl.get(test or {}, "native", "cxxflags") or {}, " ") %>
-LIB_LDFLAGS += <% return arr.concat(tbl.get(test or {}, "native", "ldflags") or {}, " ") %>
+LIB_CFLAGS += <% return arr.concat(tbl.get(test or {}, {"native", "cflags"}) or {}, " ") %>
+LIB_CXXFLAGS += <% return arr.concat(tbl.get(test or {}, {"native", "cxxflags"}) or {}, " ") %>
+LIB_LDFLAGS += <% return arr.concat(tbl.get(test or {}, {"native", "ldflags"}) or {}, " ") %>
 <% pop() %>
 endif
 
@@ -156,9 +166,9 @@ all: $(LIB_O) $(LIB_SO)
 
 <% return inject_flags(rules, rules) %>
 <% push(environment == "build") %>
-<% return inject_flags(tbl.get(build or {}, "native", "rules"), tbl.get(build or {}, "wasm", "rules")) %>
+<% return inject_flags(tbl.get(build or {}, {"native", "rules"}), tbl.get(build or {}, {"wasm", "rules"})) %>
 <% pop() push(environment == "test") %>
-<% return inject_flags(tbl.get(test or {}, "native", "rules"), tbl.get(test or {}, "wasm", "rules")) %>
+<% return inject_flags(tbl.get(test or {}, {"native", "rules"}), tbl.get(test or {}, {"wasm", "rules"})) %>
 <% pop() %>
 
 %.o: %.wasm.c
