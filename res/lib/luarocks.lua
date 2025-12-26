@@ -6,7 +6,7 @@ rocks_trees = {
 lua_version = "5.1"
 rocks_provided = { lua = "5.1" }
 
-<% push(wasm) %>
+<% push(is_wasm) %>
 
 variables = {
 
