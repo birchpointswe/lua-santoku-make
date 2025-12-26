@@ -21,7 +21,7 @@ local str = require("santoku.string")
 local boilerplate_tar_b64 = <%
   local fs = require("santoku.fs")
   local tmp = fs.tmpname()
-  sys.execute({ "tar", "-C", "submodules/tokuboilerplate-lib", "--exclude", ".git", "-czf", tmp, "." })
+  sys.execute({ "tar", "-C", "submodules/tokuboilerplate-lib", "--exclude", ".git", "--exclude", "build", "-czf", tmp, "." })
   local content = fs.readfile(tmp)
   fs.rm(tmp)
   return str.quote(str.to_base64(content))
@@ -48,7 +48,7 @@ local function create (opts)
     "lib/tokuboilerplate",
   }) do
     local src = fs.join(dir, d)
-    if fs.exists(src) then
+    if fs.isdir(src) then
       fs.mv(src, fs.join(dir, str.gsub(d, "tokuboilerplate", name)))
     end
   end
