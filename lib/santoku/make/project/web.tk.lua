@@ -816,7 +816,8 @@ rocks_provided = { lua = "5.1" }
           for _, wasm_file in ipairs(public_files_wasm) do
             if not first then arr.push(js_parts, ",") end
             first = false
-            arr.push(js_parts, str.format("[atob(%q)]:%q", str.to_base64(wasm_file), wasm_file))
+            local hashed_wasm = manifest[wasm_file] or wasm_file
+            arr.push(js_parts, str.format("[atob(%q)]:%q", str.to_base64(wasm_file), hashed_wasm))
           end
           arr.push(js_parts, "};")
           fs.writefile(hash_precache_js, arr.concat(js_parts, ""))
