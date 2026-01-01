@@ -1248,7 +1248,10 @@ rocks_provided = { lua = "5.1" }
       end
     end)(err.pcall(sys.execute, { "sh", "-c", "type inotifywait >/dev/null 2>/dev/null" }))
     local config_mtime = fs.exists(opts.config_file) and require("santoku.make.posix").time(opts.config_file) or nil
+    local prev_error = false
     while true do
+      local build_ok = true
+      local inotify_ok = true
       if config_mtime then
         local new_mtime = fs.exists(opts.config_file) and require("santoku.make.posix").time(opts.config_file) or nil
         if new_mtime and new_mtime > config_mtime then
@@ -1258,6 +1261,7 @@ rocks_provided = { lua = "5.1" }
       end
       (function (ok, first, ...)
         if not ok then
+          build_ok = false
           if first == "fatal" then
             err.error(first, ...)
           end
@@ -1285,6 +1289,7 @@ rocks_provided = { lua = "5.1" }
       end)
       ;(function (ok, first, ...)
         if not ok then
+          inotify_ok = false
           local msg = tostring(first)
           if str.match(msg, "interrupt") or str.match(msg, "SIGINT") or str.match(msg, "signaled") then
             err.error(first, ...)
@@ -1308,6 +1313,11 @@ rocks_provided = { lua = "5.1" }
           arr.spread(existing_dirs)
         })
       end))
+      local this_error = not build_ok or not inotify_ok
+      if this_error and prev_error then
+        err.error("consecutive errors without file changes - stopping iterate")
+      end
+      prev_error = this_error
       sys.sleep(.25)
     end
   end)
