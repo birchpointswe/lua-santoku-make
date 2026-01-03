@@ -6,16 +6,6 @@
     - inotifywait spawned repeatedly without cleanup
     - .d file scanning may leak file handles
 
-- When building JS code with client.files=true (embed files instead of bundling
-  bytecode), the main program runs but all require() calls fail with "module not
-  found". Suspected causes:
-    - wasm.lua embed_main_template has hardcoded paths (/lua_modules/...)
-    - Paths in generated C code may not match actual embedded file locations
-    - LUA_PATH/CPATH in the compiled .c file may be incorrect relative to the
-      --embed-file paths passed to emcc
-    - Verify the relationship between bundle() options and the paths emcc uses for
-      the virtual filesystem
-
 - struct stat st_mtim not available on macos
 
 # Next
