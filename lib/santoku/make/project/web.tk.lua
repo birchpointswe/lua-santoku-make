@@ -1181,14 +1181,17 @@ rocks_provided = { lua = "5.1" }
       if run_server and #base_server_test_specs > 0 then
         build({ "stop", "test-stop" }, opts.verbosity)
         build({ "test-start" }, opts.verbosity)
-        sys.sleep(0.5)
         local pid_file = test_dist_dir("server.pid")
-        if not fs.exists(pid_file) then
-          err.error("fatal", "Server failed to start: no pid file created")
+        local pid
+        for _ = 1, 20 do
+          sys.sleep(0.25)
+          if fs.exists(pid_file) then
+            pid = str.match(fs.readfile(pid_file), "(%d+)")
+            if pid then break end
+          end
         end
-        local pid = str.match(fs.readfile(pid_file), "(%d+)")
         if not pid then
-          err.error("fatal", "Server failed to start: invalid pid file")
+          err.error("fatal", "Server failed to start: no pid file created after 5s")
         end
         local alive = err.pcall(sys.execute, { "kill", "-0", pid })
         if not alive then
