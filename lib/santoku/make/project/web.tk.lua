@@ -600,6 +600,11 @@ rocks_provided = { lua = "5.1" }
     fs.mkdirp(staging_dir())
     fs.mkdirp(cdir())
 
+    target({ static_files_ok }, {}, function ()
+      fs.mkdirp(fs.dirname(static_files_ok))
+      fs.touch(static_files_ok)
+    end)
+
     for _, fp in ipairs(base_client_assets) do
       add_copied_target(staging_dir_stripped(remove_tk(fp)), fp,
         { cdir(base_client_lua_modules_deps_ok) })
