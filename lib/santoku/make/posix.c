@@ -34,7 +34,11 @@ int tk_make_posix_time (lua_State *L)
   int rc = stat(path, &statbuf);
   if (rc == -1)
     return tk_make_posix_err(L, errno);
+#ifdef __APPLE__
+  struct timespec *t = &statbuf.st_mtimespec;
+#else
   struct timespec *t = &statbuf.st_mtim;
+#endif
   lua_pushnumber(L, t->tv_sec);
   return 1;
 }

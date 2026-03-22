@@ -4,6 +4,8 @@ export LUA='<% return lua %>'
 export LUA_PATH='<% return lua_path %>'
 export LUA_CPATH='<% return lua_cpath %>'
 
+status_chk=0
+
 echo
 
 if type luacheck >/dev/null 2>/dev/null && [ -f luacheck.lua ]; then
