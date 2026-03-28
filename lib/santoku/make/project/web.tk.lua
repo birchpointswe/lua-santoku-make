@@ -984,13 +984,13 @@ rocks_provided = { lua = "5.1" }
       modules[mod] = path and str.stripprefix(path, e.dist_dir .. "/") or nil
     end
     return {
-      nginx = tbl.merge({
+      nginx = tbl.merge({}, nginx_cfg, {
         foreground = foreground,
         daemon = "off",
         pid = "server.pid",
         error_log = foreground and "stderr" or "logs/error.log",
         access_log = "logs/access.log",
-      }, nginx_cfg),
+      }),
       modules = modules,
       lua_package_path = "lua_modules/share/lua/5.1/?.lua;lua_modules/share/lua/5.1/?/init.lua;" .. (opts.openresty_dir or "") .. "/lualib/?.lua;" .. (opts.openresty_dir or "") .. "/lualib/?/init.lua;;",
       lua_package_cpath = "lua_modules/lib/lua/5.1/?.so;" .. (opts.openresty_dir or "") .. "/lualib/?.so;;",
