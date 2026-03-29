@@ -11,7 +11,7 @@ cd "$(dirname $0)"
 
 <%
   local env_lines = {}
-  for k, v in pairs(run_env_vars or {}) do
+  for k, v in pairs((server or {}).run_env_vars or {}) do
     env_lines[#env_lines + 1] = str.interp("export %1=%2", { k, str.quote(tostring(v)) })
   end
   return arr.concat(env_lines, "\n")
@@ -19,7 +19,7 @@ cd "$(dirname $0)"
 
 <%
   local script_lines = {}
-  local scripts = run_env_scripts or {}
+  local scripts = (server or {}).run_env_scripts or {}
   for i = 1, #scripts do
     if not str.isempty(scripts[i]) then
       script_lines[#script_lines + 1] = ". " .. scripts[i]
