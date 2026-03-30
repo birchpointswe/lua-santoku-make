@@ -46,7 +46,7 @@ run luarocks install santoku-cli 0.0.331-1 \
     && luarocks install luacheck \
     && rm -rf /root/.cache
 
-run npm -g install tailwindcss @tailwindcss/cli \
+run npm -g install tailwindcss @tailwindcss/cli esbuild \
     && npm cache clean --force \
     && rm -rf /root/.npm
 
