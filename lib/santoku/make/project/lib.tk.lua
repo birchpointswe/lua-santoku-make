@@ -49,25 +49,25 @@ local function create (opts)
   }) do
     local src = fs.join(dir, d)
     if fs.isdir(src) then
-      fs.mv(src, fs.join(dir, str.gsub(d, "tokuboilerplate", name)))
+      fs.mv(src, fs.join(dir, (str.gsub(d, "tokuboilerplate", name))))
     end
   end
 
   for _, f in ipairs({
     "bin/tokuboilerplate.lua",
-    "lib/tokuboilerplate.lua",
+    "lib/tokuboilerplate.tk.lua",
     "test/spec/tokuboilerplate.lua",
   }) do
     local src = fs.join(dir, f)
     if fs.exists(src) then
-      fs.mv(src, fs.join(dir, str.gsub(f, "tokuboilerplate", name)))
+      fs.mv(src, fs.join(dir, (str.gsub(f, "tokuboilerplate", name))))
     end
   end
 
   for fp in fs.files(dir, { recurse = true }) do
     local content = fs.readfile(fp)
     if content:find("tokuboilerplate") then
-      fs.writefile(fp, str.gsub(content, "tokuboilerplate", name))
+      fs.writefile(fp, (str.gsub(content, "tokuboilerplate", name)))
     end
   end
 
