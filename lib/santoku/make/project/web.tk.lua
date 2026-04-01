@@ -1007,11 +1007,13 @@ rocks_provided = { lua = "5.1" }
       env_with_nginx.nginx = nginx_ctx
       env_with_nginx.hashed = hashed_fn
       if nginx_is_template then
-        local t, ds = common.with_build_deps(has_build_deps and build_deps_dir or nil, function ()
+        local deps = {}
+        env_with_nginx.readfile = function (fp) deps[fp] = true; return fs.readfile(fp) end
+        local t = common.with_build_deps(has_build_deps and build_deps_dir or nil, function ()
           return tmpl.renderfile(src, env_with_nginx, _G)
         end)
         fs.writefile(dest, t)
-        fs.writefile(dest .. ".d", tmpl.serialize_deps(src, dest, ds))
+        fs.writefile(dest .. ".d", tmpl.serialize_deps(src, dest, deps))
       else
         fs.writefile(dest, fs.readfile(src))
       end

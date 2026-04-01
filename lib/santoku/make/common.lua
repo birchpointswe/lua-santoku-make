@@ -110,11 +110,13 @@ local function add_file_target(target_fn, dest, src, env, config, config_file, e
     dest = str.gsub(dest, "%.tk", "")
     target_fn({ dest }, arr.flatten({ src, config_file, extra_srcs or {}, build_deps_ok or {} }), function ()
       fs.mkdirp(fs.dirname(dest))
-      local t, ds = with_build_deps(build_deps_dir, function ()
+      local deps = {}
+      env.readfile = function (fp) deps[fp] = true; return fs.readfile(fp) end
+      local t = with_build_deps(build_deps_dir, function ()
         return tmpl.renderfile(src, env, _G)
       end)
       fs.writefile(dest, t)
-      fs.writefile(dest .. ".d", tmpl.serialize_deps(src, dest, ds))
+      fs.writefile(dest .. ".d", tmpl.serialize_deps(src, dest, deps))
     end)
   end
 end
@@ -123,11 +125,13 @@ end
 local function add_templated_target_base64(target_fn, dest, data, env, config_file, extra_srcs, build_deps_dir, build_deps_ok)
   target_fn({ dest }, arr.flatten({ config_file, extra_srcs or {}, build_deps_ok or {} }), function ()
     fs.mkdirp(fs.dirname(dest))
-    local t, ds = with_build_deps(build_deps_dir, function ()
+    local deps = {}
+    env.readfile = function (fp) deps[fp] = true; return fs.readfile(fp) end
+    local t = with_build_deps(build_deps_dir, function ()
       return tmpl.render(str.from_base64(data), env, _G)
     end)
     fs.writefile(dest, t)
-    fs.writefile(dest .. ".d", tmpl.serialize_deps(dest, config_file, ds))
+    fs.writefile(dest .. ".d", tmpl.serialize_deps(dest, config_file, deps))
   end)
 end
 

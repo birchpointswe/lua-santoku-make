@@ -18,13 +18,15 @@ print(xpcall(function ()
 
   mkdirp(".bootstrap")
 
-  local env = setmetatable({}, { __index = _G })
+  local env = setmetatable({
+    readfile = fs.readfile
+  }, { __index = _G })
 
   for fp in files("lib", true) do
     local outfile = join(".bootstrap", fp)
     local outdir = dirname(outfile)
     mkdirp(outdir)
-    writefile(outfile, (renderfile(fp, env)))
+    writefile(outfile, renderfile(fp, env))
   end
 
   package.path = ".bootstrap/lib/?.lua;" .. package.path
