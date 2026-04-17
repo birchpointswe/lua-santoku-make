@@ -73,13 +73,13 @@ Web project type supporting client/server builds with OpenResty integration.
 ## Usage with Santoku CLI
 
 Santoku Make is primarily used through the
-[lua-santoku-cli](https://github.com/treadwelllane/lua-santoku-cli) `toku`
+[lua-santoku-cli](https://github.com/birchpointswe/lua-santoku-cli) `toku`
 command. See the CLI documentation for detailed usage instructions.
 
 ## Template Processing
 
 Files with `.tk` extension or `.tk.` in their name are processed using
-[lua-santoku-template](https://github.com/treadwelllane/lua-santoku-template).
+[lua-santoku-template](https://github.com/birchpointswe/lua-santoku-template).
 Templates can access the project environment variables and use the full Lua
 language for dynamic content generation.
 
