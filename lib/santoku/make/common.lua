@@ -160,6 +160,16 @@ local function compute_file_hash(filepath)
   return str.sub(hash, 1, 12)
 end
 
+local function compute_string_hash(content)
+  local tmp = os.tmpname()
+  local f = io.open(tmp, "wb")
+  f:write(content)
+  f:close()
+  local h = compute_file_hash(tmp)
+  os.remove(tmp)
+  return h
+end
+
 local function hash_filename(filepath, hash)
   local dir = fs.dirname(filepath)
   local base = fs.basename(filepath)
@@ -196,6 +206,7 @@ return {
   get_lua_cpath = get_lua_cpath,
   get_files = get_files,
   compute_file_hash = compute_file_hash,
+  compute_string_hash = compute_string_hash,
   hash_filename = hash_filename,
   is_text_file = is_text_file,
 }

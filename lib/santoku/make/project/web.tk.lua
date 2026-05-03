@@ -795,10 +795,38 @@ rocks_provided = { lua = "5.1" }
               files_to_hash[rel] = fp
             end
           end
-          for rel, fp in pairs(files_to_hash) do
-            local hash = common.compute_file_hash(fp)
-            local hashed_rel = common.hash_filename(rel, hash)
-            manifest[rel] = hashed_rel
+          local function escape_pattern(s)
+            return str.gsub(s, "[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%1")
+          end
+          local function substitute_refs(content, m)
+            for orig, h in pairs(m) do
+              content = str.gsub(content, "\"" .. escape_pattern(orig) .. "\"", "\"" .. h .. "\"")
+              content = str.gsub(content, "'" .. escape_pattern(orig) .. "'", "'" .. h .. "'")
+              content = str.gsub(content, "\"/" .. escape_pattern(orig) .. "\"", "\"/" .. h .. "\"")
+              content = str.gsub(content, "'/" .. escape_pattern(orig) .. "'", "'/" .. h .. "'")
+              content = str.gsub(content, "url%(/" .. escape_pattern(orig) .. "%)", "url(/" .. h .. ")")
+              content = str.gsub(content, "url%(" .. escape_pattern(orig) .. "%)", "url(" .. h .. ")")
+            end
+            return content
+          end
+          for i = 1, 10 do
+            local changed = false
+            for rel, fp in pairs(files_to_hash) do
+              local hash
+              if common.is_text_file(fp) then
+                local content = substitute_refs(fs.readfile(fp), manifest)
+                hash = common.compute_string_hash(content)
+              else
+                hash = common.compute_file_hash(fp)
+              end
+              local hashed_rel = common.hash_filename(rel, hash)
+              if manifest[rel] ~= hashed_rel then
+                manifest[rel] = hashed_rel
+                changed = true
+              end
+            end
+            if not changed then break end
+            assert(i < 10, "hash manifest failed to converge after 10 iterations")
           end
           local manifest_content = "return {\n"
           for orig, h in pairs(manifest) do
