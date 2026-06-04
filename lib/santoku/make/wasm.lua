@@ -15,7 +15,7 @@ local function setup_lua(target_fn, dir)
     fs.mkdirp(dir)
     return fs.pushd(dir, function ()
       if not fs.exists("lua-5.1.5.tar.gz") then
-        sys.execute({ "wget", "https://www.lua.org/ftp/lua-5.1.5.tar.gz" })
+        sys.execute({ "wget", "https://github.com/birchpointswe/lua-santoku-make/releases/download/vendor/lua-5.1.5/lua-5.1.5.tar.gz" })
       end
       if fs.exists("lua-5.1.5") then
         sys.execute({ "rm", "-rf", "lua-5.1.5" })
