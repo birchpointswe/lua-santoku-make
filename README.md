@@ -1,317 +1,97 @@
-# Santoku Make
+# santoku-make
 
-A Lua-based build system for creating Lua libraries and web applications with
-template processing, dependency management, and testing support.
+The build and project framework behind the `toku` tool. It turns a project's
+`make*.lua` descriptor into a built, tested, and installable luarocks package (a
+library, a bin executable, or a web app), and underneath it provides a small
+build-graph engine that the project layer is built on.
 
-## Module Reference
+You normally drive this through the [`toku` CLI](../lua-santoku-cli/README.md);
+this repo is the machinery it calls. This README orients the framework and the
+project model; [`doc/usage.md`](doc/usage.md) is the by-example guide (the
+low-level engine, the descriptor reference, and worked per-scenario examples).
 
-### `santoku.make`
+## Two layers
 
-Core build system providing target-based dependency resolution and incremental builds.
+- **`santoku.make`** (the engine): a dependency-graph build runner. `make()`
+  returns a submake with `target(targets, deps, fn)` and `build(targets,
+  verbosity)`; it resolves a target DAG by modification time, treats `fn = true`
+  as a phony (always-stale) target, and reads `.d` sidecar files for transitive
+  source dependencies. This is what `test/spec/santoku/make.lua` exercises.
+- **`santoku.make.project`** (the project layer): `project.init(opts)` reads a
+  `make*.lua` descriptor, classifies the project (lib/bin vs web), assembles an
+  environment from the descriptor, and registers targets on a submake that render
+  the framework's `.mk`/`.tk` templates and run the lifecycle (build/test/install/
+  release).
 
-| Function | Arguments | Returns | Description |
-|----------|-----------|---------|-------------|
-| `make` | `-` | `table` | Creates build system instance with `target`, `build`, `targets`, `deps`, `fns` |
+The key idea: the `res/lib/*.mk` files (and any `*.tk*` file in a project) are not
+special build scripts, they are templates. The project layer renders them with
+[santoku.template](../lua-santoku-template/README.md), injecting an environment
+inherited from your `make*.lua` (the merge chain is `base <- env.* ->
+build/test`, further specialized by `native`/`wasm`). The rendered Makefiles are
+then run.
 
-#### Build System Instance Methods
+## The descriptor
 
-| Method | Arguments | Returns | Description |
-|----------|-----------|---------|-------------|
-| `target` | `targets, dependencies, [function/true]` | `-` | Registers build targets with dependencies and optional build function |
-| `build` | `targets, [verbosity], ...` | `number` | Builds specified targets, returns max modification time |
-
-### `santoku.make.project`
-
-High-level project initialization and management for library and web projects.
-
-| Function | Arguments | Returns | Description |
-|----------|-----------|---------|-------------|
-| `init` | `[options]` | `project` | Initializes project based on make.lua configuration |
-| `create_lib` | `-` | `-` | Creates new library project (not yet implemented) |
-| `create_web` | `-` | `-` | Creates new web project (not yet implemented) |
-
-#### Init Options
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `env` | `string` | Build environment (default: "default") |
-| `dir` | `string` | Build directory (default: "build") |
-| `config` | `table/string` | Configuration table or path to make.lua |
-| `config_file` | `string` | Path to configuration file |
-| `wasm` | `boolean` | Enable WebAssembly build mode |
-| `skip_check` | `boolean` | Skip luacheck validation |
-
-### `santoku.make.project.lib`
-
-Library project type supporting Lua module builds with template processing.
-
-#### Project Methods
-
-| Method | Arguments | Returns | Description |
-|----------|-----------|---------|-------------|
-| `build` | `[options]` | `-` | Builds library |
-| `test` | `[options]` | `-` | Runs tests |
-| `iterate` | `[options]` | `-` | Watches and rebuilds on changes |
-| `release` | `[options]` | `-` | Creates release tarball |
-| `install` | `[options]` | `-` | Installs to lua_modules |
-| `check` | `[options]` | `-` | Runs luacheck |
-
-### `santoku.make.project.web`
-
-Web project type supporting client/server builds with OpenResty integration.
-
-#### Project Methods
-
-| Method | Arguments | Returns | Description |
-|----------|-----------|---------|-------------|
-| `build` | `[options]` | `-` | Builds web application |
-| `test` | `[options]` | `-` | Runs tests |
-| `iterate` | `[options]` | `-` | Watches, rebuilds, and restarts server |
-| `start` | `[options]` | `-` | Starts development server |
-| `stop` | `[options]` | `-` | Stops development server |
-
-## Usage with Santoku CLI
-
-Santoku Make is primarily used through the
-[lua-santoku-cli](https://github.com/birchpointswe/lua-santoku-cli) `toku`
-command. See the CLI documentation for detailed usage instructions.
-
-## Template Processing
-
-Files with `.tk` extension or `.tk.` in their name are processed using
-[lua-santoku-template](https://github.com/birchpointswe/lua-santoku-template).
-Templates can access the project environment variables and use the full Lua
-language for dynamic content generation.
-
-## Project Configuration
-
-### Library Project (`make.lua`)
+A project is a `make.lua` (or `make.common.lua`) that returns a table with an
+`env` field:
 
 ```lua
 return {
-  type = "lib",
   env = {
-    name = "my-library",
+    name = "my-lib",
     version = "0.0.1-1",
     license = "MIT",
-    homepage = "https://github.com/user/my-library",
-
-    dependencies = {
-      "lua >= 5.1",
-      "santoku >= 0.0.279-1"
-    },
-
-    -- Optional C compilation flags
-    cflags = { "-O2", "-Wall" },
-    ldflags = { "-shared" }
+    dependencies = { "lua == 5.1", "santoku >= 0.0.330-1" },
+    test = { dependencies = { "luacov >= 0.15.0-1" } },
   },
-
-  -- File processing rules
-  rules = {
-    exclude = { "%.swp$", "^%.git/" },
-    copy = { "%.txt$" },
-    template = { "%.tk$" }
-  }
 }
 ```
 
-### Web Project (`make.lua`)
+`env` carries metadata (`name`/`version`/`license`/`public`/`homepage`), the
+dependency sets (`dependencies`, `test.dependencies`, `build.dependencies`), C
+build flags (`cflags`/`ldflags`, scoped by `build`/`test` and by `native`/`wasm`),
+per-file `rules`, an optional `configure` hook, and, for web projects, `server`/
+`client`/`nginx` blocks. See [`doc/usage.md`](doc/usage.md) for the full field
+reference and real examples.
 
-```lua
-return {
-  type = "web",
-  env = {
-    name = "my-app",
-    version = "0.0.1-1",
-
-    server = {
-      dependencies = {
-        "lua == 5.1",
-        "santoku >= 0.0.279-1",
-        "lua-cjson >= 2.1.0"
-      },
-
-      -- OpenResty configuration
-      domain = "localhost",
-      port = "8080",
-      workers = "auto",
-      ssl = false,
-
-      -- Server routes
-      init = "myapp.init",
-      routes = {
-        { "GET", "/api/users", "myapp.users.list" },
-        { "POST", "/api/users", "myapp.users.create" }
-      }
-    },
-
-    client = {
-      dependencies = {
-        "lua == 5.1",
-        "santoku-web >= 0.0.253-1"
-      },
-
-      -- Application configuration
-      opts = {
-        app_title = "My Application",
-        banner_text = "Welcome to My App",
-        theme_color = "#3B82F6"
-      }
-    }
-  }
-}
-```
-
-### Web Project with Custom Build Steps
-
-```lua
-return {
-  type = "web",
-  env = {
-    name = "advanced-app",
-    version = "1.0.0",
-
-    server = {
-      dependencies = {
-        "lua == 5.1",
-        "santoku >= 0.0.279-1",
-        "lua-cjson >= 2.1.0",
-        "luasocket >= 3.1.0"
-      },
-
-      nginx_env_vars = { "PATH", "DATABASE_URL", "API_KEY" },
-      run_env_vars = { LOG_LEVEL = "info" },
-
-      domain = require("santoku.env").var("DOMAIN", "localhost"),
-      port = require("santoku.env").var("PORT", "8080"),
-      workers = 4,
-
-      init = "app.server.init",
-      routes = {
-        { "GET",  "/health",         "app.server.health" },
-        { "GET",  "/api/products",   "app.server.products.list" },
-        { "POST", "/api/products",   "app.server.products.create" },
-        { "GET",  "/api/products/:id", "app.server.products.get" },
-        { "PUT",  "/api/products/:id", "app.server.products.update" }
-      }
-    },
-
-    client = {
-      dependencies = {
-        "lua == 5.1",
-        "santoku-web >= 0.0.253-1"
-      },
-
-      opts = {
-        app_title = "Product Manager",
-        company_name = "ACME Corp",
-        support_email = "support@example.com"
-      }
-    },
-
-    -- Custom build configuration
-    configure = function(submake, client_env, server_env)
-      local fs = require("santoku.fs")
-
-      -- Add custom CSS compilation
-      submake.target(
-        { fs.join(client_env.build_dir, "res/styles.css") },
-        { "client/styles/main.scss" },
-        function()
-          -- Custom SCSS compilation logic
-        end
-      )
-
-      -- Add database migration target
-      submake.target(
-        { server_env.work_dir .. "/migrations.sql" },
-        { "database/schema.sql", "database/migrations/*.sql" },
-        function()
-          -- Combine migration files
-        end
-      )
-    end
-  }
-}
-```
-
-### Multi-Environment Configuration
-
-```lua
--- make.common.lua
-return {
-  type = "web",
-  env = {
-    name = "my-service",
-    version = "2.0.0",
-
-    server = {
-      dependencies = {
-        "lua == 5.1",
-        "santoku >= 0.0.279-1"
-      },
-
-      init = "service.init",
-      routes = {
-        { "GET", "/status", "service.status" }
-      }
-    }
-  }
-}
-
--- make.prod.lua
-local fs = require("santoku.fs")
-local base = fs.runfile("make.common.lua")
-base.env.server.workers = 8
-base.env.server.ssl = true
-base.env.server.domain = "api.production.com"
-return base
-
--- make.beta.lua
-local fs = require("santoku.fs")
-local base = fs.runfile("make.common.lua")
-base.env.server.workers = 4
-base.env.server.domain = "api.beta.com"
-base.env.server.port = "8443"
-return base
-```
-
-## Project Structure
-
-### Library Project
+## Project layout
 
 ```
-project/
-├── make.lua             # Project configuration
-├── lib/                 # Library source files
-│   └── mylib/
-│       ├── init.lua
-│       └── util.tk.lua  # Template file
-├── test/                # Test files
-│   └── spec/
-│       └── mylib.lua
-└── res/                 # Resources
-    └── lib/
-        └── data.bin     # Luacheck configuration
+make.lua            descriptor (or make.common.lua + make.<env>.lua profiles)
+lib/                library modules (.lua, .c, .tk.lua)
+bin/                executable entry points (bin projects)
+res/                resources (templated or copied)
+test/spec/          test files
+test/res/           test fixtures
+deps/<name>/Makefile   vendored C dependency (writes results.mk)
 ```
 
-### Web Project
+Web projects add `client/` and `server/` trees. Builds are written under
+`build/<env>/{build,test}` (e.g. `build/default/test`); `<env>` is selected with
+`toku --env` and corresponds to a `make.<env>.lua` profile.
 
-```
-project/
-├── make.lua            # Project configuration
-├── make.common.lua     # Shared configuration
-├── client/             # Client-side code
-│   ├── bin/            # Client entry points
-│   │   └── main.tk.lua
-│   ├── lib/            # Client libraries
-│   ├── res/            # Client resources
-│   └── static/         # Static assets
-│       └── public/
-└── server/             # Server-side code
-    ├── lib/            # Server libraries
-    └── test/           # Server tests
-```
+## Project types
+
+- **lib**: compiles `lib/*.c` to shared objects, installs `.lua`/`.so` via
+  luarocks. The common case.
+- **bin**: ships executables under `bin/`; can be installed as luarocks command
+  scripts or bundled to standalone binaries (via [santoku-bundle](../lua-santoku-bundle/README.md)).
+- **web**: a `client/` (compiled to WebAssembly) plus a `server/` (OpenResty/Lua),
+  with `start`/`stop` for a dev server. Demonstrated by
+  `submodules/tokuboilerplate-web`.
+
+## Vendored C dependencies
+
+A `deps/<name>/Makefile` builds an upstream C library and appends `LIB_CFLAGS`/
+`LIB_LDFLAGS` to a generated `results.mk`, which the build includes. The idiomatic
+pattern is to compile the upstream sources directly with `$(CC) $(CFLAGS)` and
+archive them (see santoku-sqlite, santoku-mustache, santoku-markdown for live
+examples); `doc/usage.md` covers it.
+
+## Building / testing
+
+This repo uses the `toku` harness. `test/spec/santoku/make.lua` exercises the
+engine. Run the suite through `toku`.
 
 ## License
 
