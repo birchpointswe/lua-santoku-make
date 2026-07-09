@@ -683,6 +683,7 @@ rocks_provided = { lua = "5.1" }
               luac = not use_files and (luac_bin .. " -s -o %output %input") or nil,
               binary = not use_files,
               files = use_files,
+              mods = tbl.get(env, {"client", "bundle_mods"}),
               ignores = { "debug" },
               path = get_lua_path(cdir("build", "default-wasm", nested_env)),
               cpath = get_lua_cpath(cdir("build", "default-wasm", nested_env)),

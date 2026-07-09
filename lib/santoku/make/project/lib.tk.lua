@@ -338,6 +338,7 @@ local function init (opts)
           bundle(test_dir("bundler-pre", fp), test_dir("bundler-post", fs.dirname(fp)), {
             cc = "emcc",
             close = false,
+            mods = test_env.bundle_mods,
             ignores = { "debug" },
             env = {
               { base_env.var("WASM"), "1" },
