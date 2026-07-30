@@ -34,6 +34,8 @@ LIBFLAG = -shared
 
 ifdef _WASM
 WASM_LDFLAGS_FINAL = -Wno-emcc
+LIB_CFLAGS += -fPIC
+LIB_CXXFLAGS += -fPIC
 endif
 
 <%
