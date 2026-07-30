@@ -33,9 +33,8 @@ INST_H = $(addprefix $(INST_PREFIX)/include/, $(LIB_H))
 LIBFLAG = -shared
 
 ifdef _WASM
-WASM_LDFLAGS_FINAL = -Wno-emcc
-LIB_CFLAGS += -fPIC
-LIB_CXXFLAGS += -fPIC
+LIBFLAG = -r
+WASM_LDFLAGS_FINAL =
 endif
 
 <%
@@ -133,6 +132,11 @@ LIB_LDFLAGS += <% return arr.concat(tbl.get(test or {}, {"ldflags"}) or {}, " ")
 
 <% -- wasm vs native flags, selected at make time %>
 ifdef _WASM
+<% -- size defaults, before project flags so projects can override %>
+<% push(environment == "build") %>
+LIB_CFLAGS += -Oz
+LIB_CXXFLAGS += -Oz
+<% pop() %>
 <% -- top-level wasm flags (apply to both build and test) %>
 LIB_CFLAGS += <% return arr.concat(tbl.get(wasm or {}, {"cflags"}) or {}, " ") %>
 LIB_CXXFLAGS += <% return arr.concat(tbl.get(wasm or {}, {"cxxflags"}) or {}, " ") %>

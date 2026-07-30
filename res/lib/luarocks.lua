@@ -15,9 +15,9 @@ variables = {
   LUA_LIBDIR = "<% return client_lua_dir %>/lib",
   LUA_LIBDIR_FILE = "liblua.a",
 
-  CFLAGS = "-I <% return client_lua_dir %>/include",
+  CFLAGS = "-I <% return client_lua_dir %>/include<% return environment == "build" and " -Oz" or "" %>",
   LDFLAGS = "-L <% return client_lua_dir %>/lib",
-  LIBFLAG = "-shared -Wno-linkflags",
+  LIBFLAG = "-r -Wno-linkflags",
 
   CC = "emcc",
   CXX = "em++",
