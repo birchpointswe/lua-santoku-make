@@ -55,7 +55,7 @@ local function get_bundle_flags(lua_dir, context, extra_cflags, extra_ldflags)
   return arr.flatten({
     context == "test"
       and { "-sASSERTIONS" }
-      or { "-Oz", "-sASSERTIONS=0", "--closure", "1", "-sMALLOC=emmalloc",
+      or { "-Oz", "-sASSERTIONS=0", "--closure", "0", "-sMALLOC=emmalloc",
            "-sTEXTDECODER=2", "-sNO_EXIT_RUNTIME", "-sEVAL_CTORS" },
     "-sALLOW_MEMORY_GROWTH",
     "-I" .. fs.join(lua_dir, "include"),
