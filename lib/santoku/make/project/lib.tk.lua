@@ -120,7 +120,6 @@ local function init (opts)
     return common.add_copied_target(target, dest, src, extra_srcs)
   end
 
-
   local build_deps_dir = work_dir("build-deps")
   local build_deps_ok = work_dir("build-deps.ok")
   local build_deps = tbl.get(opts, {"config", "env", "build", "dependencies"}) or {}
@@ -195,7 +194,7 @@ local function init (opts)
 
   if opts.wasm then
     for i = 1, #base_test_specs do
-      test_all_base_templated[#test_all_base_templated + 1] = fs.stripextension(remove_wasm(base_test_specs[i]))
+      test_all_base_templated[#test_all_base_templated + 1] = fs.stripextension(remove_wasm(base_test_specs[i])) .. ".js"
     end
   else
     arr.copy(test_all_base_templated, base_test_specs)
@@ -326,7 +325,7 @@ local function init (opts)
     end
 
     for _, fp in ipairs(base_test_specs) do
-      target({ test_dir("bundler-post", fs.stripextension(remove_wasm(fp))) },
+      target({ test_dir("bundler-post", fs.stripextension(remove_wasm(fp)) .. ".js") },
         arr.flatten({ test_dir("bundler-pre", fp), test_cfgs, test_dir(base_lua_modules_ok) }),
         function ()
           local extra_cflags = arr.flatten({
@@ -337,6 +336,7 @@ local function init (opts)
             tbl.get(test_env, {"test", "wasm", "ldflags"}) or {}})
           bundle(test_dir("bundler-pre", fp), test_dir("bundler-post", fs.dirname(fp)), {
             cc = "emcc",
+            outprefix = fs.stripextensions(fs.basename(fp)) .. ".js",
             close = false,
             mods = test_env.bundle_mods,
             ignores = { "debug" },
@@ -351,8 +351,8 @@ local function init (opts)
     end
 
     for _, fp in ipairs(base_test_specs) do
-      add_file_target(test_dir(fs.stripextension(remove_wasm(remove_tk(fp)))),
-        test_dir("bundler-post", fs.stripextension(remove_wasm(fp))), test_env)
+      add_file_target(test_dir(fs.stripextension(remove_wasm(remove_tk(fp))) .. ".js"),
+        test_dir("bundler-post", fs.stripextension(remove_wasm(fp)) .. ".js"), test_env)
     end
 
   end
@@ -483,7 +483,6 @@ local function init (opts)
         fs.touch(base_lua_modules_ok)
       end)
     end)
-
 
   local build_deps_luarocks_cfg = work_dir("build-deps-luarocks.lua")
   if has_build_deps then

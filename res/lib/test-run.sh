@@ -42,7 +42,7 @@ echo
 
 <% push(single) %>
 TEST="<% return single %>"
-toku test -s -i "node --expose-gc" "${TEST%.lua}"
+toku test -s -i "node --expose-gc" "${TEST%.lua}.js"
 status_tst=$?
 <% pop() push(not single) %>
 toku test -s -i "node --expose-gc" test/spec
