@@ -1,12 +1,10 @@
-# TODO: Should use OBJ_EXTENSION
-
+# tk: mk
 <% tbl = require("santoku.table") %>
 <% arr = require("santoku.array") %>
 <% str = require("santoku.string") %>
 
 include $(addprefix ../, $(PARENT_DEPS_RESULTS))
 
-# Auto-detect WASM build from compiler
 ifneq (,$(findstring emcc,$(CC)))
 _WASM = 1
 endif
@@ -62,7 +60,6 @@ inject_flags = function (env, wasm_env)
             if v.ldflags then arr.copy(wasm_flags.ldflags, v.ldflags) end
           end
         end
-        -- Emit rules with ifdef for wasm vs native flags
         local has_native = #flags.cflags > 0 or #flags.cxxflags > 0 or #flags.ldflags > 0
         local has_wasm = #wasm_flags.cflags > 0 or #wasm_flags.cxxflags > 0 or #wasm_flags.ldflags > 0
         if has_native or has_wasm then
@@ -114,12 +111,10 @@ inject_flags = function (env, wasm_env)
 end
 %>
 
-<% -- flags for all environments %>
 LIB_CFLAGS := -I. $(addprefix -I, $(LUA_INCDIR)) <% return arr.concat(cflags or {}, " ") %> $(<% return var("CFLAGS") %>) $(LIB_CFLAGS)
 LIB_CXXFLAGS := -I. $(addprefix -I, $(LUA_INCDIR)) <% return arr.concat(cxxflags or {}, " ") %> $(<% return var("CXXFLAGS") %>) $(LIB_CXXFLAGS)
 LIB_LDFLAGS := $(addprefix -L, $(LUA_LIBDIR)) <% return arr.concat(ldflags or {}, " ") %> $(<% return var("LDFLAGS") %>) $(LIB_LDFLAGS)
 
-<% -- flags for build/test environments (non-wasm-specific) %>
 <% push(environment == "build") %>
 LIB_CFLAGS += <% return arr.concat(tbl.get(build or {}, {"cflags"}) or {}, " ") %>
 LIB_CXXFLAGS += <% return arr.concat(tbl.get(build or {}, {"cxxflags"}) or {}, " ") %>
@@ -130,18 +125,14 @@ LIB_CXXFLAGS += <% return arr.concat(tbl.get(test or {}, {"cxxflags"}) or {}, " 
 LIB_LDFLAGS += <% return arr.concat(tbl.get(test or {}, {"ldflags"}) or {}, " ") %>
 <% pop() %>
 
-<% -- wasm vs native flags, selected at make time %>
 ifdef _WASM
-<% -- size defaults, before project flags so projects can override %>
 <% push(environment == "build") %>
 LIB_CFLAGS += -Oz
 LIB_CXXFLAGS += -Oz
 <% pop() %>
-<% -- top-level wasm flags (apply to both build and test) %>
 LIB_CFLAGS += <% return arr.concat(tbl.get(wasm or {}, {"cflags"}) or {}, " ") %>
 LIB_CXXFLAGS += <% return arr.concat(tbl.get(wasm or {}, {"cxxflags"}) or {}, " ") %>
 LIB_LDFLAGS += <% return arr.concat(tbl.get(wasm or {}, {"ldflags"}) or {}, " ") %>
-<% -- environment-specific wasm flags %>
 <% push(environment == "build") %>
 LIB_CFLAGS += <% return arr.concat(tbl.get(build or {}, {"wasm", "cflags"}) or {}, " ") %>
 LIB_CXXFLAGS += <% return arr.concat(tbl.get(build or {}, {"wasm", "cxxflags"}) or {}, " ") %>
@@ -152,11 +143,9 @@ LIB_CXXFLAGS += <% return arr.concat(tbl.get(test or {}, {"wasm", "cxxflags"}) o
 LIB_LDFLAGS += <% return arr.concat(tbl.get(test or {}, {"wasm", "ldflags"}) or {}, " ") %>
 <% pop() %>
 else
-<% -- top-level native flags (apply to both build and test) %>
 LIB_CFLAGS += <% return arr.concat(tbl.get(native or {}, {"cflags"}) or {}, " ") %>
 LIB_CXXFLAGS += <% return arr.concat(tbl.get(native or {}, {"cxxflags"}) or {}, " ") %>
 LIB_LDFLAGS += <% return arr.concat(tbl.get(native or {}, {"ldflags"}) or {}, " ") %>
-<% -- environment-specific native flags %>
 <% push(environment == "build") %>
 LIB_CFLAGS += <% return arr.concat(tbl.get(build or {}, {"native", "cflags"}) or {}, " ") %>
 LIB_CXXFLAGS += <% return arr.concat(tbl.get(build or {}, {"native", "cxxflags"}) or {}, " ") %>

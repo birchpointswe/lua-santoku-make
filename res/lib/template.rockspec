@@ -1,3 +1,4 @@
+-- tk: lua
 <%
   str = require("santoku.string")
   squote = str.quote

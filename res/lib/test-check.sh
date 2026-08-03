@@ -1,4 +1,5 @@
 #!/bin/sh
+# tk: sh
 
 export LUA='<% return lua %>'
 export LUA_PATH='<% return lua_path %>'
