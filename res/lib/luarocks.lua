@@ -1,3 +1,4 @@
+-- tk: lua
 rocks_trees = {
   { name = "system",
     root = "<% return lua_modules %>"

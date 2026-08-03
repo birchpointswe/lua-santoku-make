@@ -1,4 +1,5 @@
 #!/bin/sh
+# tk: sh
 
 <%
   arr = require("santoku.array")

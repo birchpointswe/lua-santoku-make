@@ -1,3 +1,4 @@
+-- tk: lua
 <% push(component == "server") %>
 
 lua_interpreter = "luajit"

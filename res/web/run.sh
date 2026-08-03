@@ -1,4 +1,5 @@
 #!/bin/sh
+# tk: sh
 
 <%
   str = require("santoku.string")
