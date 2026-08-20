@@ -41,7 +41,7 @@ run wget https://www.sqlite.org/2024/sqlite-autoconf-3470200.tar.gz \
     && cd / && rm -rf sqlite-autoconf-3470200* \
     && strip /usr/local/lib/libsqlite3.so* 2>/dev/null
 
-run luarocks install santoku-cli 1.0.1-1 \
+run luarocks install santoku-cli 2.2.0-1 \
     && luarocks install lua-cjson \
     && luarocks install luacheck \
     && rm -rf /root/.cache
