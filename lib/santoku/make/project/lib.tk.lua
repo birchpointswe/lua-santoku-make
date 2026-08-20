@@ -173,7 +173,7 @@ local function init (opts)
       for _, dir_fn in ipairs({ build_dir, test_dir }) do
         local dest = dir_fn(spec.file)
         target({ dest }, opts.config_file and { opts.config_file } or {}, function ()
-          vendor.fetch(opts.config, spec, dest)
+          vendor.fetch(spec, dest)
         end)
         arr.push(vendor_dests, dest)
       end

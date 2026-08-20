@@ -18,17 +18,6 @@ local function specs (config)
   return tbl.get(config, { "env", "vendor" }) or {}
 end
 
-local function mirror (config, spec)
-  if spec.mirror then
-    return spec.mirror
-  end
-  local homepage = tbl.get(config, { "env", "homepage" })
-  if not homepage then
-    return nil
-  end
-  return homepage .. "/releases/download/vendor/" .. fs.basename(spec.file)
-end
-
 local function download (url, dest)
   local part = dest .. ".part"
   fs.mkdirp(fs.dirname(dest))
@@ -67,14 +56,12 @@ local function validate (config)
   for i = 1, #ss do
     local spec = ss[i]
     err.assert(spec.file, "vendor entry missing file")
-    err.assert(mirror(config, spec),
-      "vendor entry has no mirror and no homepage to derive one from", spec.file)
+    err.assert(spec.url, "vendor entry missing url", spec.file)
   end
   return ss
 end
 
-local function fetch (config, spec, dest)
-  local url = mirror(config, spec)
+local function fetch (spec, dest)
   if fs.exists(dest) then
     if spec.sha256 and sha256(dest) == spec.sha256 then
       return dest
@@ -82,13 +69,9 @@ local function fetch (config, spec, dest)
     printf("[vendor]\tdiscarding unverified %s\n", dest)
     fs.rm(dest)
   end
-  printf("[vendor]\tfetching %s\n", url)
-  if not download(url, dest) then
-    printf("\nThe vendor mirror is missing this artifact. Seed it once:\n")
-    printf("  download %s\n", spec.url or "the upstream archive")
-    printf("  verify its sha256 against the vendor table\n")
-    printf("  gh release upload vendor <file> -R <owner>/<repo>\n\n")
-    return err.error("vendored source not on the mirror", dest, url)
+  printf("[vendor]\tfetching %s\n", spec.url)
+  if not download(spec.url, dest) then
+    return err.error("unable to fetch vendored source", dest, spec.url)
   end
   local got = sha256(dest)
   if not spec.sha256 then
@@ -127,7 +110,6 @@ end
 return {
   sha256 = sha256,
   specs = specs,
-  mirror = mirror,
   check = check,
   validate = validate,
   fetch = fetch,
