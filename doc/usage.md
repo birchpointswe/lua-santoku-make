@@ -85,10 +85,11 @@ required.
 - Variant forms exist: `test.wasm.dependencies`, `test.native.dependencies`.
 
 **Vendored third-party sources**
-- `vendor`: array of `{ file, url, sha256, mirror }` entries naming pristine
-  upstream archives that ship inside the rock. `file` is a path under `deps/`
-  relative to the project root. `mirror` defaults to
-  `<homepage>/releases/download/vendor/<basename>` and is tried before `url`.
+- `vendor`: array of `{ file, sha256, url, mirror }` entries naming pristine
+  upstream archives that ship inside the rock. `file` is a `deps/` path that
+  materializes in the build and test dirs; the source tree never holds the
+  artifact. `mirror` defaults to
+  `<homepage>/releases/download/vendor/<basename>`; `url` is provenance only.
   See the vendored-dependency scenario below.
 
 **C build flags** (arrays, joined onto the compile/link lines)
@@ -161,12 +162,15 @@ rather than running the upstream's own `./configure`; santoku-sqlite, santoku-mu
 and santoku-markdown all follow this pattern.
 
 A deps Makefile never downloads. The upstream archive is a vendored artifact:
-declared in the `vendor` table, fetched once by `toku vendor` into the source
-tree's `deps/`, verified against its `sha256`, and gitignored. Because `pack`
-enumerates `deps/` from the filesystem, the archive ships inside the release
-tarball, so a consumer's `luarocks install` never reaches a third-party host.
-`pack` and `release` refuse to run if a declared artifact is missing, fails its
-checksum, or would be filtered out of the tarball by a `rules.exclude` pattern.
+declared in the `vendor` table and registered as an ordinary build target, so
+`toku build`, `toku test`, `toku pack`, and `toku release` fetch it into the
+build and test dirs on demand and verify it against its `sha256`. The source
+tree never holds it and nothing needs gitignoring. The archive ships inside the
+release tarball next to its Makefile, so a consumer's `luarocks install` never
+reaches any host at all. `pack` and `release` additionally refuse to run if a
+declared artifact fails its checksum or would be filtered out of the tarball by
+a `rules.exclude` pattern; the Makefile's `[ -f ... ] || exit 1` guard is the
+last line of defense, not the mechanism.
 
 ```lua
 -- lua-santoku-mustache/make.lua (excerpt)
@@ -179,8 +183,8 @@ vendor = {
 }
 ```
 
-`toku vendor` fetches from the birchpointswe `vendor` release tag and nowhere
-else. It never falls back to `url`: a fallback would silently paper over an
+Fetches come from the birchpointswe `vendor` release tag and nowhere else.
+There is no fallback to `url`: a fallback would silently paper over an
 un-seeded mirror, which is the one failure this mechanism exists to make loud.
 `url` is provenance only, recorded so a human knows where the bytes originally
 came from and can seed the mirror once:
@@ -188,10 +192,11 @@ came from and can seed the mirror once:
     download <url>, check its sha256 against the vendor table, then
     gh release upload vendor <file> -R birchpointswe/<repo>
 
-Omit `sha256` on a new entry and `toku vendor` prints the computed digest to
-paste into `make.lua`, then exits non-zero. Modified upstream code is not a
-vendored artifact: it is first-party, and belongs in-tree under `lib/` (as with
-the lpeg port in santoku-lpeg).
+`toku vendor` still exists as an explicit prefetch (e.g. before going
+offline); it is never required. Omit `sha256` on a new entry and the fetch
+prints the computed digest to paste into `make.lua`, then exits non-zero.
+Modified upstream code is not a vendored artifact: it is first-party, and
+belongs in-tree under `lib/` (as with the lpeg port in santoku-lpeg).
 
 ## Scenario: native and WASM variants
 
@@ -271,8 +276,8 @@ are real multi-profile examples; pm-search-server also shows a `Dockerfile` invo
 
 The project layer registers these (run via the matching `toku` command):
 
-- **vendor**: fetch and sha256-verify the `vendor` artifacts into `deps/`. Run
-  once per fresh clone, before `build`.
+- **vendor**: prefetch and sha256-verify the `vendor` artifacts into the build
+  and test dirs. Optional; `build`/`test`/`pack` fetch on demand.
 - **build**: render templates, install deps, compile.
 - **test**: build the test env, run the suite (santoku-test-runner) and `luacheck`
   (`--skip-check` to skip). `iterate` re-runs on file changes.
