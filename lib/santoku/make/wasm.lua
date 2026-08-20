@@ -1,11 +1,14 @@
 
-
 local fs = require("santoku.fs")
 local sys = require("santoku.system")
 local arr = require("santoku.array")
 local str = require("santoku.string")
+local vendor = require("santoku.make.vendor")
 
-
+local lua_tarball_url =
+  "https://github.com/birchpointswe/lua-santoku-make/releases/download/vendor/lua-5.1.5/lua-5.1.5.tar.gz"
+local lua_tarball_sha256 =
+  "2640fc56a795f29d28ef15e13c34a47e223960b0240e8cb0a82d9b0738695333"
 
 local function setup_lua(target_fn, dir)
   local lua_dir = fs.join(dir, "lua-5.1.5")
@@ -14,9 +17,7 @@ local function setup_lua(target_fn, dir)
   target_fn({ lua_ok }, {}, function ()
     fs.mkdirp(dir)
     return fs.pushd(dir, function ()
-      if not fs.exists("lua-5.1.5.tar.gz") then
-        sys.execute({ "wget", "https://github.com/birchpointswe/lua-santoku-make/releases/download/vendor/lua-5.1.5/lua-5.1.5.tar.gz" })
-      end
+      vendor.fetch_verified("lua-5.1.5.tar.gz", { lua_tarball_url }, lua_tarball_sha256)
       if fs.exists("lua-5.1.5") then
         sys.execute({ "rm", "-rf", "lua-5.1.5" })
       end
@@ -49,8 +50,6 @@ local function setup_lua(target_fn, dir)
   return lua_dir, lua_ok
 end
 
-
-
 local function get_bundle_flags(lua_dir, context, extra_cflags, extra_ldflags)
   return arr.flatten({
     context == "test"
@@ -67,7 +66,6 @@ local function get_bundle_flags(lua_dir, context, extra_cflags, extra_ldflags)
   })
 end
 
-
 local function create_node_wrapper(dest, js_file)
   local wrapper = string.format([[#!/bin/sh
 exec node "%s" "$@"
@@ -75,7 +73,6 @@ exec node "%s" "$@"
   fs.writefile(dest, wrapper)
   sys.execute({ "chmod", "+x", dest })
 end
-
 
 local embed_main_template = [[
 #include "lua.h"
@@ -121,8 +118,6 @@ int main(int argc, char **argv) {
 }
 ]]
 
-
-
 local function build_embed(entry_lua, outdir, opts)
   opts = opts or {}
   local lua_dir = opts.lua_dir
@@ -133,19 +128,15 @@ local function build_embed(entry_lua, outdir, opts)
   local outcfp = fs.join(outdir, outprefix .. ".embed.c")
   local outmainfp = fs.join(outdir, outprefix)
 
-
   local lua_path = "/lua_modules/share/lua/5.1/?.lua;/lua_modules/share/lua/5.1/?/init.lua;/lua_modules/lib/lua/5.1/?.lua;/lua_modules/lib/lua/5.1/?/init.lua;;"
   local lua_cpath = "/lua_modules/lib/lua/5.1/?.so;;"
 
-
   local entry_vfs_path = "/" .. fs.basename(entry_lua)
-
 
   local c_code = str.format(embed_main_template, lua_path, lua_cpath, entry_vfs_path)
 
   fs.mkdirp(outdir)
   fs.writefile(outcfp, c_code)
-
 
   local args = arr.flatten({
     "emcc",

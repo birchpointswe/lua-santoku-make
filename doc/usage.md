@@ -84,6 +84,13 @@ required.
   rendering (so a `.tk` file can `require` them at build time).
 - Variant forms exist: `test.wasm.dependencies`, `test.native.dependencies`.
 
+**Vendored third-party sources**
+- `vendor`: array of `{ file, url, sha256, mirror }` entries naming pristine
+  upstream archives that ship inside the rock. `file` is a path under `deps/`
+  relative to the project root. `mirror` defaults to
+  `<homepage>/releases/download/vendor/<basename>` and is tried before `url`.
+  See the vendored-dependency scenario below.
+
 **C build flags** (arrays, joined onto the compile/link lines)
 - `cflags`, `cxxflags`, `ldflags`: applied to every build.
 - Scope by phase: `build.cflags` / `test.cflags` (and `ldflags`, etc.).
@@ -138,7 +145,8 @@ ldflags = { "$(PWD)/deps/sqlite3/sqlite-amalgamation-3490200/libsqlite3.a", "-lm
 ```make
 # deps/sqlite3/Makefile (shape)
 results.mk:
-	# download + extract the source
+	[ -f <archive> ] || { echo "missing vendored <archive>; run 'toku vendor'" >&2; exit 1; }
+	tar xf <archive>
 	cd <src> && $(CC) -c $(SQLITE_CFLAGS) $(CFLAGS) -o sqlite3.o sqlite3.c
 	cd <src> && $(AR) rcs libsqlite3.a sqlite3.o
 	echo "LIB_CFLAGS += -I$(CURDIR)/<src>" >> results.mk
@@ -151,6 +159,32 @@ produce `results.mk`, and includes the resulting `LIB_CFLAGS`/`LIB_LDFLAGS`. Com
 the upstream sources directly with `$(CC) $(CFLAGS)` (so they inherit the toolchain),
 rather than running the upstream's own `./configure`; santoku-sqlite, santoku-mustache,
 and santoku-markdown all follow this pattern.
+
+A deps Makefile never downloads. The upstream archive is a vendored artifact:
+declared in the `vendor` table, fetched once by `toku vendor` into the source
+tree's `deps/`, verified against its `sha256`, and gitignored. Because `pack`
+enumerates `deps/` from the filesystem, the archive ships inside the release
+tarball, so a consumer's `luarocks install` never reaches a third-party host.
+`pack` and `release` refuse to run if a declared artifact is missing, fails its
+checksum, or would be filtered out of the tarball by a `rules.exclude` pattern.
+
+```lua
+-- lua-santoku-mustache/make.lua (excerpt)
+vendor = {
+  {
+    file = "deps/mustach/mustach-1.2.10.tar.gz",
+    url = "https://gitlab.com/jobol/mustach/-/archive/1.2.10/mustach-1.2.10.tar.gz",
+    sha256 = "95a2a351e748db9eeb98f40ba8bfbf010c1c6d2e725d31a3c7e602526d05bf90",
+  },
+}
+```
+
+`toku vendor` tries the birchpointswe `vendor` release tag first and falls back
+to `url`, so upstream uptime does not gate a fresh clone. Omit `sha256` on a new
+entry and `toku vendor` fetches, prints the computed digest to paste into
+`make.lua`, and exits non-zero. Modified upstream code is not a vendored
+artifact: it is first-party, and belongs in-tree under `lib/` (as with the lpeg
+port in santoku-lpeg).
 
 ## Scenario: native and WASM variants
 
@@ -230,6 +264,8 @@ are real multi-profile examples; a service also shows a `Dockerfile` invoking
 
 The project layer registers these (run via the matching `toku` command):
 
+- **vendor**: fetch and sha256-verify the `vendor` artifacts into `deps/`. Run
+  once per fresh clone, before `build`.
 - **build**: render templates, install deps, compile.
 - **test**: build the test env, run the suite (santoku-test-runner) and `luacheck`
   (`--skip-check` to skip). `iterate` re-runs on file changes.

@@ -14,6 +14,7 @@ local vdt = require("santoku.validate")
 local err = require("santoku.error")
 local common = require("santoku.make.common")
 local wasm = require("santoku.make.wasm")
+local vendor = require("santoku.make.vendor")
 local clean = require("santoku.make.clean")
 local arr = require("santoku.array")
 local str = require("santoku.string")
@@ -584,6 +585,10 @@ rocks_provided = { lua = "5.1" }
     end)
   end)
 
+  target({ "vendor" }, {}, function ()
+    vendor.sync(opts.config)
+  end)
+
   if not opts.wasm then
 
     local release_tarball_dir = str.interp("%s#(name)-%s#(version)", opts.config.env)
@@ -603,7 +608,21 @@ rocks_provided = { lua = "5.1" }
       arr.push(release_tarball_contents, base_license)
     end
 
-    target({ "pack" }, install_release_deps, function ()
+    target({ "vendor-check" }, {}, function ()
+      local packed = {}
+      for i = 1, #release_tarball_contents do
+        packed[release_tarball_contents[i]] = true
+      end
+      local specs = vendor.ensure(opts.config)
+      for i = 1, #specs do
+        local fp = remove_tk(specs[i].file)
+        if not packed[fp] then
+          err.error("vendored source would not be packed, check rules.exclude", fp)
+        end
+      end
+    end)
+
+    target({ "pack" }, arr.flatten({ { "vendor-check" }, install_release_deps }), function ()
       fs.mkdirp(build_dir())
       return fs.pushd(build_dir(), function ()
         if fs.exists(release_tarball) then
@@ -867,6 +886,10 @@ rocks_provided = { lua = "5.1" }
     install_deps = function (opts)
       opts = opts or {}
       build(tbl.assign({ "install-deps" }, opts), opts.verbosity)
+    end,
+    vendor = function (opts)
+      opts = opts or {}
+      build(tbl.assign({ "vendor" }, opts), opts.verbosity)
     end,
     pack = not opts.wasm and function (opts)
       opts = opts or {}
