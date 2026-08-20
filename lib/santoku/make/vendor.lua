@@ -19,20 +19,15 @@ local function specs (config)
   return tbl.get(config, { "env", "vendor" }) or {}
 end
 
-local function urls (config, spec)
-  local out = {}
+local function mirror (config, spec)
   if spec.mirror then
-    arr.push(out, spec.mirror)
-  else
-    local homepage = tbl.get(config, { "env", "homepage" })
-    if homepage then
-      arr.push(out, homepage .. "/releases/download/vendor/" .. fs.basename(spec.file))
-    end
+    return spec.mirror
   end
-  if spec.url then
-    arr.push(out, spec.url)
+  local homepage = tbl.get(config, { "env", "homepage" })
+  if not homepage then
+    return nil
   end
-  return out
+  return homepage .. "/releases/download/vendor/" .. fs.basename(spec.file)
 end
 
 local function download (url, dest)
@@ -72,7 +67,8 @@ local function validate (config)
   for i = 1, #ss do
     local spec = ss[i]
     err.assert(spec.file, "vendor entry missing file")
-    err.assert(spec.url or spec.mirror, "vendor entry missing url and mirror", spec.file)
+    err.assert(mirror(config, spec),
+      "vendor entry has no mirror and no homepage to derive one from", spec.file)
   end
   return ss
 end
@@ -95,18 +91,14 @@ local function sync (config)
   for i = 1, #ss do
     local spec = ss[i]
     if not fs.exists(spec.file) then
-      local sources = urls(config, spec)
-      local fetched = false
-      for j = 1, #sources do
-        printf("[vendor]\tfetching %s\n", sources[j])
-        if download(sources[j], spec.file) then
-          fetched = true
-          break
-        end
-        printf("[vendor]\tfailed %s\n", sources[j])
-      end
-      if not fetched then
-        err.error("unable to fetch vendored source", spec.file, arr.concat(sources, ", "))
+      local url = mirror(config, spec)
+      printf("[vendor]\tfetching %s\n", url)
+      if not download(url, spec.file) then
+        printf("\nThe vendor mirror does not have this artifact. Seed it once:\n\n")
+        printf("  download %s\n", spec.url or "the upstream archive")
+        printf("  verify its sha256 against the vendor table\n")
+        printf("  gh release upload vendor <file> -R <the repo owning this mirror>\n\n")
+        err.error("vendored source not on the mirror", spec.file, url)
       end
     end
     if not spec.sha256 then
@@ -130,7 +122,7 @@ local function sync (config)
   return ss
 end
 
-local function fetch_verified (dest, sources, expected)
+local function fetch_verified (dest, url, expected)
   if fs.exists(dest) then
     if sha256(dest) == expected then
       return dest
@@ -138,25 +130,22 @@ local function fetch_verified (dest, sources, expected)
     printf("[vendor]\tdiscarding unverified %s\n", dest)
     fs.rm(dest)
   end
-  for i = 1, #sources do
-    printf("[vendor]\tfetching %s\n", sources[i])
-    if download(sources[i], dest) then
-      local got = sha256(dest)
-      if got ~= expected then
-        fs.rm(dest)
-        err.error("vendored source failed verification", dest, expected, got)
-      end
-      return dest
-    end
-    printf("[vendor]\tfailed %s\n", sources[i])
+  printf("[vendor]\tfetching %s\n", url)
+  if not download(url, dest) then
+    return err.error("unable to fetch vendored source", dest, url)
   end
-  return err.error("unable to fetch vendored source", dest, arr.concat(sources, ", "))
+  local got = sha256(dest)
+  if got ~= expected then
+    fs.rm(dest)
+    return err.error("vendored source failed verification", dest, expected, got)
+  end
+  return dest
 end
 
 return {
   sha256 = sha256,
   specs = specs,
-  urls = urls,
+  mirror = mirror,
   check = check,
   ensure = ensure,
   sync = sync,

@@ -17,7 +17,7 @@ local function setup_lua(target_fn, dir)
   target_fn({ lua_ok }, {}, function ()
     fs.mkdirp(dir)
     return fs.pushd(dir, function ()
-      vendor.fetch_verified("lua-5.1.5.tar.gz", { lua_tarball_url }, lua_tarball_sha256)
+      vendor.fetch_verified("lua-5.1.5.tar.gz", lua_tarball_url, lua_tarball_sha256)
       if fs.exists("lua-5.1.5") then
         sys.execute({ "rm", "-rf", "lua-5.1.5" })
       end

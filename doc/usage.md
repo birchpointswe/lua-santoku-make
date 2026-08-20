@@ -179,12 +179,19 @@ vendor = {
 }
 ```
 
-`toku vendor` tries the birchpointswe `vendor` release tag first and falls back
-to `url`, so upstream uptime does not gate a fresh clone. Omit `sha256` on a new
-entry and `toku vendor` fetches, prints the computed digest to paste into
-`make.lua`, and exits non-zero. Modified upstream code is not a vendored
-artifact: it is first-party, and belongs in-tree under `lib/` (as with the lpeg
-port in santoku-lpeg).
+`toku vendor` fetches from the birchpointswe `vendor` release tag and nowhere
+else. It never falls back to `url`: a fallback would silently paper over an
+un-seeded mirror, which is the one failure this mechanism exists to make loud.
+`url` is provenance only, recorded so a human knows where the bytes originally
+came from and can seed the mirror once:
+
+    download <url>, check its sha256 against the vendor table, then
+    gh release upload vendor <file> -R birchpointswe/<repo>
+
+Omit `sha256` on a new entry and `toku vendor` prints the computed digest to
+paste into `make.lua`, then exits non-zero. Modified upstream code is not a
+vendored artifact: it is first-party, and belongs in-tree under `lib/` (as with
+the lpeg port in santoku-lpeg).
 
 ## Scenario: native and WASM variants
 
