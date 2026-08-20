@@ -1,6 +1,6 @@
 local env = {
   name = "santoku-make",
-  version = "2.0.0-1",
+  version = "2.1.0-1",
   variable_prefix = "TK_MAKE",
   license = "MIT",
   public = true,
