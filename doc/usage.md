@@ -84,13 +84,6 @@ required.
   rendering (so a `.tk` file can `require` them at build time).
 - Variant forms exist: `test.wasm.dependencies`, `test.native.dependencies`.
 
-**Vendored third-party sources**
-- `vendor`: array of `{ file, url, sha256 }` entries naming pristine upstream
-  archives that ship inside the rock. `file` is a `deps/` path that
-  materializes in the build and test dirs; the source tree never holds the
-  artifact. `url` is where the build fetches it from, verified against
-  `sha256`. See the vendored-dependency scenario below.
-
 **C build flags** (arrays, joined onto the compile/link lines)
 - `cflags`, `cxxflags`, `ldflags`: applied to every build.
 - Scope by phase: `build.cflags` / `test.cflags` (and `ldflags`, etc.).
@@ -103,11 +96,19 @@ required.
 - `rules.exclude`, `rules.copy`, `rules.template`: arrays of Lua patterns selecting
   files to ignore, force-copy (skip templating), or force-template. Variant rules
   (`build.native.rules`, etc.) attach extra per-file compiler flags.
+- `rules.include`: array of literal paths (not patterns) declared into the file
+  set even when absent from the source tree. Declared paths are unioned with the
+  walked files and win over `exclude`. They flow through every downstream list
+  (build, test, release tarball) like any tracked file; a declared path that
+  neither exists nor has a producer target fails the build.
 
 **Hook**
-- `configure(submake, envs, register_public_file)`: called after the standard
-  targets are registered, so you can add your own (asset pipelines, codegen, SSL
-  cert generation). `envs.root`/`envs.server`/`envs.client` give the merged envs.
+- `configure(submake, envs)`: called once per environment after the standard
+  targets are registered, so you can add your own targets (asset pipelines,
+  codegen, SSL cert generation, producers for `rules.include` paths).
+  `envs.root` (plus `envs.server`/`envs.client` on web projects) gives the
+  merged envs. The pattern throughout: file sets are declared data in the
+  descriptor; `configure` only wires up the targets that produce them.
 
 **Web blocks** (web projects): `server`, `client`, `nginx` (covered below).
 
@@ -145,7 +146,7 @@ ldflags = { "$(PWD)/deps/sqlite3/sqlite-amalgamation-3490200/libsqlite3.a", "-lm
 ```make
 # deps/sqlite3/Makefile (shape)
 results.mk:
-	[ -f <archive> ] || { echo "missing vendored <archive>; run 'toku vendor'" >&2; exit 1; }
+	[ -f <archive> ] || { echo "missing vendored <archive>" >&2; exit 1; }
 	tar xf <archive>
 	cd <src> && $(CC) -c $(SQLITE_CFLAGS) $(CFLAGS) -o sqlite3.o sqlite3.c
 	cd <src> && $(AR) rcs libsqlite3.a sqlite3.o
@@ -160,39 +161,60 @@ the upstream sources directly with `$(CC) $(CFLAGS)` (so they inherit the toolch
 rather than running the upstream's own `./configure`; santoku-sqlite, santoku-mustache,
 and santoku-markdown all follow this pattern.
 
-A deps Makefile never downloads. The upstream archive is a vendored artifact:
-declared in the `vendor` table and registered as an ordinary build target, so
-`toku build`, `toku test`, `toku pack`, and `toku release` fetch it into the
-build and test dirs on demand and verify it against its `sha256`. The source
-tree never holds it and nothing needs gitignoring. The archive ships inside the
-release tarball next to its Makefile, so a consumer's `luarocks install` never
-reaches any host at all. `pack` and `release` additionally refuse to run if a
-declared artifact fails its checksum or would be filtered out of the tarball by
-a `rules.exclude` pattern; the Makefile's `[ -f ... ] || exit 1` guard is the
+A deps Makefile never downloads. The upstream archive is declared data: its
+`deps/` path goes in `rules.include`, so it flows through the build, test, and
+release-tarball file lists like any tracked file, and a `configure` hook
+registers the producer target that fetches it. The engine has no vendor
+feature; `santoku.make.vendor` is an opt-in helper the hook calls. The source
+tree never holds the artifact and nothing needs gitignoring. The archive ships
+inside the release tarball next to its Makefile, so a consumer's
+`luarocks install` never reaches any host at all. A declared path with no
+producer fails the build; the Makefile's `[ -f ... ] || exit 1` guard is the
 last line of defense, not the mechanism.
 
 ```lua
 -- lua-santoku-mustache/make.lua (excerpt)
-vendor = {
+local fs = require("santoku.fs")
+local vendor = require("santoku.make.vendor")
+
+local vendored = {
   {
     file = "deps/mustach/mustach-1.2.10.tar.gz",
     url = "https://gitlab.com/jobol/mustach/-/archive/1.2.10/mustach-1.2.10.tar.gz",
     sha256 = "95a2a351e748db9eeb98f40ba8bfbf010c1c6d2e725d31a3c7e602526d05bf90",
   },
 }
+
+local include = {}
+for i = 1, #vendored do
+  include[i] = vendored[i].file
+end
+
+-- in env:
+rules = { include = include },
+configure = function (submake, envs)
+  for i = 1, #vendored do
+    local v = vendored[i]
+    local dest = fs.join(envs.root.build_dir, v.file)
+    submake.target({ dest }, { "make.lua" }, function ()
+      vendor.fetch(v, dest)
+    end)
+  end
+end,
 ```
+
+`vendor.fetch(spec, dest)` downloads to `dest .. ".part"`, renames on success,
+and verifies against `spec.sha256`, discarding and refetching an existing file
+that fails verification. Making `make.lua` the target's dependency means a
+digest bump triggers a refetch. Omit `sha256` on a new entry and the fetch
+prints the computed digest to paste into `make.lua`, then exits non-zero.
 
 Only the maintainer's own dev builds ever fetch, once per clean build dir;
 consumers get the artifact inside the rock, so the pinned `sha256` is the
 trust anchor and the host is not. If a given upstream is flaky, point that
-entry's `url` at self-hosted storage (the lua-5.1.5 tarball for wasm builds
-does exactly this); there is no separate mirror concept.
-
-`toku vendor` exists as an explicit prefetch (e.g. before going offline); it
-is never required. Omit `sha256` on a new entry and the fetch prints the
-computed digest to paste into `make.lua`, then exits non-zero. Modified
-upstream code is not a vendored artifact: it is first-party, and belongs
-in-tree under `lib/` (as with the lpeg port in santoku-lpeg).
+entry's `url` at self-hosted storage. Modified upstream code is not a vendored
+artifact: it is first-party, and belongs in-tree under `lib/` (as with the
+lpeg port in santoku-lpeg).
 
 ## Scenario: native and WASM variants
 
@@ -241,10 +263,13 @@ nginx = { ssl_self_signed = true, hsts = false, ssl_port = env.var("SSL_PORT", "
   Lua `modules` wired in (request handling lives in those modules, not in the
   descriptor).
 - `client.pwa` drives manifest/icon generation and asset minification transforms.
+- `client.public` declares the public filenames the `configure` hook produces
+  (fonts, compiled CSS, icons); they join the hashed-asset manifest exactly like
+  walked static files.
 - The `configure` hook does the rest of the asset pipeline (the boilerplate
   generates a self-signed cert, fetches fonts, runs Tailwind, and renders icons and
-  splash screens with `submake.target(...)` calls, using `register_public_file` to
-  publish hashed static assets).
+  splash screens with `submake.target(...)` calls producing the declared
+  `client.public` files).
 
 Web projects are driven with `toku build`, `toku start`/`toku stop` (dev server), and
 `toku test`. The `submodules/tokuboilerplate-lib` project is the matching plain
@@ -272,8 +297,6 @@ are real multi-profile examples; a service also shows a `Dockerfile` invoking
 
 The project layer registers these (run via the matching `toku` command):
 
-- **vendor**: prefetch and sha256-verify the `vendor` artifacts into the build
-  and test dirs. Optional; `build`/`test`/`pack` fetch on demand.
 - **build**: render templates, install deps, compile.
 - **test**: build the test env, run the suite (santoku-test-runner) and `luacheck`
   (`--skip-check` to skip). `iterate` re-runs on file changes.

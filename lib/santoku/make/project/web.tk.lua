@@ -205,9 +205,8 @@ local function init (opts)
   end
 
   local registered_public_files = {}
-
-  local function register_public_file (filename)
-    registered_public_files[filename] = true
+  for _, fp in ipairs(tbl.get(opts, {"config", "env", "client", "public"}) or {}) do
+    registered_public_files[fp] = true
   end
 
   local function make_hashed (get_manifest_path)
@@ -498,7 +497,6 @@ rocks_provided = { lua = "5.1" }
 
   add_templated_target_base64(test_server_dir(base_server_run_sh),
     <% return str.quote(str.to_base64(readfile("res/web/run.sh"))) %>, test_server_env) -- luacheck: ignore
-
 
   add_templated_target_base64(server_dir(base_server_luarocks_cfg),
     <% return str.quote(str.to_base64(readfile("res/web/luarocks.lua"))) %>, server_env) -- luacheck: ignore
@@ -1403,8 +1401,8 @@ rocks_provided = { lua = "5.1" }
 
   local configure = tbl.get(opts, {"config", "env", "configure"})
   if configure then
-    configure(submake, { root = root_env, client = client_env, server = server_env }, register_public_file)
-    configure(submake, { root = test_root_env, client = test_client_env, server = test_server_env }, register_public_file)
+    configure(submake, { root = root_env, client = client_env, server = server_env })
+    configure(submake, { root = test_root_env, client = test_client_env, server = test_server_env })
   end
 
   return {

@@ -1,11 +1,9 @@
 
-
 local fs = require("santoku.fs")
 local tmpl = require("santoku.template")
 local str = require("santoku.string")
 local tbl = require("santoku.table")
 local arr = require("santoku.array")
-
 
 local function get_action(fp, config)
   config = config or {}
@@ -24,7 +22,6 @@ local function get_action(fp, config)
   return "template"
 end
 
-
 local function force_template(fp, config)
   config = config or {}
   local rules = tbl.get(config, {"env", "rules"}) or config.rules or {}
@@ -35,13 +32,11 @@ local function force_template(fp, config)
   return false
 end
 
-
 local function remove_tk(fp, config)
   return get_action(fp, config) == "template"
     and str.gsub(fp, "%.tk", "")
     or fp
 end
-
 
 local function add_copied_target(target_fn, dest, src, extra_srcs)
   target_fn({ dest }, arr.flatten({ src, extra_srcs or {} }), function ()
@@ -50,11 +45,9 @@ local function add_copied_target(target_fn, dest, src, extra_srcs)
   end)
 end
 
-
 local function get_lua_version()
   return (str.match(_VERSION, "(%d+.%d+)"))
 end
-
 
 local function get_require_paths(prefix, ...)
   local pfx = prefix and fs.join(prefix, "lua_modules") or "lua_modules"
@@ -67,7 +60,6 @@ local function get_require_paths(prefix, ...)
   return arr.concat(t, ";")
 end
 
-
 local function get_lua_path(prefix)
   return get_require_paths(prefix,
     "share/lua/%s/?.lua",
@@ -76,13 +68,11 @@ local function get_lua_path(prefix)
     "lib/lua/%s/?/init.lua")
 end
 
-
 local function get_lua_cpath(prefix)
   return get_require_paths(prefix,
     "lib/lua/%s/?.so",
     "lib/lua/%s/loadall.so")
 end
-
 
 local function with_build_deps(build_deps_dir, fn)
   if not build_deps_dir then
@@ -100,7 +90,6 @@ local function with_build_deps(build_deps_dir, fn)
     return ...
   end)(fn())
 end
-
 
 local function add_file_target(target_fn, dest, src, env, config, config_file, extra_srcs, build_deps_dir, build_deps_ok)
   local action = get_action(src, config)
@@ -121,7 +110,6 @@ local function add_file_target(target_fn, dest, src, env, config, config_file, e
   end
 end
 
-
 local function add_templated_target_base64(target_fn, dest, data, env, config_file, extra_srcs, build_deps_dir, build_deps_ok)
   target_fn({ dest }, arr.flatten({ config_file, extra_srcs or {}, build_deps_ok or {} }), function ()
     fs.mkdirp(fs.dirname(dest))
@@ -135,18 +123,28 @@ local function add_templated_target_base64(target_fn, dest, data, env, config_fi
   end)
 end
 
-
 local function get_files(dir, config, check_tpl)
   local tpl = check_tpl and {} or nil
-  if not fs.exists(dir) then
-    return {}, tpl
-  end
   local result = {}
-  for fp in fs.files(dir, true) do
-    if check_tpl and force_template(fp, config) then
-      arr.push(tpl, fp)
-    elseif get_action(fp, config) ~= "ignore" then
+  local seen = {}
+  if fs.exists(dir) then
+    for fp in fs.files(dir, true) do
+      if check_tpl and force_template(fp, config) then
+        arr.push(tpl, fp)
+        seen[fp] = true
+      elseif get_action(fp, config) ~= "ignore" then
+        arr.push(result, fp)
+        seen[fp] = true
+      end
+    end
+  end
+  local rules = tbl.get(config or {}, {"env", "rules"}) or (config or {}).rules or {}
+  local include = tbl.get(rules, {"include"}) or {}
+  for i = 1, #include do
+    local fp = include[i]
+    if not seen[fp] and str.startswith(fp, dir .. "/") then
       arr.push(result, fp)
+      seen[fp] = true
     end
   end
   return result, tpl

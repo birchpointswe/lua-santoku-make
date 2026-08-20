@@ -6,7 +6,7 @@ local str = require("santoku.string")
 local vendor = require("santoku.make.vendor")
 
 local lua_tarball_url =
-  "https://github.com/birchpointswe/lua-santoku-make/releases/download/vendor/lua-5.1.5/lua-5.1.5.tar.gz"
+  "https://www.lua.org/ftp/lua-5.1.5.tar.gz"
 local lua_tarball_sha256 =
   "2640fc56a795f29d28ef15e13c34a47e223960b0240e8cb0a82d9b0738695333"
 
@@ -17,7 +17,7 @@ local function setup_lua(target_fn, dir)
   target_fn({ lua_ok }, {}, function ()
     fs.mkdirp(dir)
     return fs.pushd(dir, function ()
-      vendor.fetch_verified("lua-5.1.5.tar.gz", lua_tarball_url, lua_tarball_sha256)
+      vendor.fetch({ url = lua_tarball_url, sha256 = lua_tarball_sha256 }, "lua-5.1.5.tar.gz")
       if fs.exists("lua-5.1.5") then
         sys.execute({ "rm", "-rf", "lua-5.1.5" })
       end
