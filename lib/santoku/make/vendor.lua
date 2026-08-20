@@ -3,7 +3,6 @@ local sys = require("santoku.system")
 local str = require("santoku.string")
 local err = require("santoku.error")
 local tbl = require("santoku.table")
-local arr = require("santoku.array")
 
 local printf = str.printf
 
@@ -48,14 +47,15 @@ local function download (url, dest)
   end)(err.pcall(sys.execute, { "wget", "-q", "-O", part, "--", url }))
 end
 
-local function check (spec)
-  if not fs.exists(spec.file) then
+local function check (spec, path)
+  path = path or spec.file
+  if not fs.exists(path) then
     return false, "missing"
   end
   if not spec.sha256 then
     return false, "no sha256 declared"
   end
-  local got = sha256(spec.file)
+  local got = sha256(path)
   if got ~= spec.sha256 then
     return false, str.format("sha256 mismatch (declared %s, actual %s)", spec.sha256, tostring(got))
   end
@@ -73,53 +73,35 @@ local function validate (config)
   return ss
 end
 
-local function ensure (config)
-  local ss = validate(config)
-  for i = 1, #ss do
-    local spec = ss[i]
-    local ok, reason = check(spec)
-    if not ok then
-      err.error("vendored source unusable, run 'toku vendor'", spec.file, reason)
+local function fetch (config, spec, dest)
+  local url = mirror(config, spec)
+  if fs.exists(dest) then
+    if spec.sha256 and sha256(dest) == spec.sha256 then
+      return dest
     end
+    printf("[vendor]\tdiscarding unverified %s\n", dest)
+    fs.rm(dest)
   end
-  return ss
-end
-
-local function sync (config)
-  local ss = validate(config)
-  local undeclared = {}
-  for i = 1, #ss do
-    local spec = ss[i]
-    if not fs.exists(spec.file) then
-      local url = mirror(config, spec)
-      printf("[vendor]\tfetching %s\n", url)
-      if not download(url, spec.file) then
-        printf("\nThe vendor mirror does not have this artifact. Seed it once:\n\n")
-        printf("  download %s\n", spec.url or "the upstream archive")
-        printf("  verify its sha256 against the vendor table\n")
-        printf("  gh release upload vendor <file> -R <the repo owning this mirror>\n\n")
-        err.error("vendored source not on the mirror", spec.file, url)
-      end
-    end
-    if not spec.sha256 then
-      arr.push(undeclared, { file = spec.file, sha256 = sha256(spec.file) })
-    else
-      local ok, reason = check(spec)
-      if not ok then
-        err.error("vendored source failed verification", spec.file, reason)
-      end
-      printf("[vendor]\tok %s\n", spec.file)
-    end
+  printf("[vendor]\tfetching %s\n", url)
+  if not download(url, dest) then
+    printf("\nThe vendor mirror is missing this artifact. Seed it once:\n")
+    printf("  download %s\n", spec.url or "the upstream archive")
+    printf("  verify its sha256 against the vendor table\n")
+    printf("  gh release upload vendor <file> -R <owner>/<repo>\n\n")
+    return err.error("vendored source not on the mirror", dest, url)
   end
-  if #undeclared > 0 then
-    printf("\nAdd the following sha256 values to the vendor table in make.lua:\n\n")
-    for i = 1, #undeclared do
-      printf("  { file = %q, sha256 = %q, ... }\n", undeclared[i].file, undeclared[i].sha256)
-    end
-    printf("\n")
-    err.error("vendored sources have no declared sha256", #undeclared)
+  local got = sha256(dest)
+  if not spec.sha256 then
+    fs.rm(dest)
+    printf("\nAdd to the vendor entry in make.lua:\n\n  sha256 = %q\n\n", got)
+    return err.error("vendored source has no declared sha256", dest)
   end
-  return ss
+  if got ~= spec.sha256 then
+    fs.rm(dest)
+    return err.error("vendored source failed verification", dest, spec.sha256, got)
+  end
+  printf("[vendor]\tok %s\n", dest)
+  return dest
 end
 
 local function fetch_verified (dest, url, expected)
@@ -147,7 +129,7 @@ return {
   specs = specs,
   mirror = mirror,
   check = check,
-  ensure = ensure,
-  sync = sync,
+  validate = validate,
+  fetch = fetch,
   fetch_verified = fetch_verified,
 }

@@ -155,6 +155,33 @@ local function init (opts)
   local base_res, base_res_templated = get_files("res", true)
   local base_deps = get_files("deps")
 
+  local vendor_specs = vendor.validate(opts.config)
+  local vendor_files = {}
+  local vendor_dests = {}
+
+  do
+    local seen = {}
+    for i = 1, #base_deps do
+      seen[base_deps[i]] = true
+    end
+    for i = 1, #vendor_specs do
+      local spec = vendor_specs[i]
+      vendor_files[spec.file] = spec
+      if not seen[spec.file] then
+        arr.push(base_deps, spec.file)
+      end
+      for _, dir_fn in ipairs({ build_dir, test_dir }) do
+        local dest = dir_fn(spec.file)
+        target({ dest }, opts.config_file and { opts.config_file } or {}, function ()
+          vendor.fetch(opts.config, spec, dest)
+        end)
+        arr.push(vendor_dests, dest)
+      end
+    end
+  end
+
+  target({ "vendor" }, vendor_dests, true)
+
   local base_rockspec = str.interp("%s#(name)-%s#(version).rockspec", opts.config.env)
   local base_makefile = "Makefile"
   local base_license = "LICENSE"
@@ -303,13 +330,17 @@ local function init (opts)
 
   for _, src_arr in ipairs({ base_libs, base_bins, base_deps }) do
     for _, fp in ipairs(src_arr) do
-      add_file_target(build_dir(remove_tk(fp)), fp, build_env)
+      if not vendor_files[fp] then
+        add_file_target(build_dir(remove_tk(fp)), fp, build_env)
+      end
     end
   end
 
   for _, src_arr in ipairs({ base_libs, base_bins, base_deps, base_test_deps }) do
     for _, fp in ipairs(src_arr) do
-      add_file_target(test_dir(remove_tk(fp)), fp, test_env)
+      if not vendor_files[fp] then
+        add_file_target(test_dir(remove_tk(fp)), fp, test_env)
+      end
     end
   end
 
@@ -585,10 +616,6 @@ rocks_provided = { lua = "5.1" }
     end)
   end)
 
-  target({ "vendor" }, {}, function ()
-    vendor.sync(opts.config)
-  end)
-
   if not opts.wasm then
 
     local release_tarball_dir = str.interp("%s#(name)-%s#(version)", opts.config.env)
@@ -608,16 +635,25 @@ rocks_provided = { lua = "5.1" }
       arr.push(release_tarball_contents, base_license)
     end
 
-    target({ "vendor-check" }, {}, function ()
+    local vendor_build_dests = {}
+    for i = 1, #vendor_specs do
+      arr.push(vendor_build_dests, build_dir(vendor_specs[i].file))
+    end
+
+    target({ "vendor-check" }, vendor_build_dests, function ()
       local packed = {}
       for i = 1, #release_tarball_contents do
         packed[release_tarball_contents[i]] = true
       end
-      local specs = vendor.ensure(opts.config)
-      for i = 1, #specs do
-        local fp = remove_tk(specs[i].file)
+      for i = 1, #vendor_specs do
+        local spec = vendor_specs[i]
+        local fp = remove_tk(spec.file)
         if not packed[fp] then
           err.error("vendored source would not be packed, check rules.exclude", fp)
+        end
+        local ok, reason = vendor.check(spec, build_dir(fp))
+        if not ok then
+          err.error("vendored source unusable", fp, reason)
         end
       end
     end)
