@@ -85,12 +85,11 @@ required.
 - Variant forms exist: `test.wasm.dependencies`, `test.native.dependencies`.
 
 **Vendored third-party sources**
-- `vendor`: array of `{ file, sha256, url, mirror }` entries naming pristine
-  upstream archives that ship inside the rock. `file` is a `deps/` path that
+- `vendor`: array of `{ file, url, sha256 }` entries naming pristine upstream
+  archives that ship inside the rock. `file` is a `deps/` path that
   materializes in the build and test dirs; the source tree never holds the
-  artifact. `mirror` defaults to
-  `<homepage>/releases/download/vendor/<basename>`; `url` is provenance only.
-  See the vendored-dependency scenario below.
+  artifact. `url` is where the build fetches it from, verified against
+  `sha256`. See the vendored-dependency scenario below.
 
 **C build flags** (arrays, joined onto the compile/link lines)
 - `cflags`, `cxxflags`, `ldflags`: applied to every build.
@@ -183,20 +182,17 @@ vendor = {
 }
 ```
 
-Fetches come from the birchpointswe `vendor` release tag and nowhere else.
-There is no fallback to `url`: a fallback would silently paper over an
-un-seeded mirror, which is the one failure this mechanism exists to make loud.
-`url` is provenance only, recorded so a human knows where the bytes originally
-came from and can seed the mirror once:
+Only the maintainer's own dev builds ever fetch, once per clean build dir;
+consumers get the artifact inside the rock, so the pinned `sha256` is the
+trust anchor and the host is not. If a given upstream is flaky, point that
+entry's `url` at self-hosted storage (the lua-5.1.5 tarball for wasm builds
+does exactly this); there is no separate mirror concept.
 
-    download <url>, check its sha256 against the vendor table, then
-    gh release upload vendor <file> -R birchpointswe/<repo>
-
-`toku vendor` still exists as an explicit prefetch (e.g. before going
-offline); it is never required. Omit `sha256` on a new entry and the fetch
-prints the computed digest to paste into `make.lua`, then exits non-zero.
-Modified upstream code is not a vendored artifact: it is first-party, and
-belongs in-tree under `lib/` (as with the lpeg port in santoku-lpeg).
+`toku vendor` exists as an explicit prefetch (e.g. before going offline); it
+is never required. Omit `sha256` on a new entry and the fetch prints the
+computed digest to paste into `make.lua`, then exits non-zero. Modified
+upstream code is not a vendored artifact: it is first-party, and belongs
+in-tree under `lib/` (as with the lpeg port in santoku-lpeg).
 
 ## Scenario: native and WASM variants
 
