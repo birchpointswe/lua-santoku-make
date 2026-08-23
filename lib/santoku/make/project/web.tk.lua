@@ -796,6 +796,10 @@ rocks_provided = { lua = "5.1" }
               environment = nested_env,
             }).install()
           end)
+          if has_local_deps and env.environment == "test" then
+            common.install_local_deps(local_deps,
+              fs.absolute(fs.join("build", "default-wasm", "test", base_server_luarocks_cfg)))
+          end
           fs.touch(base_client_lua_modules_ok)
         end)
       end)

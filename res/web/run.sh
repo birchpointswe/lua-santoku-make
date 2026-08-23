@@ -29,7 +29,7 @@ cd "$(dirname $0)"
   return arr.concat(script_lines, "\n")
 %>
 
-mkdir -p logs
+mkdir -p logs temp
 touch logs/access.log logs/error.log
 
 if [ "$1" = "--fg" ]; then
