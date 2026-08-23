@@ -4,6 +4,7 @@ local tmpl = require("santoku.template")
 local str = require("santoku.string")
 local tbl = require("santoku.table")
 local arr = require("santoku.array")
+local err = require("santoku.error")
 
 local function get_action(fp, config)
   config = config or {}
@@ -91,13 +92,26 @@ local function with_build_deps(build_deps_dir, fn)
   end)(fn())
 end
 
+local function get_config_files(config_file)
+  if not config_file then
+    return {}
+  end
+  local files = { config_file }
+  local dir = fs.dirname(config_file)
+  local common_cfg = dir == "." and "make.common.lua" or fs.join(dir, "make.common.lua")
+  if fs.exists(common_cfg) then
+    arr.push(files, common_cfg)
+  end
+  return files
+end
+
 local function add_file_target(target_fn, dest, src, env, config, config_file, extra_srcs, build_deps_dir, build_deps_ok)
   local action = get_action(src, config)
   if action == "copy" then
     return add_copied_target(target_fn, dest, src, extra_srcs)
   elseif action == "template" then
     dest = str.gsub(dest, "%.tk", "")
-    target_fn({ dest }, arr.flatten({ src, config_file, extra_srcs or {}, build_deps_ok or {} }), function ()
+    target_fn({ dest }, arr.flatten({ src, get_config_files(config_file), extra_srcs or {}, build_deps_ok or {} }), function ()
       fs.mkdirp(fs.dirname(dest))
       local deps = {}
       env.readfile = function (fp) deps[fp] = true; return fs.readfile(fp) end
@@ -111,7 +125,7 @@ local function add_file_target(target_fn, dest, src, env, config, config_file, e
 end
 
 local function add_templated_target_base64(target_fn, dest, data, env, config_file, extra_srcs, build_deps_dir, build_deps_ok)
-  target_fn({ dest }, arr.flatten({ config_file, extra_srcs or {}, build_deps_ok or {} }), function ()
+  target_fn({ dest }, arr.flatten({ get_config_files(config_file), extra_srcs or {}, build_deps_ok or {} }), function ()
     fs.mkdirp(fs.dirname(dest))
     local deps = {}
     env.readfile = function (fp) deps[fp] = true; return fs.readfile(fp) end
@@ -148,6 +162,67 @@ local function get_files(dir, config, check_tpl)
     end
   end
   return result, tpl
+end
+
+local function local_dep_paths(root_dir, config)
+  local specs = tbl.get(config or {}, {"env", "local_deps"}) or {}
+  local paths = {}
+  for i = 1, #specs do
+    local p = specs[i]
+    if not str.startswith(p, "/") then
+      p = fs.join(root_dir, p)
+    end
+    if not fs.isdir(p) then
+      err.error("local_deps path not found", p)
+    end
+    if not fs.exists(fs.join(p, "make.lua")) then
+      err.error("local_deps path has no make.lua (submodule not initialized?)", p)
+    end
+    arr.push(paths, p)
+  end
+  return paths
+end
+
+local function local_dep_srcs(paths)
+  local srcs = {}
+  for i = 1, #paths do
+    for _, d in ipairs({ "lib", "bin", "deps", "res" }) do
+      local dir = fs.join(paths[i], d)
+      if fs.exists(dir) then
+        for fp in fs.files(dir, true) do
+          arr.push(srcs, fp)
+        end
+      end
+    end
+    for _, f in ipairs({ "make.lua", "make.common.lua" }) do
+      local fp = fs.join(paths[i], f)
+      if fs.exists(fp) then
+        arr.push(srcs, fp)
+      end
+    end
+  end
+  return srcs
+end
+
+local function install_local_deps(paths, lcfg)
+  for i = 1, #paths do
+    local p = paths[i]
+    fs.pushd(p, function ()
+      local m = require("santoku.make.project").init({
+        skip_tests = true,
+        in_local_dep = true,
+        luarocks_config = lcfg,
+      })
+      if not m.install then
+        err.error("local_deps entry is not a lib project", p)
+      end
+      (function (ok, ...)
+        if not ok then
+          err.error("local dep install failed", p, ...)
+        end
+      end)(err.pcall(m.install))
+    end)
+  end
 end
 
 local function compute_file_hash(filepath)
@@ -202,7 +277,11 @@ return {
   get_require_paths = get_require_paths,
   get_lua_path = get_lua_path,
   get_lua_cpath = get_lua_cpath,
+  get_config_files = get_config_files,
   get_files = get_files,
+  local_dep_paths = local_dep_paths,
+  local_dep_srcs = local_dep_srcs,
+  install_local_deps = install_local_deps,
   compute_file_hash = compute_file_hash,
   compute_string_hash = compute_string_hash,
   hash_filename = hash_filename,

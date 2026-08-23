@@ -65,6 +65,7 @@ local function clean_lib(opts)
   if opts.deps then
     remove_if_exists(fs.join(test_dir, "lua_modules"), dry_run, removed)
     remove_if_exists(fs.join(test_dir, "lua_modules.ok"), dry_run, removed)
+    remove_if_exists(fs.join(test_dir, "local-deps.ok"), dry_run, removed)
     remove_if_exists(fs.join(build_dir, "lua_modules"), dry_run, removed)
     remove_if_exists(fs.join(build_dir, "lua_modules.ok"), dry_run, removed)
     return removed
@@ -130,6 +131,7 @@ local function clean_web(opts)
         if opts.deps then
           remove_if_exists(fs.join(server_dir, "lua_modules"), dry_run, removed)
           remove_if_exists(fs.join(server_dir, "lua_modules.ok"), dry_run, removed)
+          remove_if_exists(fs.join(server_dir, "local-deps.ok"), dry_run, removed)
           remove_if_exists(fs.join(dist_dir, "lua_modules"), dry_run, removed)
         elseif not opts.wasm then
           remove_if_exists(fs.join(server_dir, "luarocks.lua"), dry_run, removed)
@@ -167,6 +169,7 @@ local function clean_web(opts)
         if opts.deps then
           remove_if_exists(fs.join(client_dir, "lua_modules.ok"), dry_run, removed)
           remove_if_exists(fs.join(client_dir, "lua_modules.deps.ok"), dry_run, removed)
+          remove_if_exists(fs.join(client_dir, "local-deps.ok"), dry_run, removed)
           remove_if_exists(fs.join(client_dir, "build"), dry_run, removed)
         elseif opts.wasm then
           remove_if_exists(fs.join(client_dir, "bundler-post"), dry_run, removed)

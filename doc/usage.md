@@ -83,6 +83,15 @@ required.
 - `build.dependencies`: deps installed into a host environment for template
   rendering (so a `.tk` file can `require` them at build time).
 - Variant forms exist: `test.wasm.dependencies`, `test.native.dependencies`.
+- `local_deps`: array of paths (relative to the project root) to sibling
+  source-built lib rocks (typically git submodules). The engine installs each
+  into every luarocks tree it manages (lib test, wasm, web server/client and
+  their test flavors, and the `toku install` target tree), ordered before the
+  consuming rock build, bundlers, and test runs. Reinstall is triggered by
+  mtime changes under the dep's `lib/`, `bin/`, `deps/`, `res/`, and make
+  files; `toku install` always reinstalls. A local dep must be a lib project
+  and must not declare `local_deps` of its own; do not also list it in
+  `dependencies`.
 
 **C build flags** (arrays, joined onto the compile/link lines)
 - `cflags`, `cxxflags`, `ldflags`: applied to every build.
@@ -289,6 +298,8 @@ return base
 ```
 
 `toku <cmd> --env prod` selects `make.prod.lua` and builds under `build/prod/`.
+A `make.common.lua` next to the selected descriptor is tracked as a config
+dependency alongside it, so edits to it invalidate rendered targets.
 an application (dev/prod/release) and a service (prod/beta, plus a submodule lib)
 are real multi-profile examples; a service also shows a `Dockerfile` invoking
 `toku build --env prod`.
