@@ -714,8 +714,10 @@ rocks_provided = { lua = "5.1" }
 
     target(
       { cdir(base_client_lua_modules_deps_ok) },
-      arr.push(common.get_config_files(opts.config_file),
+      arr.push(arr.push(arr.push(common.get_config_files(opts.config_file),
         arr.spread(arr.map(arr.flatten({arr.map(arr.copy({}, base_client_res), remove_tk), arr.map(arr.copy({}, base_client_res_templated), remove_tk)}), cdir_stripped))),
+        arr.spread(arr.map(arr.flatten({base_client_bins, base_client_libs, base_client_deps}), cdir_stripped))),
+        arr.spread(arr.map(arr.map(arr.copy({}, base_root_res), remove_tk), cdir))),
       function ()
         local nested_env = env.environment == "test" and "test" or "build"
         local config_file = fs.absolute(opts.config_file)
