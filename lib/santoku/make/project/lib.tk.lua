@@ -125,6 +125,15 @@ local function init (opts)
   local build_deps = tbl.get(opts, {"config", "env", "build", "dependencies"}) or {}
   local has_build_deps = #build_deps > 0
 
+  if opts.in_local_dep and #(tbl.get(opts, {"config", "env", "local_deps"}) or {}) > 0 then
+    err.error("recursive local_deps not supported", opts.config.env.name)
+  end
+
+  local local_deps = common.local_dep_paths(fs.cwd(), opts.config)
+  local has_local_deps = #local_deps > 0
+  local local_deps_ok = test_dir("local-deps.ok")
+  local local_deps_srcs = has_local_deps and common.local_dep_srcs(local_deps) or nil
+
   local function add_file_target(dest, src, env, extra_srcs)
     return common.add_file_target(target, dest, src, env, opts.config, opts.config_file, extra_srcs,
       has_build_deps and build_deps_dir or nil,
@@ -237,6 +246,10 @@ local function init (opts)
   if has_build_deps then
     arr.push(test_all, build_deps_ok)
     arr.push(build_all, build_deps_ok)
+  end
+
+  if has_local_deps then
+    arr.push(test_all, local_deps_ok)
   end
 
   local base_env = {
@@ -459,7 +472,8 @@ local function init (opts)
 
   target(
     arr.map({ base_lua_modules_ok }, test_dir),
-    arr.flatten({ test_srcs, test_cfgs, test_dir(base_luarocks_cfg) }),
+    arr.flatten({ test_srcs, test_cfgs, test_dir(base_luarocks_cfg),
+      has_local_deps and { local_deps_ok } or {} }),
     function ()
       fs.mkdirp(test_dir())
       return fs.pushd(test_dir(), function ()
@@ -488,11 +502,21 @@ local function init (opts)
       end)
     end)
 
+  if has_local_deps then
+    target(
+      { local_deps_ok },
+      arr.flatten({ test_dir(base_luarocks_cfg), local_deps_srcs }),
+      function ()
+        common.install_local_deps(local_deps, fs.absolute(test_dir(base_luarocks_cfg)))
+        fs.touch(local_deps_ok)
+      end)
+  end
+
   local build_deps_luarocks_cfg = work_dir("build-deps-luarocks.lua")
   if has_build_deps then
     target(
       { build_deps_ok },
-      { opts.config_file },
+      common.get_config_files(opts.config_file),
       function ()
         fs.mkdirp(build_deps_dir)
         local config_file = fs.absolute(opts.config_file)
@@ -551,6 +575,9 @@ rocks_provided = { lua = "5.1" }
       end
       local lcfg = opts.luarocks_config or (opts.wasm and base_luarocks_cfg) or nil
       lcfg = lcfg and fs.absolute(lcfg) or nil
+      if has_local_deps then
+        common.install_local_deps(local_deps, lcfg)
+      end
       sys.execute(arr.push({
         "luarocks", "make", base_rockspec,
         env = {
@@ -578,6 +605,9 @@ rocks_provided = { lua = "5.1" }
       end
       local lcfg = opts.luarocks_config or (opts.wasm and base_luarocks_cfg) or nil
       lcfg = lcfg and fs.absolute(lcfg) or nil
+      if has_local_deps then
+        common.install_local_deps(local_deps, lcfg)
+      end
       sys.execute(arr.push({
         "luarocks", "make", "--deps-only", base_rockspec,
         env = {
