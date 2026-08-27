@@ -244,9 +244,12 @@ local function init (opts)
   local build_deps = tbl.get(opts, {"config", "env", "build", "dependencies"}) or {}
   local has_build_deps = #build_deps > 0
 
-  local local_deps = common.local_dep_paths(fs.cwd(), opts.config)
-  local has_local_deps = #local_deps > 0
-  local local_deps_srcs = has_local_deps and common.local_dep_srcs(local_deps) or nil
+  local local_deps_all = common.local_dep_paths(fs.cwd(), opts.config)
+  local local_deps_server = common.local_dep_paths(fs.cwd(), opts.config, "server")
+  local local_deps_client = common.local_dep_paths(fs.cwd(), opts.config, "client")
+  local has_local_deps_server = #local_deps_server > 0
+  local has_local_deps_client = #local_deps_client > 0
+  local local_deps_srcs = #local_deps_all > 0 and common.local_dep_srcs(local_deps_all) or nil
 
   local function add_file_target(dest, src, env, extra_srcs)
     return common.add_file_target(target, dest, src, env, opts.config, opts.config_file, extra_srcs,
@@ -543,13 +546,13 @@ rocks_provided = { lua = "5.1" }
   add_templated_target_base64(test_server_dir(base_server_luarocks_cfg),
     <% return str.quote(str.to_base64(readfile("res/web/luarocks.lua"))) %>, test_server_env) -- luacheck: ignore
 
-  if has_local_deps then
+  if has_local_deps_server then
     for _, sdir in ipairs({ server_dir, test_server_dir }) do
       target(
         { sdir("local-deps.ok") },
         arr.flatten({ sdir(base_server_luarocks_cfg), local_deps_srcs }),
         function ()
-          common.install_local_deps(local_deps, fs.absolute(sdir(base_server_luarocks_cfg)))
+          common.install_local_deps(local_deps_server, fs.absolute(sdir(base_server_luarocks_cfg)))
           fs.touch(sdir("local-deps.ok"))
         end)
     end
@@ -770,12 +773,12 @@ rocks_provided = { lua = "5.1" }
         end)
       end)
 
-    if has_local_deps then
+    if has_local_deps_client then
       target(
         { cdir("local-deps.ok") },
         arr.flatten({ cdir(base_client_lua_modules_deps_ok), local_deps_srcs }),
         function ()
-          common.install_local_deps(local_deps, fs.absolute(env.luarocks_cfg))
+          common.install_local_deps(local_deps_client, fs.absolute(env.luarocks_cfg))
           fs.touch(cdir("local-deps.ok"))
         end)
     end
@@ -786,7 +789,7 @@ rocks_provided = { lua = "5.1" }
         arr.map(arr.flatten({base_client_bins, base_client_libs, base_client_deps}), cdir_stripped),
         arr.map(arr.map(arr.flatten({base_root_libs, base_root_res}), remove_tk), cdir),
         { cdir(base_client_lua_modules_deps_ok) },
-        has_local_deps and { cdir("local-deps.ok") } or {},
+        has_local_deps_client and { cdir("local-deps.ok") } or {},
         common.get_config_files(opts.config_file),
         { hash_static_ok },
         has_build_deps and { build_deps_ok } or {} }),
@@ -820,8 +823,8 @@ rocks_provided = { lua = "5.1" }
               environment = nested_env,
             }).install()
           end)
-          if has_local_deps and env.environment == "test" then
-            common.install_local_deps(local_deps,
+          if has_local_deps_server and env.environment == "test" then
+            common.install_local_deps(local_deps_server,
               fs.absolute(fs.join("build", "default-wasm", "test", base_server_luarocks_cfg)))
           end
           fs.touch(base_client_lua_modules_ok)
@@ -994,7 +997,7 @@ rocks_provided = { lua = "5.1" }
   target(
     { server_dir(base_server_lua_modules_ok) },
     arr.push(arr.push(arr.push({ server_dir(base_server_luarocks_cfg) },
-      arr.spread(has_local_deps and { server_dir("local-deps.ok") } or {})),
+      arr.spread(has_local_deps_server and { server_dir("local-deps.ok") } or {})),
       arr.spread(arr.map(arr.map(arr.flatten({base_server_libs, base_server_deps}), server_dir_stripped), remove_tk))),
       arr.spread(arr.map(arr.map(arr.flatten({base_root_libs, base_root_res}), server_dir), remove_tk))),
     function ()
@@ -1027,7 +1030,7 @@ rocks_provided = { lua = "5.1" }
   target(
     { test_server_dir(base_server_lua_modules_ok) },
     arr.push(arr.push(arr.push({ test_server_dir(base_server_luarocks_cfg) },
-      arr.spread(has_local_deps and { test_server_dir("local-deps.ok") } or {})),
+      arr.spread(has_local_deps_server and { test_server_dir("local-deps.ok") } or {})),
       arr.spread(arr.map(arr.map(arr.flatten({base_server_libs, base_server_deps}), test_server_dir_stripped), remove_tk))),
       arr.spread(arr.map(arr.map(arr.flatten({base_root_libs, base_root_res}), test_server_dir), remove_tk))),
     function ()

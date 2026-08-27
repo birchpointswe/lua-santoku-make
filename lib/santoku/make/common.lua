@@ -200,21 +200,42 @@ local function get_files(dir, config, check_tpl)
   return result, tpl
 end
 
-local function local_dep_paths(root_dir, config)
+local function local_dep_wanted(spec, target)
+  if type(spec) ~= "table" or not spec.targets then
+    return true
+  end
+  if not target then
+    return true
+  end
+  for i = 1, #spec.targets do
+    if spec.targets[i] == target then
+      return true
+    end
+  end
+  return false
+end
+
+local function local_dep_paths(root_dir, config, target)
   local specs = tbl.get(config or {}, {"env", "local_deps"}) or {}
   local paths = {}
   for i = 1, #specs do
-    local p = specs[i]
-    if not str.startswith(p, "/") then
-      p = fs.join(root_dir, p)
+    local spec = specs[i]
+    if local_dep_wanted(spec, target) then
+      local p = type(spec) == "table" and spec.path or spec
+      if type(p) ~= "string" then
+        err.error("local_deps entry must be a path or a table with a path field", i)
+      end
+      if not str.startswith(p, "/") then
+        p = fs.join(root_dir, p)
+      end
+      if not fs.isdir(p) then
+        err.error("local_deps path not found", p)
+      end
+      if not fs.exists(fs.join(p, "make.lua")) then
+        err.error("local_deps path has no make.lua (submodule not initialized?)", p)
+      end
+      arr.push(paths, p)
     end
-    if not fs.isdir(p) then
-      err.error("local_deps path not found", p)
-    end
-    if not fs.exists(fs.join(p, "make.lua")) then
-      err.error("local_deps path has no make.lua (submodule not initialized?)", p)
-    end
-    arr.push(paths, p)
   end
   return paths
 end
