@@ -11,6 +11,15 @@
 
   tbl = require("santoku.table")
   get = tbl.get
+
+  test_args = function ()
+    local out = {}
+    local fps = test_files or {}
+    for i = 1, #fps do
+      out[#out + 1] = squote(fps[i])
+    end
+    return arr.concat(out, " ")
+  end
 %>
 
 export LUA='<% return lua %>'
@@ -44,7 +53,13 @@ echo
 TEST="<% return single %>"
 toku test -s -i "node --expose-gc" "${TEST%.lua}.js"
 status_tst=$?
-<% pop() push(not single) %>
+<% pop() push(not single and test_files) %>
+toku test -s -i "node --expose-gc" <% return test_args() %>
+status_tst=$?
+<% pop() push(not single and no_test_files) %>
+echo "No tests matched"
+status_tst=0
+<% pop() push(not single and not test_files and not no_test_files) %>
 toku test -s -i "node --expose-gc" test/spec
 status_tst=$?
 <% pop() %>
@@ -64,7 +79,13 @@ MODS="$MODS -l santoku.trace"
 <% push(single) %>
 toku test -s -i "$LUA $MODS" "<% return single %>"
 status_tst=$?
-<% pop() push(not single) %>
+<% pop() push(not single and test_files) %>
+toku test -s -i "$LUA $MODS" <% return test_args() %>
+status_tst=$?
+<% pop() push(not single and no_test_files) %>
+echo "No tests matched"
+status_tst=0
+<% pop() push(not single and not test_files and not no_test_files) %>
 toku test -s -i "$LUA $MODS" --match "^.*%.lua$" test/spec
 status_tst=$?
 <% pop() %>

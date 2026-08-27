@@ -10,6 +10,9 @@ this repo is the machinery it calls. This README orients the framework and the
 project model; [`doc/usage.md`](doc/usage.md) is the by-example guide (the
 low-level engine, the descriptor reference, and worked per-scenario examples).
 
+Documentation and runnable examples: [santoku.dev](https://santoku.dev), under the
+`santoku-make` tab.
+
 ## Two layers
 
 - **`santoku.make`** (the engine): a dependency-graph build runner. `make()`

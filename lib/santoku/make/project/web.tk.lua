@@ -701,7 +701,7 @@ rocks_provided = { lua = "5.1" }
               ignores = { "debug" },
               path = get_lua_path(cdir("build", "default-wasm", nested_env)),
               cpath = get_lua_cpath(cdir("build", "default-wasm", nested_env)),
-              flags = wasm.get_bundle_flags(lua_dir, "build", extra_cflags, extra_ldflags)
+              flags = wasm.get_bundle_flags(lua_dir, "web", extra_cflags, extra_ldflags)
             })
           end)
         end)
@@ -739,6 +739,7 @@ rocks_provided = { lua = "5.1" }
               config_file = config_file,
               config = config,
               single = opts.single and remove_tk(opts.single) or nil,
+              match = opts.match,
               skip_check = opts.skip_check,
               wasm = true,
               skip_tests = true,
@@ -791,6 +792,7 @@ rocks_provided = { lua = "5.1" }
               config_file = config_file,
               config = config,
               single = opts.single and remove_tk(opts.single) or nil,
+              match = opts.match,
               skip_check = opts.skip_check,
               wasm = true,
               skip_tests = env.environment ~= "test",
@@ -999,6 +1001,7 @@ rocks_provided = { lua = "5.1" }
           luarocks_config = fs.absolute(base_server_luarocks_cfg),
           config = config,
           single = opts.single and remove_tk(opts.single) or nil,
+          match = opts.match,
           skip_check = opts.skip_check,
           skip_tests = true,
           dir = server_dir(),
@@ -1031,6 +1034,7 @@ rocks_provided = { lua = "5.1" }
           luarocks_config = fs.absolute(base_server_luarocks_cfg),
           config = config,
           single = opts.single and remove_tk(opts.single) or nil,
+          match = opts.match,
           skip_check = opts.skip_check,
           skip_tests = true,
           lua = test_server_env.lua,
@@ -1240,6 +1244,7 @@ rocks_provided = { lua = "5.1" }
           config_file = config_file,
           config = root_config,
           single = single_target == "root" and single_path and remove_tk(single_path) or nil,
+          match = opts.match,
           skip_check = opts.skip_check,
           dir = fs.absolute("build"),
         }).test()
@@ -1295,6 +1300,7 @@ rocks_provided = { lua = "5.1" }
             luarocks_config = fs.absolute(base_server_luarocks_cfg),
             config = server_config,
             single = single_target == "server" and single_path and remove_tk(single_path) or nil,
+            match = opts.match,
             skip_check = opts.skip_check,
             lua = test_server_env.lua,
             lua_path = test_server_env.lua_path,

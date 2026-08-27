@@ -191,6 +191,37 @@ local function init (opts)
     return str.gsub(fp, "%.wasm%.", ".")
   end
 
+  local function test_run_path (fp)
+    if opts.wasm then
+      return remove_tk(fs.stripextension(remove_wasm(fp)) .. ".js")
+    else
+      return remove_tk(fp)
+    end
+  end
+
+  local single_spec = opts.single
+  local match_tests, no_tests
+
+  if opts.match then
+    local matched = {}
+    for i = 1, #base_test_specs do
+      if str.match(remove_tk(base_test_specs[i]), opts.match) then
+        matched[#matched + 1] = base_test_specs[i]
+      end
+    end
+    base_test_specs = matched
+    if single_spec and not str.match(remove_tk(single_spec), opts.match) then
+      single_spec = nil
+    end
+    match_tests = {}
+    for i = 1, #base_test_specs do
+      match_tests[#match_tests + 1] = test_run_path(base_test_specs[i])
+    end
+    if #match_tests == 0 then
+      match_tests, no_tests = nil, true
+    end
+  end
+
   local base_test_deps = get_files("test/deps")
   local base_test_res, base_test_res_templated = get_files("test/res", true)
 
@@ -255,7 +286,9 @@ local function init (opts)
   local base_env = {
     is_wasm = opts.wasm,
     skip_check = opts.skip_check,
-    single = opts.single and remove_tk(opts.single) or nil,
+    single = single_spec and remove_tk(single_spec) or nil,
+    test_files = match_tests,
+    no_test_files = no_tests,
     bins = base_bins,
     libs = base_libs,
     root_dir = fs.cwd(),
@@ -447,7 +480,7 @@ local function init (opts)
     <% return str.quote(str.to_base64(readfile("res/lib/test-check.sh"))) %>, test_env) -- luacheck: ignore
 
   for _, flag in ipairs({
-    "single", "skip_check", "lua",
+    "single", "match", "skip_check", "lua",
     "lua_path_extra", "lua_cpath_extra"
   }) do
     local fp = work_dir(flag .. ".flag")
@@ -466,7 +499,7 @@ local function init (opts)
   target(
     arr.map({ base_run_sh, base_check_sh }, test_dir),
     arr.map({
-      "skip_check.flag", "single.flag",
+      "skip_check.flag", "single.flag", "match.flag",
       "lua.flag", "lua_path_extra.flag", "lua_cpath_extra.flag" },
       work_dir))
 
