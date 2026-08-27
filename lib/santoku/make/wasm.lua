@@ -50,7 +50,48 @@ local function setup_lua(target_fn, dir)
   return lua_dir, lua_ok
 end
 
+local web_flags = {
+  "-sWASM_BIGINT",
+  "-sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE='$stringToNewUTF8'",
+  "-sEXPORTED_FUNCTIONS=_main,_malloc,_free",
+  "-sEXPORTED_RUNTIME_METHODS=stringToUTF8,lengthBytesUTF8,UTF8ToString,stringToNewUTF8,HEAPU8",
+  "-sENVIRONMENT=web,worker",
+  "-sABORT_ON_WASM_EXCEPTIONS=0",
+}
+
+local function setting_name(flag)
+  if type(flag) ~= "string" then
+    return nil
+  end
+  return str.match(flag, "^%-s([%w_]+)")
+end
+
+local function get_web_flags(extras)
+  local overridden = {}
+  local i = 1
+  while i <= #extras do
+    if extras[i] == "-s" then
+      local next_flag = extras[i + 1]
+      local n = type(next_flag) == "string" and str.match(next_flag, "^([%w_]+)") or nil
+      if n then overridden[n] = true end
+      i = i + 2
+    else
+      local n = setting_name(extras[i])
+      if n then overridden[n] = true end
+      i = i + 1
+    end
+  end
+  local flags = {}
+  for j = 1, #web_flags do
+    if not overridden[setting_name(web_flags[j])] then
+      arr.push(flags, web_flags[j])
+    end
+  end
+  return flags
+end
+
 local function get_bundle_flags(lua_dir, context, extra_cflags, extra_ldflags)
+  local extras = arr.flatten({ extra_cflags or {}, extra_ldflags or {} })
   return arr.flatten({
     context == "test"
       and { "-sASSERTIONS" }
@@ -61,8 +102,8 @@ local function get_bundle_flags(lua_dir, context, extra_cflags, extra_ldflags)
     "-L" .. fs.join(lua_dir, "lib"),
     context == "test" and { "-sSINGLE_FILE", "-lnodefs.js", "-lnoderawfs.js" } or {},
     "-llua", "-lm",
-    extra_cflags or {},
-    extra_ldflags or {},
+    context == "web" and get_web_flags(extras) or {},
+    extras,
   })
 end
 

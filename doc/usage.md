@@ -280,6 +280,25 @@ nginx = { ssl_self_signed = true, hsts = false, ssl_port = env.var("SSL_PORT", "
   splash screens with `submake.target(...)` calls producing the declared
   `client.public` files).
 
+Client page bundles get the Emscripten flags santoku-web needs without the descriptor
+declaring them:
+
+```
+-sWASM_BIGINT
+-sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE='$stringToNewUTF8'
+-sEXPORTED_FUNCTIONS=_main,_malloc,_free
+-sEXPORTED_RUNTIME_METHODS=stringToUTF8,lengthBytesUTF8,UTF8ToString,stringToNewUTF8,HEAPU8
+-sENVIRONMENT=web,worker
+-sABORT_ON_WASM_EXCEPTIONS=0
+```
+
+Omitting them used to build fine and then die in the browser on the first JS string
+allocation (`ReferenceError: stringToNewUTF8 is not defined`). They apply only to web
+client pages (every one is a `bundle()` output with its own `main`), not to WASM test
+specs or `--wasm` CLI bundles, which run under node. `client.ldflags` and
+`client.rules[...].ldflags` are appended after them, and any `-sNAME` a descriptor sets
+itself replaces the default of that name rather than being passed twice.
+
 Web projects are driven with `toku build`, `toku start`/`toku stop` (dev server), and
 `toku test`. The `submodules/tokuboilerplate-lib` project is the matching plain
 lib/bin example.
@@ -310,7 +329,10 @@ The project layer registers these (run via the matching `toku` command):
 
 - **build**: render templates, install deps, compile.
 - **test**: build the test env, run the suite (santoku-test-runner) and `luacheck`
-  (`--skip-check` to skip). `iterate` re-runs on file changes.
+  (`--skip-check` to skip). `--single <file>` runs one spec, `--match <lua-pattern>`
+  keeps only the spec files whose path matches the pattern, and combining them
+  intersects: the single spec runs only if it also matches. `iterate` re-runs on file
+  changes.
 - **install**: `luarocks make` the built rock (or bundle `bin/` to standalone
   executables with `--bundled`).
 - **pack** / **release** (when `public = true`): build a tarball; tag, push, create a
