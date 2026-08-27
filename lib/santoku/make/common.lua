@@ -6,6 +6,38 @@ local tbl = require("santoku.table")
 local arr = require("santoku.array")
 local err = require("santoku.error")
 
+local function watch_snapshot (paths)
+  local posix = require("santoku.make.posix")
+  local snap = {}
+  for i = 1, #paths do
+    local p = paths[i]
+    if fs.exists(p) then
+      if fs.isdir(p) then
+        for fp in fs.files(p, true) do
+          snap[fp] = posix.time(fp)
+        end
+      else
+        snap[p] = posix.time(p)
+      end
+    end
+  end
+  return snap
+end
+
+local function watch_changed (before, after)
+  for fp, t in pairs(after) do
+    if before[fp] ~= t then
+      return true
+    end
+  end
+  for fp in pairs(before) do
+    if after[fp] == nil then
+      return true
+    end
+  end
+  return false
+end
+
 local function get_action(fp, config)
   config = config or {}
   if str.endswith(fp, ".d") then
@@ -270,6 +302,8 @@ local function is_text_file(filepath)
 end
 
 return {
+  watch_snapshot = watch_snapshot,
+  watch_changed = watch_changed,
   get_action = get_action,
   force_template = force_template,
   remove_tk = remove_tk,

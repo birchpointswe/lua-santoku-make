@@ -754,9 +754,20 @@ rocks_provided = { lua = "5.1" }
     end)(err.pcall(sys.execute, { "sh", "-c", "type inotifywait >/dev/null 2>/dev/null" }))
     local config_mtime = fs.exists(opts.config_file) and require("santoku.make.posix").time(opts.config_file) or nil
     local prev_error = false
+    local function watch_paths ()
+      local t = {}
+      for fp in fs.files(".") do
+        t[#t + 1] = fp
+      end
+      for _, d in ipairs({ "lib", "bin", "test", "res" }) do
+        t[#t + 1] = d
+      end
+      return t
+    end
     while true do
       local build_ok = true
       local inotify_ok = true
+      local before = common.watch_snapshot(watch_paths())
       err.pcall(function ()
         if config_mtime then
           local new_mtime = fs.exists(opts.config_file) and require("santoku.make.posix").time(opts.config_file) or nil
@@ -776,6 +787,8 @@ rocks_provided = { lua = "5.1" }
           end
         end)(err.pcall(build, { "test", "check" }, opts.verbosity))
       end)
+      local changed_during_build =
+        common.watch_changed(before, common.watch_snapshot(watch_paths()))
       local dfile_dirs = {}
       err.pcall(function ()
         for dfile in fs.files(work_dir(), true) do
@@ -800,13 +813,10 @@ rocks_provided = { lua = "5.1" }
           end
         end
       end)(err.pcall(function ()
-        local watch_dirs = {}
-        for fp in fs.files(".") do
-          watch_dirs[#watch_dirs + 1] = fp
+        if changed_during_build then
+          return
         end
-        for _, d in ipairs({ "lib", "bin", "test", "res" }) do
-          watch_dirs[#watch_dirs + 1] = d
-        end
+        local watch_dirs = watch_paths()
         for dir in pairs(dfile_dirs) do
           watch_dirs[#watch_dirs + 1] = dir
         end
@@ -824,7 +834,7 @@ rocks_provided = { lua = "5.1" }
         })
       end))
       local this_error = not build_ok or not inotify_ok
-      if this_error and prev_error then
+      if this_error and prev_error and not changed_during_build then
         err.error("consecutive errors without file changes - stopping iterate")
       end
       prev_error = this_error
