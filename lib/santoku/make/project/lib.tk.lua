@@ -188,12 +188,16 @@ local function init (opts)
   end
 
   local function remove_wasm(fp)
-    return str.gsub(fp, "%.wasm%.", ".")
+    return (str.gsub(fp, "%.wasm%.", "."))
+  end
+
+  local function spec_js (fp)
+    return fs.stripextension(remove_wasm(remove_tk(fp))) .. ".js"
   end
 
   local function test_run_path (fp)
     if opts.wasm then
-      return remove_tk(fs.stripextension(remove_wasm(fp)) .. ".js")
+      return spec_js(fp)
     else
       return remove_tk(fp)
     end
@@ -234,7 +238,7 @@ local function init (opts)
 
   if opts.wasm then
     for i = 1, #base_test_specs do
-      test_all_base_templated[#test_all_base_templated + 1] = fs.stripextension(remove_wasm(base_test_specs[i])) .. ".js"
+      test_all_base_templated[#test_all_base_templated + 1] = spec_js(base_test_specs[i])
     end
   else
     arr.copy(test_all_base_templated, base_test_specs)
@@ -286,6 +290,9 @@ local function init (opts)
   local base_env = {
     is_wasm = opts.wasm,
     skip_check = opts.skip_check,
+    profile = opts.profile,
+    trace = opts.trace,
+    stop = opts.stop,
     single = single_spec and remove_tk(single_spec) or nil,
     test_files = match_tests,
     no_test_files = no_tests,
@@ -375,8 +382,10 @@ local function init (opts)
     end
 
     for _, fp in ipairs(base_test_specs) do
-      target({ test_dir("bundler-post", fs.stripextension(remove_wasm(fp)) .. ".js") },
-        arr.flatten({ test_dir("bundler-pre", fp), test_cfgs, test_dir(base_lua_modules_ok) }),
+      local pre = remove_tk(fp)
+      local js = spec_js(fp)
+      target({ test_dir("bundler-post", js) },
+        arr.flatten({ test_dir("bundler-pre", pre), test_cfgs, test_dir(base_lua_modules_ok) }),
         function ()
           local extra_cflags = arr.flatten({
             tbl.get(test_env, {"test", "cflags"}) or {},
@@ -384,9 +393,9 @@ local function init (opts)
           local extra_ldflags = arr.flatten({
             tbl.get(test_env, {"test", "ldflags"}) or {},
             tbl.get(test_env, {"test", "wasm", "ldflags"}) or {}})
-          bundle(test_dir("bundler-pre", fp), test_dir("bundler-post", fs.dirname(fp)), {
+          bundle(test_dir("bundler-pre", pre), test_dir("bundler-post", fs.dirname(js)), {
             cc = "emcc",
-            outprefix = fs.stripextensions(fs.basename(fp)) .. ".js",
+            outprefix = fs.basename(js),
             close = false,
             mods = test_env.bundle_mods,
             ignores = { "debug" },
@@ -401,8 +410,7 @@ local function init (opts)
     end
 
     for _, fp in ipairs(base_test_specs) do
-      add_file_target(test_dir(fs.stripextension(remove_wasm(remove_tk(fp))) .. ".js"),
-        test_dir("bundler-post", fs.stripextension(remove_wasm(fp)) .. ".js"), test_env)
+      add_file_target(test_dir(spec_js(fp)), test_dir("bundler-post", spec_js(fp)), test_env)
     end
 
   end
@@ -481,7 +489,8 @@ local function init (opts)
 
   for _, flag in ipairs({
     "single", "match", "skip_check", "lua",
-    "lua_path_extra", "lua_cpath_extra"
+    "lua_path_extra", "lua_cpath_extra",
+    "profile", "trace", "stop"
   }) do
     local fp = work_dir(flag .. ".flag")
     fs.mkdirp(fs.dirname(fp))
@@ -500,7 +509,8 @@ local function init (opts)
     arr.map({ base_run_sh, base_check_sh }, test_dir),
     arr.map({
       "skip_check.flag", "single.flag", "match.flag",
-      "lua.flag", "lua_path_extra.flag", "lua_cpath_extra.flag" },
+      "lua.flag", "lua_path_extra.flag", "lua_cpath_extra.flag",
+      "profile.flag", "trace.flag", "stop.flag" },
       work_dir))
 
   target(

@@ -8,6 +8,9 @@ local err = require("santoku.error")
 
 local function get_action(fp, config)
   config = config or {}
+  if str.endswith(fp, ".d") then
+    return "ignore"
+  end
   local rules = tbl.get(config, {"env", "rules"}) or config.rules or {}
   local exclude = tbl.get(rules, {"exclude"}) or {}
   for i = 1, #exclude do
@@ -143,11 +146,12 @@ local function get_files(dir, config, check_tpl)
   local seen = {}
   if fs.exists(dir) then
     for fp in fs.files(dir, true) do
-      if check_tpl and force_template(fp, config) then
-        arr.push(tpl, fp)
-        seen[fp] = true
-      elseif get_action(fp, config) ~= "ignore" then
-        arr.push(result, fp)
+      if get_action(fp, config) ~= "ignore" then
+        if check_tpl and force_template(fp, config) then
+          arr.push(tpl, fp)
+        else
+          arr.push(result, fp)
+        end
         seen[fp] = true
       end
     end

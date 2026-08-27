@@ -268,6 +268,32 @@ local function init (opts)
     return common.get_files(dir, opts.config, check_tpl)
   end
 
+  local function openresty_lualib (...)
+    if not opts.openresty_dir then
+      return nil
+    end
+    return fs.join(opts.openresty_dir, "lualib", ...)
+  end
+
+  local function openresty_interpreter ()
+    if not opts.openresty_dir then
+      return nil
+    end
+    local fp = fs.join(opts.openresty_dir, "luajit", "bin", "luajit")
+    return fs.exists(fp) and fp or nil
+  end
+
+  local function extend_path (base, extra)
+    if not extra then
+      return base
+    end
+    return arr.concat({ base, ";", extra })
+  end
+
+  local openresty_path = opts.openresty_dir and
+    arr.concat({ openresty_lualib("?.lua"), ";", openresty_lualib("?", "init.lua") }) or nil
+  local openresty_cpath = openresty_lualib("?.so")
+
   local base_server_libs = get_files("server/lib")
   local base_server_deps = get_files("server/deps")
   local base_server_test_specs = get_files("server/test/spec")
@@ -355,9 +381,9 @@ local function init (opts)
     work_dir = test_server_dir(),
     openresty_dir = opts.openresty_dir,
     luarocks_cfg = test_server_dir(base_server_luarocks_cfg),
-    lua = env.interpreter()[1],
-    lua_path = get_lua_path(test_dist_dir()),
-    lua_cpath = get_lua_cpath(test_dist_dir()),
+    lua = opts.lua or openresty_interpreter() or env.interpreter()[1],
+    lua_path = extend_path(get_lua_path(test_dist_dir()), openresty_path),
+    lua_cpath = extend_path(get_lua_cpath(test_dist_dir()), openresty_cpath),
     lua_modules = test_dist_dir(base_server_lua_modules),
     hashed = test_hashed,
   }
@@ -411,11 +437,16 @@ local function init (opts)
     target = "test-build",
     dist_dir = test_dist_dir(),
     work_dir = work_dir("test"),
-    lua = env.interpreter()[1],
+    lua = opts.lua or env.interpreter()[1],
     lua_path = get_lua_path(work_dir("test", "build")),
     lua_cpath = get_lua_cpath(work_dir("test", "build")),
     hashed = test_hashed,
   }
+
+  for _, e in ipairs({ test_server_env, test_root_env }) do
+    e.lua_path = extend_path(e.lua_path, opts.lua_path_extra)
+    e.lua_cpath = extend_path(e.lua_cpath, opts.lua_cpath_extra)
+  end
 
   tbl.merge(server_env, base_env)
   tbl.merge(test_server_env, base_env)
@@ -527,22 +558,6 @@ rocks_provided = { lua = "5.1" }
   add_copied_target(
     test_dist_dir(base_server_run_sh),
     test_server_dir(base_server_run_sh))
-
-  for _, flag in ipairs({
-    "skip_check"
-  }) do
-    local fp = work_dir(flag .. ".flag")
-    fs.mkdirp(fs.dirname(fp))
-    local strval = tostring(opts[flag])
-    if not fs.exists(fp) then
-      fs.writefile(fp, strval)
-    else
-      local val = fs.readfile(fp)
-      if val ~= strval then
-        fs.writefile(fp, strval)
-      end
-    end
-  end
 
   for _, fp in ipairs(base_server_libs) do
     add_file_target(server_dir_stripped(remove_tk(fp)), fp, server_env)
@@ -794,6 +809,7 @@ rocks_provided = { lua = "5.1" }
               single = opts.single and remove_tk(opts.single) or nil,
               match = opts.match,
               skip_check = opts.skip_check,
+              stop = opts.stop,
               wasm = true,
               skip_tests = env.environment ~= "test",
               dir = cdir("build"),
@@ -832,17 +848,14 @@ rocks_provided = { lua = "5.1" }
               files_to_hash[rel] = fp
             end
           end
-          local function escape_pattern(s)
-            return str.gsub(s, "[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%1")
-          end
           local function substitute_refs(content, m)
             for orig, h in pairs(m) do
-              content = str.gsub(content, "\"" .. escape_pattern(orig) .. "\"", "\"" .. h .. "\"")
-              content = str.gsub(content, "'" .. escape_pattern(orig) .. "'", "'" .. h .. "'")
-              content = str.gsub(content, "\"/" .. escape_pattern(orig) .. "\"", "\"/" .. h .. "\"")
-              content = str.gsub(content, "'/" .. escape_pattern(orig) .. "'", "'/" .. h .. "'")
-              content = str.gsub(content, "url%(/" .. escape_pattern(orig) .. "%)", "url(/" .. h .. ")")
-              content = str.gsub(content, "url%(" .. escape_pattern(orig) .. "%)", "url(" .. h .. ")")
+              content = str.gsub(content, "\"" .. str.escape(orig) .. "\"", "\"" .. h .. "\"")
+              content = str.gsub(content, "'" .. str.escape(orig) .. "'", "'" .. h .. "'")
+              content = str.gsub(content, "\"/" .. str.escape(orig) .. "\"", "\"/" .. h .. "\"")
+              content = str.gsub(content, "'/" .. str.escape(orig) .. "'", "'/" .. h .. "'")
+              content = str.gsub(content, "url%(/" .. str.escape(orig) .. "%)", "url(/" .. h .. ")")
+              content = str.gsub(content, "url%(" .. str.escape(orig) .. "%)", "url(" .. h .. ")")
             end
             return content
           end
@@ -944,24 +957,21 @@ rocks_provided = { lua = "5.1" }
             fs.mkdirp(fs.dirname(dest))
             fs.writefile(dest, fs.readfile(fp))
           end
-          local function escape_pattern(s)
-            return str.gsub(s, "[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%1")
-          end
           for rel in pairs(files_to_hash) do
             local hashed_rel = manifest[rel]
             local dest = final_dir(hashed_rel)
             if common.is_text_file(dest) then
               local content = fs.readfile(dest)
               for tag, h in pairs(mapping) do
-                content = str.gsub(content, escape_pattern(tag), h)
+                content = str.gsub(content, str.escape(tag), h)
               end
               for orig, h in pairs(manifest) do
-                content = str.gsub(content, "\"" .. escape_pattern(orig) .. "\"", "\"" .. h .. "\"")
-                content = str.gsub(content, "'" .. escape_pattern(orig) .. "'", "'" .. h .. "'")
-                content = str.gsub(content, "\"/" .. escape_pattern(orig) .. "\"", "\"/" .. h .. "\"")
-                content = str.gsub(content, "'/" .. escape_pattern(orig) .. "'", "'/" .. h .. "'")
-                content = str.gsub(content, "url%(/" .. escape_pattern(orig) .. "%)", "url(/" .. h .. ")")
-                content = str.gsub(content, "url%(" .. escape_pattern(orig) .. "%)", "url(" .. h .. ")")
+                content = str.gsub(content, "\"" .. str.escape(orig) .. "\"", "\"" .. h .. "\"")
+                content = str.gsub(content, "'" .. str.escape(orig) .. "'", "'" .. h .. "'")
+                content = str.gsub(content, "\"/" .. str.escape(orig) .. "\"", "\"/" .. h .. "\"")
+                content = str.gsub(content, "'/" .. str.escape(orig) .. "'", "'/" .. h .. "'")
+                content = str.gsub(content, "url%(/" .. str.escape(orig) .. "%)", "url(/" .. h .. ")")
+                content = str.gsub(content, "url%(" .. str.escape(orig) .. "%)", "url(" .. h .. ")")
               end
               fs.writefile(dest, content)
             end
@@ -1246,6 +1256,12 @@ rocks_provided = { lua = "5.1" }
           single = single_target == "root" and single_path and remove_tk(single_path) or nil,
           match = opts.match,
           skip_check = opts.skip_check,
+          profile = opts.profile,
+          trace = opts.trace,
+          stop = opts.stop,
+          lua = test_root_env.lua,
+          lua_path = test_root_env.lua_path,
+          lua_cpath = test_root_env.lua_cpath,
           dir = fs.absolute("build"),
         }).test()
       end
@@ -1302,6 +1318,9 @@ rocks_provided = { lua = "5.1" }
             single = single_target == "server" and single_path and remove_tk(single_path) or nil,
             match = opts.match,
             skip_check = opts.skip_check,
+            profile = opts.profile,
+            trace = opts.trace,
+            stop = opts.stop,
             lua = test_server_env.lua,
             lua_path = test_server_env.lua_path,
             lua_cpath = test_server_env.lua_cpath,
