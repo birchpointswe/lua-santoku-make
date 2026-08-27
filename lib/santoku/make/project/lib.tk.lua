@@ -75,6 +75,10 @@ local function create (opts)
     sys.execute({ "git", "init", dir })
   end
 
+  if opts.quiet then
+    return
+  end
+
   io.stdout:write("Created library project: " .. name .. "\n")
   io.stdout:write("\nNext steps:\n")
   if dir ~= "." then
