@@ -56,7 +56,6 @@ local function create (opts)
   for _, d in ipairs({
     "server/lib/tokuboilerplate",
     "client/lib/tokuboilerplate",
-    "lib/tokuboilerplate",
   }) do
     local src = fs.join(dir, d)
     if fs.exists(src) then
@@ -65,9 +64,6 @@ local function create (opts)
   end
 
   for _, f in ipairs({
-    "client/lib/tokuboilerplate.lua",
-    "server/lib/tokuboilerplate.lua",
-    "test/spec/tokuboilerplate.lua",
     "client/test/spec/tokuboilerplate.lua",
     "server/test/spec/tokuboilerplate.lua",
   }) do
@@ -81,14 +77,6 @@ local function create (opts)
     local content = fs.readfile(fp)
     if content:find("tokuboilerplate") then
       fs.writefile(fp, (str.gsub(content, "tokuboilerplate", name)))
-    end
-  end
-
-  local upper_name = str.upper(str.gsub(name, "%-", "_"))
-  for fp in fs.files(dir, { recurse = true }) do
-    local content = fs.readfile(fp)
-    if content:find("TOKUBOILERPLATE") then
-      fs.writefile(fp, (str.gsub(content, "TOKUBOILERPLATE", upper_name)))
     end
   end
 
@@ -844,6 +832,11 @@ rocks_provided = { lua = "5.1" }
     local is_main = env.environment == "main"
     local hash_ok = is_main and dist_dir("hash.ok") or test_dist_dir("hash.ok")
     local hash_manifest = is_main and dist_dir("hash-manifest.lua") or test_dist_dir("hash-manifest.lua")
+
+    target({ static_files_ok }, {}, function ()
+      fs.mkdirp(fs.dirname(static_files_ok))
+      fs.touch(static_files_ok)
+    end)
 
     target(
       { hash_static_ok },
