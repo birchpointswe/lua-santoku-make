@@ -325,7 +325,8 @@ local function init (opts)
   local base_client_lua_modules_ok = "lua_modules.ok"
   local base_client_lua_modules_deps_ok = "lua_modules.deps.ok"
 
-  local has_client_lua = #base_client_bins > 0 or #base_client_libs > 0
+  local has_client_build = #base_client_bins > 0 or #base_client_libs > 0
+    or #base_client_res > 0 or #base_client_deps > 0
 
   local base_client_pages = {}
   for i = 1, #base_client_bins do
@@ -752,7 +753,7 @@ rocks_provided = { lua = "5.1" }
         }
         fs.mkdirp(cdir())
         return fs.pushd(cdir(), function ()
-          if not has_client_lua then
+          if not has_client_build then
             fs.touch(base_client_lua_modules_deps_ok)
             return
           end
@@ -809,7 +810,7 @@ rocks_provided = { lua = "5.1" }
         }
         fs.mkdirp(cdir())
         return fs.pushd(cdir(), function ()
-          if not has_client_lua then
+          if not has_client_build then
             fs.touch(base_client_lua_modules_ok)
             return
           end
