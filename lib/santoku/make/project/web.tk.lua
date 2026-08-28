@@ -41,6 +41,12 @@ local function create (opts)
     err.error("Invalid name: must start with lowercase letter and contain only lowercase letters, numbers, and hyphens")
   end
 
+  if fs.exists(dir) then
+    for _ in fs.files(dir, true) do
+      err.error("target directory is not empty, refusing to scaffold into it", dir)
+    end
+  end
+
   fs.mkdirp(dir)
   local tmp = fs.tmpname()
   fs.writefile(tmp, str.from_base64(boilerplate_tar_b64))
@@ -445,8 +451,8 @@ local function init (opts)
     dist_dir = test_dist_dir(),
     work_dir = work_dir("test"),
     lua = opts.lua or env.interpreter()[1],
-    lua_path = get_lua_path(work_dir("test", "build")),
-    lua_cpath = get_lua_cpath(work_dir("test", "build")),
+    lua_path = get_lua_path(work_dir("test")),
+    lua_cpath = get_lua_cpath(work_dir("test")),
     hashed = test_hashed,
   }
 
@@ -1277,8 +1283,10 @@ rocks_provided = { lua = "5.1" }
         build({ "stop", "test-stop" }, opts.verbosity)
         build({ "test-start" }, opts.verbosity)
         local pid_file = test_dist_dir("server.pid")
+        local start_timeout = tonumber(opts.start_timeout
+          or tbl.get(opts, {"config", "env", "nginx", "start_timeout"})) or 60
         local pid
-        for _ = 1, 20 do
+        for _ = 1, math.ceil(start_timeout / 0.25) do
           sys.sleep(0.25)
           if fs.exists(pid_file) then
             pid = str.match(fs.readfile(pid_file), "(%d+)")
@@ -1286,7 +1294,11 @@ rocks_provided = { lua = "5.1" }
           end
         end
         if not pid then
-          err.error("fatal", "Server failed to start: no pid file created after 5s")
+          err.error("fatal", str.format(
+            "Server failed to start: no pid file created after %ds. " ..
+            "Raise it with nginx.start_timeout in your descriptor, " ..
+            "or check %s for a bind or config error.",
+            start_timeout, test_dist_dir("logs", "error.log")))
         end
         local alive = err.pcall(sys.execute, { "kill", "-0", pid })
         if not alive then

@@ -38,6 +38,12 @@ local function create (opts)
     err.error("Invalid name: must start with lowercase letter and contain only lowercase letters, numbers, and hyphens")
   end
 
+  if fs.exists(dir) then
+    for _ in fs.files(dir, true) do
+      err.error("target directory is not empty, refusing to scaffold into it", dir)
+    end
+  end
+
   fs.mkdirp(dir)
   local tmp = fs.tmpname()
   fs.writefile(tmp, str.from_base64(boilerplate_tar_b64))
