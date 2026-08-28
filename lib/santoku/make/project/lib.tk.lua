@@ -285,7 +285,7 @@ local function init (opts)
     base_check_sh }, test_dir), remove_tk)
 
   local build_all = arr.map(arr.map(arr.flatten({
-    base_bins, base_libs, base_deps, opts.wasm and { base_luarocks_cfg } or {},
+    base_bins, base_libs, base_deps, { base_luarocks_cfg },
     base_res_templated, base_res,
     { base_rockspec, base_makefile }}), remove_tk), build_dir)
 
@@ -503,10 +503,8 @@ local function init (opts)
   add_templated_target_base64(test_dir(base_luarocks_cfg),
     <% return str.quote(str.to_base64(readfile("res/lib/luarocks.lua"))) %>, test_env) -- luacheck: ignore
 
-  if opts.wasm then
-    add_templated_target_base64(build_dir(base_luarocks_cfg),
-      <% return str.quote(str.to_base64(readfile("res/lib/luarocks.lua"))) %>, build_env) -- luacheck: ignore
-  end
+  add_templated_target_base64(build_dir(base_luarocks_cfg),
+    <% return str.quote(str.to_base64(readfile("res/lib/luarocks.lua"))) %>, build_env) -- luacheck: ignore
 
   add_templated_target_base64(test_dir(base_luacheck_cfg),
     <% return str.quote(str.to_base64(readfile("res/lib/luacheck.lua"))) %>, test_env) -- luacheck: ignore
@@ -648,6 +646,35 @@ rocks_provided = { lua = "5.1" }
       end
       local lcfg = opts.luarocks_config or (opts.wasm and base_luarocks_cfg) or nil
       lcfg = lcfg and fs.absolute(lcfg) or nil
+      if has_local_deps then
+        common.install_local_deps(local_deps, lcfg)
+      end
+      sys.execute(arr.push({
+        "luarocks", "make", base_rockspec,
+        env = {
+          LUAROCKS_CONFIG = lcfg,
+          MAKEFLAGS = "--no-print-directory"
+        },
+      }, arr.spread(vars)))
+    end)
+  end)
+
+  target({ "install-bundled" }, install_release_deps, function ()
+    fs.mkdirp(build_dir())
+    return fs.pushd(build_dir(), function ()
+      local vars = {}
+      local env_tables = {
+        tbl.get(build_env, {"luarocks", "env_vars"}) or {},
+        tbl.get(build_env, {"build", "luarocks", "env_vars"}) or {},
+        opts.wasm and tbl.get(build_env, {"build", "wasm", "luarocks", "env_vars"}) or {},
+        not opts.wasm and tbl.get(build_env, {"build", "native", "luarocks", "env_vars"}) or {}
+      }
+      for _, env_tbl in ipairs(env_tables) do
+        for k, v in pairs(env_tbl) do
+          vars[#vars + 1] = str.format("%s=%s", k, v)
+        end
+      end
+      local lcfg = fs.absolute(base_luarocks_cfg)
       if has_local_deps then
         common.install_local_deps(local_deps, lcfg)
       end
@@ -912,7 +939,7 @@ rocks_provided = { lua = "5.1" }
     install = function (install_opts)
       install_opts = install_opts or {}
       if install_opts.bundled then
-        build(tbl.assign({ "install-deps" }, install_opts), install_opts.verbosity)
+        build(tbl.assign({ "install-bundled" }, install_opts), install_opts.verbosity)
         local bin_dir = "bin"
         if not fs.exists(bin_dir) then
           err.error("No bin/ directory found for bundled install")

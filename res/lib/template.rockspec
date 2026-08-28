@@ -72,17 +72,10 @@ build = {
   build_variables = {
     CC = "$(CC)",
     CXX = "$(CXX)",
-    AR = "$(AR)",
-    LD = "$(LD)",
-    NM = "$(NM)",
-    LDSHARED = "$(LDSHARED)",
-    RANLIB = "$(RANLIB)",
     CFLAGS = "$(CFLAGS)",
     LIBFLAG = "$(LIBFLAG)",
-    LUA_BINDIR = "$(LUA_BINDIR)",
     LUA_INCDIR = "$(LUA_INCDIR)",
     LUA_LIBDIR = "$(LUA_LIBDIR)",
-    LUA = "$(LUA)",
   },
   install_variables = {
     CC = "$(CC)",
@@ -90,6 +83,5 @@ build = {
     INST_BINDIR = "$(BINDIR)",
     INST_LIBDIR = "$(LIBDIR)",
     INST_LUADIR = "$(LUADIR)",
-    INST_CONFDIR = "$(CONFDIR)",
   }
 }
