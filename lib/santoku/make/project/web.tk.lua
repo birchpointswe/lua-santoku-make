@@ -325,6 +325,8 @@ local function init (opts)
   local base_client_lua_modules_ok = "lua_modules.ok"
   local base_client_lua_modules_deps_ok = "lua_modules.deps.ok"
 
+  local has_client_lua = #base_client_bins > 0 or #base_client_libs > 0
+
   local base_client_pages = {}
   for i = 1, #base_client_bins do
     base_client_pages[i] = fs.stripparts(fs.stripextensions(base_client_bins[i]) .. ".js", 2)
@@ -750,6 +752,10 @@ rocks_provided = { lua = "5.1" }
         }
         fs.mkdirp(cdir())
         return fs.pushd(cdir(), function ()
+          if not has_client_lua then
+            fs.touch(base_client_lua_modules_deps_ok)
+            return
+          end
           common.with_build_deps(has_build_deps and build_deps_dir or nil, function ()
             require("santoku.make.project").init({
               config_file = config_file,
@@ -803,6 +809,10 @@ rocks_provided = { lua = "5.1" }
         }
         fs.mkdirp(cdir())
         return fs.pushd(cdir(), function ()
+          if not has_client_lua then
+            fs.touch(base_client_lua_modules_ok)
+            return
+          end
           common.with_build_deps(has_build_deps and build_deps_dir or nil, function ()
             require("santoku.make.project").init({
               config_file = config_file,
