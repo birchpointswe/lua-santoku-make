@@ -50,30 +50,44 @@ local function create (opts)
   sys.execute({ "tar", "-C", dir, "-xzf", tmp })
   fs.rm(tmp)
 
+  local mod_name = str.gsub(name, "%-", "_")
+
   for _, d in ipairs({
     "lib/tokuboilerplate",
   }) do
     local src = fs.join(dir, d)
     if fs.isdir(src) then
-      fs.mv(src, fs.join(dir, (str.gsub(d, "tokuboilerplate", name))))
+      fs.mv(src, fs.join(dir, (str.gsub(d, "tokuboilerplate", mod_name))))
     end
   end
 
   for _, f in ipairs({
-    "bin/tokuboilerplate.lua",
     "lib/tokuboilerplate.tk.lua",
     "test/spec/tokuboilerplate.lua",
   }) do
     local src = fs.join(dir, f)
     if fs.exists(src) then
-      fs.mv(src, fs.join(dir, (str.gsub(f, "tokuboilerplate", name))))
+      fs.mv(src, fs.join(dir, (str.gsub(f, "tokuboilerplate", mod_name))))
+    end
+  end
+
+  do
+    local src = fs.join(dir, "bin/tokuboilerplate.lua")
+    if fs.exists(src) then
+      fs.mv(src, fs.join(dir, "bin/" .. name .. ".lua"))
     end
   end
 
   for fp in fs.files(dir, { recurse = true }) do
     local content = fs.readfile(fp)
     if content:find("tokuboilerplate") then
-      fs.writefile(fp, (str.gsub(content, "tokuboilerplate", name)))
+      if str.endswith(fp, "make.lua") then
+        content = str.gsub(content, "tokuboilerplate", name)
+      else
+        content = str.gsub(content, ':name%("tokuboilerplate"%)', ':name("' .. name .. '")')
+        content = str.gsub(content, "tokuboilerplate", mod_name)
+      end
+      fs.writefile(fp, content)
     end
   end
 
@@ -838,6 +852,8 @@ rocks_provided = { lua = "5.1" }
             existing_dirs[#existing_dirs + 1] = watch_dirs[i]
           end
         end
+        print("\n[iterate] waiting for changes in " ..
+          arr.concat(arr.copy({}, existing_dirs), ", ") .. "\n")
         sys.execute({
           "inotifywait", "-qr",
           "-e", "close_write", "-e", "modify",

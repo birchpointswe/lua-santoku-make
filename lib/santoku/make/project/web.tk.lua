@@ -1279,8 +1279,11 @@ rocks_provided = { lua = "5.1" }
         }).test()
       end
 
-      if run_server and #base_server_test_specs > 0 then
+      local has_server = tbl.get(opts, {"config", "env", "nginx"}) ~= nil
+      if run_server and (has_server or #base_server_test_specs > 0) then
         build({ "stop", "test-stop" }, opts.verbosity)
+        local error_log = test_dist_dir("logs", "error.log")
+        local error_log_seen = fs.exists(error_log) and #fs.readfile(error_log) or 0
         build({ "test-start" }, opts.verbosity)
         local pid_file = test_dist_dir("server.pid")
         local start_timeout = tonumber(opts.start_timeout
@@ -1291,6 +1294,14 @@ rocks_provided = { lua = "5.1" }
           if fs.exists(pid_file) then
             pid = str.match(fs.readfile(pid_file), "(%d+)")
             if pid then break end
+          end
+          if fs.exists(error_log) then
+            local emerg = str.match(
+              str.sub(fs.readfile(error_log), error_log_seen + 1),
+              "%[emerg%][^\n]*")
+            if emerg then
+              err.error("fatal", "Server failed to start: " .. emerg)
+            end
           end
         end
         if not pid then
@@ -1320,34 +1331,36 @@ rocks_provided = { lua = "5.1" }
           end
         end
 
-        local server_config = {
-          type = "lib",
-          env = tbl.merge({
-            name = opts.config.env.name .. "-server",
-            version = opts.config.env.version,
-            rules = opts.config.env.rules,
-          }, opts.config.env.server or {}),
-        }
-        fs.mkdirp(test_server_dir())
-        fs.pushd(test_server_dir(), function ()
-          local lib = require("santoku.make.project").init({
-            config_file = config_file,
-            luarocks_config = fs.absolute(base_server_luarocks_cfg),
-            config = server_config,
-            single = single_target == "server" and single_path and remove_tk(single_path) or nil,
-            match = opts.match,
-            skip_check = opts.skip_check,
-            profile = opts.profile,
-            trace = opts.trace,
-            stop = opts.stop,
-            lua = test_server_env.lua,
-            lua_path = test_server_env.lua_path,
-            lua_cpath = test_server_env.lua_cpath,
-            dir = test_server_dir(),
-          })
-          lib.test({ skip_check = true })
-          lib.check()
-        end)
+        if #base_server_test_specs > 0 then
+          local server_config = {
+            type = "lib",
+            env = tbl.merge({
+              name = opts.config.env.name .. "-server",
+              version = opts.config.env.version,
+              rules = opts.config.env.rules,
+            }, opts.config.env.server or {}),
+          }
+          fs.mkdirp(test_server_dir())
+          fs.pushd(test_server_dir(), function ()
+            local lib = require("santoku.make.project").init({
+              config_file = config_file,
+              luarocks_config = fs.absolute(base_server_luarocks_cfg),
+              config = server_config,
+              single = single_target == "server" and single_path and remove_tk(single_path) or nil,
+              match = opts.match,
+              skip_check = opts.skip_check,
+              profile = opts.profile,
+              trace = opts.trace,
+              stop = opts.stop,
+              lua = test_server_env.lua,
+              lua_path = test_server_env.lua_path,
+              lua_cpath = test_server_env.lua_cpath,
+              dir = test_server_dir(),
+            })
+            lib.test({ skip_check = true })
+            lib.check()
+          end)
+        end
 
         if not iterating then
           build({ "test-stop" }, opts.verbosity)
@@ -1429,6 +1442,8 @@ rocks_provided = { lua = "5.1" }
             existing_dirs[#existing_dirs + 1] = watch_dirs[i]
           end
         end
+        print("\n[iterate] waiting for changes in " ..
+          arr.concat(arr.copy({}, existing_dirs), ", ") .. "\n")
         sys.execute({
           "inotifywait", "-qr",
           "-e", "close_write", "-e", "modify",
