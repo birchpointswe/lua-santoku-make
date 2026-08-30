@@ -867,24 +867,33 @@ rocks_provided = { lua = "5.1" }
           end
           local function substitute_refs(content, m)
             for orig, h in pairs(m) do
-              content = str.gsub(content, "\"" .. str.escape(orig) .. "\"", "\"" .. h .. "\"")
-              content = str.gsub(content, "'" .. str.escape(orig) .. "'", "'" .. h .. "'")
-              content = str.gsub(content, "\"/" .. str.escape(orig) .. "\"", "\"/" .. h .. "\"")
-              content = str.gsub(content, "'/" .. str.escape(orig) .. "'", "'/" .. h .. "'")
-              content = str.gsub(content, "url%(/" .. str.escape(orig) .. "%)", "url(/" .. h .. ")")
-              content = str.gsub(content, "url%(" .. str.escape(orig) .. "%)", "url(" .. h .. ")")
+              if str.find(content, orig, 1, true) then
+                content = str.gsub(content, "\"" .. str.escape(orig) .. "\"", "\"" .. h .. "\"")
+                content = str.gsub(content, "'" .. str.escape(orig) .. "'", "'" .. h .. "'")
+                content = str.gsub(content, "\"/" .. str.escape(orig) .. "\"", "\"/" .. h .. "\"")
+                content = str.gsub(content, "'/" .. str.escape(orig) .. "'", "'/" .. h .. "'")
+                content = str.gsub(content, "url%(/" .. str.escape(orig) .. "%)", "url(/" .. h .. ")")
+                content = str.gsub(content, "url%(" .. str.escape(orig) .. "%)", "url(" .. h .. ")")
+              end
             end
             return content
           end
+          local text_cache, bin_cache = {}, {}
+          for rel, fp in pairs(files_to_hash) do
+            if common.is_text_file(fp) then
+              text_cache[rel] = fs.readfile(fp)
+            else
+              bin_cache[rel] = common.compute_file_hash(fp)
+            end
+          end
           for i = 1, 10 do
             local changed = false
-            for rel, fp in pairs(files_to_hash) do
+            for rel in pairs(files_to_hash) do
               local hash
-              if common.is_text_file(fp) then
-                local content = substitute_refs(fs.readfile(fp), manifest)
-                hash = common.compute_string_hash(content)
+              if text_cache[rel] then
+                hash = common.compute_string_hash(substitute_refs(text_cache[rel], manifest))
               else
-                hash = common.compute_file_hash(fp)
+                hash = bin_cache[rel]
               end
               local hashed_rel = common.hash_filename(rel, hash)
               if manifest[rel] ~= hashed_rel then
