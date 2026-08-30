@@ -13,6 +13,7 @@ local printf = str.printf
 local fs = require("santoku.fs")
 local exists = fs.exists
 local readfile = fs.readfile
+local relative = fs.relative
 
 local arr = require("santoku.array")
 
@@ -87,7 +88,7 @@ return function ()
         if ttime and (not dtime or dtime < ttime) then
 
           if verbosity > 1 then
-            printf("[ok]    \t%s\n", t)
+            printf("[ok]    \t%s\n", relative(t))
           end
 
           cache[t] = ttime
@@ -95,12 +96,12 @@ return function ()
 
         elseif not ttime and not fns[t] then
 
-          error("target doesn't exist and corresponding function not registered", t)
+          error("target doesn't exist and corresponding function not registered", relative(t))
 
         elseif fns[t] == true then
 
           if verbosity > 1 then
-            printf("[phony] \t%s\n", t)
+            printf("[phony] \t%s\n", relative(t))
           end
 
           maxtime = huge
@@ -108,7 +109,7 @@ return function ()
         elseif not fns[t] then
 
           if verbosity > 1 then
-            printf("[src]   \t%s\n", t)
+            printf("[src]   \t%s\n", relative(t))
           end
 
           cache[t] = ttime
@@ -117,7 +118,7 @@ return function ()
         else
 
           if verbosity > 0 then
-            printf("[make]  \t%s\n", t)
+            printf("[make]  \t%s\n", relative(t))
           end
 
           fns[t](targets[t], deps[t], ...)
