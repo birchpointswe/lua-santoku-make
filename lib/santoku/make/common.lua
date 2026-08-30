@@ -311,6 +311,41 @@ local function hash_filename(filepath, hash)
   return dir and dir ~= "" and dir ~= "." and fs.join(dir, hashed_name) or hashed_name
 end
 
+local function substitute_refs (content, manifest)
+  for orig, h in pairs(manifest) do
+    if str.find(content, orig, 1, true) then
+      content = str.gsub(content, "\"" .. str.escape(orig) .. "\"", "\"" .. h .. "\"")
+      content = str.gsub(content, "'" .. str.escape(orig) .. "'", "'" .. h .. "'")
+      content = str.gsub(content, "\"/" .. str.escape(orig) .. "\"", "\"/" .. h .. "\"")
+      content = str.gsub(content, "'/" .. str.escape(orig) .. "'", "'/" .. h .. "'")
+      content = str.gsub(content, "url%(/" .. str.escape(orig) .. "%)", "url(/" .. h .. ")")
+      content = str.gsub(content, "url%(" .. str.escape(orig) .. "%)", "url(" .. h .. ")")
+    end
+  end
+  return content
+end
+
+local function hash_token (name)
+  return "___TKHASH_" .. (str.gsub(name, ".", function (c)
+    return str.format("%02x", str.byte(c))
+  end)) .. "___"
+end
+
+local function resolve_tokens (content, manifest, strict, src)
+  return (str.gsub(content, "___TKHASH_(%x+)___", function (hex)
+    local name = str.gsub(hex, "%x%x", function (b)
+      return str.char(tonumber(b, 16))
+    end)
+    local h = manifest[name]
+    if h then
+      return h
+    end
+    if strict then
+      err.error("unresolvable hashed() reference", src, name)
+    end
+  end))
+end
+
 local text_extensions = {
   html = true, htm = true, css = true, js = true, json = true,
   xml = true, svg = true, txt = true, md = true, lua = true,
@@ -344,5 +379,8 @@ return {
   compute_file_hash = compute_file_hash,
   compute_string_hash = compute_string_hash,
   hash_filename = hash_filename,
+  substitute_refs = substitute_refs,
+  hash_token = hash_token,
+  resolve_tokens = resolve_tokens,
   is_text_file = is_text_file,
 }

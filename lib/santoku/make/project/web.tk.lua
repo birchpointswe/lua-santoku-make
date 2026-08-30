@@ -17,7 +17,6 @@ local clean = require("santoku.make.clean")
 local arr = require("santoku.array")
 local str = require("santoku.string")
 local tmpl = require("santoku.template")
-local rand = require("santoku.random")
 local fun = require("santoku.functional")
 local spread = arr.spread
 
@@ -207,6 +206,11 @@ local function init (opts)
     registered_public_files[fp] = true
   end
 
+  local unhashed_public_files = {}
+  for _, fp in ipairs(tbl.get(opts, {"config", "env", "client", "unhashed"}) or {}) do
+    unhashed_public_files[fp] = true
+  end
+
   local function make_hashed (get_manifest_path)
     return function (filename)
       local manifest_path = get_manifest_path()
@@ -220,8 +224,13 @@ local function init (opts)
     end
   end
 
-  local hashed = make_hashed(function () return dist_dir("hash-manifest-static.lua") end)
-  local test_hashed = make_hashed(function () return test_dist_dir("hash-manifest-static.lua") end)
+  local function hashed (filename)
+    if unhashed_public_files[filename] then
+      return filename
+    end
+    return common.hash_token(filename)
+  end
+
   local hashed_full = make_hashed(function () return dist_dir("hash-manifest.lua") end)
   local test_hashed_full = make_hashed(function () return test_dist_dir("hash-manifest.lua") end)
 
@@ -346,7 +355,9 @@ local function init (opts)
 
   local public_files = arr.flatten({public_files_static, public_files_wasm})
 
-  local public_files_static_for_precache = public_files_static
+  local public_files_static_for_precache = arr.filtered(public_files_static, function (fp)
+    return not unhashed_public_files[fp]
+  end)
 
   local base_env = {
     root_dir = fs.cwd(),
@@ -389,7 +400,7 @@ local function init (opts)
     lua_path = extend_path(get_lua_path(test_dist_dir()), openresty_path),
     lua_cpath = extend_path(get_lua_cpath(test_dist_dir()), openresty_cpath),
     lua_modules = test_dist_dir(base_server_lua_modules),
-    hashed = test_hashed,
+    hashed = hashed,
   }
 
   local client_env = {
@@ -423,7 +434,7 @@ local function init (opts)
     lua_path = get_lua_path(test_client_dir("build", "default-wasm", "build")),
     lua_cpath = get_lua_cpath(test_client_dir("build", "default-wasm", "build")),
     luarocks_cfg = test_client_dir("build", "default-wasm", "build", base_server_luarocks_cfg),
-    hashed = test_hashed,
+    hashed = hashed,
   }
 
   local root_env = {
@@ -444,7 +455,7 @@ local function init (opts)
     lua = opts.lua or env.interpreter()[1],
     lua_path = get_lua_path(work_dir("test")),
     lua_cpath = get_lua_cpath(work_dir("test")),
-    hashed = test_hashed,
+    hashed = hashed,
   }
 
   for _, e in ipairs({ test_server_env, test_root_env }) do
@@ -748,7 +759,7 @@ rocks_provided = { lua = "5.1" }
             rules = opts.config.env.rules,
             public_files_static_for_precache = public_files_static_for_precache,
             registered_public_files = registered_public_files,
-            hashed = env.environment == "test" and test_hashed or hashed,
+            hashed = hashed,
           }, opts.config.env.client or {}, env),
         }
         fs.mkdirp(cdir())
@@ -805,7 +816,7 @@ rocks_provided = { lua = "5.1" }
             rules = opts.config.env.rules,
             public_files_static_for_precache = public_files_static_for_precache,
             registered_public_files = registered_public_files,
-            hashed = env.environment == "test" and test_hashed or hashed,
+            hashed = hashed,
           }, opts.config.env.client or {}, env),
         }
         fs.mkdirp(cdir())
@@ -854,6 +865,7 @@ rocks_provided = { lua = "5.1" }
       arr.push(arr.copy({}, static_staging_files), static_files_ok),
         function ()
           local manifest = {}
+          local subst_manifest = {}
           local files_to_hash = {}
           for _, fp in ipairs(static_staging_files) do
             local rel = str.stripprefix(fp, staging_dir() .. "/")
@@ -865,19 +877,6 @@ rocks_provided = { lua = "5.1" }
               files_to_hash[rel] = fp
             end
           end
-          local function substitute_refs(content, m)
-            for orig, h in pairs(m) do
-              if str.find(content, orig, 1, true) then
-                content = str.gsub(content, "\"" .. str.escape(orig) .. "\"", "\"" .. h .. "\"")
-                content = str.gsub(content, "'" .. str.escape(orig) .. "'", "'" .. h .. "'")
-                content = str.gsub(content, "\"/" .. str.escape(orig) .. "\"", "\"/" .. h .. "\"")
-                content = str.gsub(content, "'/" .. str.escape(orig) .. "'", "'/" .. h .. "'")
-                content = str.gsub(content, "url%(/" .. str.escape(orig) .. "%)", "url(/" .. h .. ")")
-                content = str.gsub(content, "url%(" .. str.escape(orig) .. "%)", "url(" .. h .. ")")
-              end
-            end
-            return content
-          end
           local text_cache, bin_cache = {}, {}
           for rel, fp in pairs(files_to_hash) do
             if common.is_text_file(fp) then
@@ -887,22 +886,29 @@ rocks_provided = { lua = "5.1" }
             end
           end
           for i = 1, 10 do
-            local changed = false
+            local changed = {}
             for rel in pairs(files_to_hash) do
               local hash
               if text_cache[rel] then
-                hash = common.compute_string_hash(substitute_refs(text_cache[rel], manifest))
+                hash = common.compute_string_hash(common.substitute_refs(
+                  common.resolve_tokens(text_cache[rel], subst_manifest), subst_manifest))
               else
                 hash = bin_cache[rel]
               end
               local hashed_rel = common.hash_filename(rel, hash)
               if manifest[rel] ~= hashed_rel then
                 manifest[rel] = hashed_rel
-                changed = true
+                if not unhashed_public_files[rel] then
+                  subst_manifest[rel] = hashed_rel
+                end
+                arr.push(changed, rel)
               end
             end
-            if not changed then break end
-            assert(i < 10, "hash manifest failed to converge after 10 iterations")
+            if #changed == 0 then break end
+            if i == 10 then
+              err.error("hash manifest failed to converge after 10 iterations, " ..
+                "break the cycle by declaring one of these in client.unhashed", arr.concat(changed, " "))
+            end
           end
           local manifest_content = "return {\n"
           for orig, h in pairs(manifest) do
@@ -913,9 +919,11 @@ rocks_provided = { lua = "5.1" }
           local js_parts = { "self.HASH_MANIFEST = {" }
           local first = true
           for orig, h in pairs(manifest) do
-            if not first then arr.push(js_parts, ",") end
-            first = false
-            arr.push(js_parts, str.format("[atob(%q)]:%q", str.to_base64(orig), h))
+            if not unhashed_public_files[orig] then
+              if not first then arr.push(js_parts, ",") end
+              first = false
+              arr.push(js_parts, str.format("[atob(%q)]:%q", str.to_base64(orig), h))
+            end
           end
           for _, wasm_file in ipairs(public_files_wasm) do
             if not first then arr.push(js_parts, ",") end
@@ -933,12 +941,7 @@ rocks_provided = { lua = "5.1" }
         arr.flatten({ hash_static_ok, wasm_staging_files }),
         function ()
           local static_manifest = fs.exists(hash_static_manifest) and dofile(hash_static_manifest) or {}
-          local mapping = {}
           local manifest = {}
-          local build_id = rand.alnum(24)
-          local function make_placeholder(filename)
-            return "___SANTOKU_" .. build_id .. "_" .. str.gsub(filename, "[^%w]", "_") .. "___"
-          end
           if fs.exists(final_dir()) then
             local preserve = tbl.get(opts, { "config", "env", "server", "preserve_public" }) or {}
             local function prune_preserved(path)
@@ -953,8 +956,6 @@ rocks_provided = { lua = "5.1" }
             fs.rmdirs(final_dir())
           end
           for rel, hashed_rel in pairs(static_manifest) do
-            local tag = make_placeholder(rel)
-            mapping[tag] = hashed_rel
             manifest[rel] = hashed_rel
           end
           local files_to_hash = {}
@@ -968,14 +969,18 @@ rocks_provided = { lua = "5.1" }
             local rel = str.stripprefix(fp, staging_dir() .. "/")
             files_to_hash[rel] = fp
           end
+          local subst_manifest = {}
           for rel, fp in pairs(files_to_hash) do
             if not manifest[rel] then
               local hash = common.compute_file_hash(fp)
               local hashed_rel = common.hash_filename(rel, hash)
               manifest[rel] = hashed_rel
             end
-            local tag = make_placeholder(rel)
-            mapping[tag] = manifest[rel]
+          end
+          for rel, hashed_rel in pairs(manifest) do
+            if not unhashed_public_files[rel] then
+              subst_manifest[rel] = hashed_rel
+            end
           end
           for rel, fp in pairs(files_to_hash) do
             local hashed_rel = manifest[rel]
@@ -987,19 +992,8 @@ rocks_provided = { lua = "5.1" }
             local hashed_rel = manifest[rel]
             local dest = final_dir(hashed_rel)
             if common.is_text_file(dest) then
-              local content = fs.readfile(dest)
-              for tag, h in pairs(mapping) do
-                content = str.gsub(content, str.escape(tag), h)
-              end
-              for orig, h in pairs(manifest) do
-                content = str.gsub(content, "\"" .. str.escape(orig) .. "\"", "\"" .. h .. "\"")
-                content = str.gsub(content, "'" .. str.escape(orig) .. "'", "'" .. h .. "'")
-                content = str.gsub(content, "\"/" .. str.escape(orig) .. "\"", "\"/" .. h .. "\"")
-                content = str.gsub(content, "'/" .. str.escape(orig) .. "'", "'/" .. h .. "'")
-                content = str.gsub(content, "url%(/" .. str.escape(orig) .. "%)", "url(/" .. h .. ")")
-                content = str.gsub(content, "url%(" .. str.escape(orig) .. "%)", "url(" .. h .. ")")
-              end
-              fs.writefile(dest, content)
+              local content = common.resolve_tokens(fs.readfile(dest), subst_manifest, true, dest)
+              fs.writefile(dest, common.substitute_refs(content, subst_manifest))
             end
           end
           local manifest_content = "return {\n"
