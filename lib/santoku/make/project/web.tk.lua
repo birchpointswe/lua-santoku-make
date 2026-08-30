@@ -410,7 +410,6 @@ local function init (opts)
     dist_dir = dist_dir(),
     public_dir = dist_dir_staging(),
     static_files_ok = dist_dir("static-files.ok"),
-    hash_precache_js = dist_dir("hash-precache.js"),
     work_dir = client_dir(),
     bundler_post_dir = client_dir("bundler-post"),
     build_dir = client_dir("build", "default-wasm", "build"),
@@ -427,7 +426,6 @@ local function init (opts)
     dist_dir = test_dist_dir(),
     public_dir = test_dist_dir_staging(),
     static_files_ok = test_dist_dir("static-files.ok"),
-    hash_precache_js = test_dist_dir("hash-precache.js"),
     work_dir = test_client_dir(),
     bundler_post_dir = test_client_dir("bundler-post"),
     build_dir = test_client_dir("build", "default-wasm", "build"),
@@ -626,20 +624,14 @@ rocks_provided = { lua = "5.1" }
     { dist_dir_staging, dist_dir_staging_stripped,
       client_dir, client_dir_stripped, client_env,
       dist_dir_client,
-      dist_dir("hash-static.ok"),
-      dist_dir("hash-manifest-static.lua"),
-      dist_dir("static-files.ok"),
-      dist_dir("hash-precache.js") },
+      dist_dir("static-files.ok") },
     { test_dist_dir_staging, test_dist_dir_staging_stripped,
       test_client_dir, test_client_dir_stripped, test_client_env,
       test_dist_dir_client,
-      test_dist_dir("hash-static.ok"),
-      test_dist_dir("hash-manifest-static.lua"),
-      test_dist_dir("static-files.ok"),
-      test_dist_dir("hash-precache.js") }
+      test_dist_dir("static-files.ok") }
   }
   for _, config in ipairs(env_configs) do
-    local staging_dir, staging_dir_stripped, cdir, cdir_stripped, env, final_dir, hash_static_ok, hash_static_manifest, static_files_ok, hash_precache_js = spread(config)
+    local staging_dir, staging_dir_stripped, cdir, cdir_stripped, env, final_dir, static_files_ok = spread(config)
 
     fs.mkdirp(staging_dir())
     fs.mkdirp(cdir())
@@ -717,9 +709,6 @@ rocks_provided = { lua = "5.1" }
           local luac_bin = fs.join(lua_dir, "bin", "luac")
           local extra_cflags = arr.flatten({extra_rule_cflags, tbl.get(env, {"cxxflags"}) or {}})
           local extra_ldflags = arr.flatten({extra_rule_ldflags, tbl.get(env, {"ldflags"}) or {}})
-          if hash_precache_js and fs.exists(hash_precache_js) then
-            arr.push(extra_ldflags, "--pre-js", hash_precache_js)
-          end
           local use_files = tbl.get(env, {"client", "files"})
           common.with_build_deps(has_build_deps and build_deps_dir or nil, function ()
             bundle(pre, fs.dirname(post), {
@@ -803,7 +792,6 @@ rocks_provided = { lua = "5.1" }
         { cdir(base_client_lua_modules_deps_ok) },
         has_local_deps_client and { cdir("local-deps.ok") } or {},
         common.get_config_files(opts.config_file),
-        { hash_static_ok },
         has_build_deps and { build_deps_ok } or {} }),
       function ()
         local nested_env = env.environment == "test" and "test" or "build"
@@ -861,149 +849,93 @@ rocks_provided = { lua = "5.1" }
     end)
 
     target(
-      { hash_static_ok },
-      arr.push(arr.copy({}, static_staging_files), static_files_ok),
-        function ()
-          local manifest = {}
-          local subst_manifest = {}
-          local files_to_hash = {}
-          for _, fp in ipairs(static_staging_files) do
-            local rel = str.stripprefix(fp, staging_dir() .. "/")
+      { hash_ok },
+      arr.flatten({ static_staging_files, wasm_staging_files, { static_files_ok } }),
+      function ()
+        local manifest = {}
+        local subst_manifest = {}
+        local files_to_hash = {}
+        for _, fp in ipairs(static_staging_files) do
+          local rel = str.stripprefix(fp, staging_dir() .. "/")
+          files_to_hash[rel] = fp
+        end
+        for _, fp in ipairs(wasm_staging_files) do
+          local rel = str.stripprefix(fp, staging_dir() .. "/")
+          files_to_hash[rel] = fp
+        end
+        for rel in pairs(registered_public_files) do
+          local fp = staging_dir(rel)
+          if fs.exists(fp) then
             files_to_hash[rel] = fp
           end
-          for rel in pairs(registered_public_files) do
-            local fp = staging_dir(rel)
-            if fs.exists(fp) then
-              files_to_hash[rel] = fp
-            end
+        end
+        local text_cache, bin_cache = {}, {}
+        for rel, fp in pairs(files_to_hash) do
+          if common.is_text_file(fp) then
+            text_cache[rel] = fs.readfile(fp)
+          else
+            bin_cache[rel] = common.compute_file_hash(fp)
           end
-          local text_cache, bin_cache = {}, {}
-          for rel, fp in pairs(files_to_hash) do
-            if common.is_text_file(fp) then
-              text_cache[rel] = fs.readfile(fp)
+        end
+        for i = 1, 10 do
+          local changed = {}
+          for rel in pairs(files_to_hash) do
+            local hash
+            if text_cache[rel] then
+              hash = common.compute_string_hash(common.substitute_refs(
+                common.resolve_tokens(text_cache[rel], subst_manifest), subst_manifest))
             else
-              bin_cache[rel] = common.compute_file_hash(fp)
+              hash = bin_cache[rel]
             end
-          end
-          for i = 1, 10 do
-            local changed = {}
-            for rel in pairs(files_to_hash) do
-              local hash
-              if text_cache[rel] then
-                hash = common.compute_string_hash(common.substitute_refs(
-                  common.resolve_tokens(text_cache[rel], subst_manifest), subst_manifest))
-              else
-                hash = bin_cache[rel]
-              end
-              local hashed_rel = common.hash_filename(rel, hash)
-              if manifest[rel] ~= hashed_rel then
-                manifest[rel] = hashed_rel
-                if not unhashed_public_files[rel] then
-                  subst_manifest[rel] = hashed_rel
-                end
-                arr.push(changed, rel)
-              end
-            end
-            if #changed == 0 then break end
-            if i == 10 then
-              err.error("hash manifest failed to converge after 10 iterations, " ..
-                "break the cycle by declaring one of these in client.unhashed", arr.concat(changed, " "))
-            end
-          end
-          local manifest_content = "return {\n"
-          for orig, h in pairs(manifest) do
-            manifest_content = manifest_content .. str.format("  [%q] = %q,\n", orig, h)
-          end
-          manifest_content = manifest_content .. "}\n"
-          fs.writefile(hash_static_manifest, manifest_content)
-          local js_parts = { "self.HASH_MANIFEST = {" }
-          local first = true
-          for orig, h in pairs(manifest) do
-            if not unhashed_public_files[orig] then
-              if not first then arr.push(js_parts, ",") end
-              first = false
-              arr.push(js_parts, str.format("[atob(%q)]:%q", str.to_base64(orig), h))
-            end
-          end
-          for _, wasm_file in ipairs(public_files_wasm) do
-            if not first then arr.push(js_parts, ",") end
-            first = false
-            local hashed_wasm = manifest[wasm_file] or wasm_file
-            arr.push(js_parts, str.format("[atob(%q)]:%q", str.to_base64(wasm_file), hashed_wasm))
-          end
-          arr.push(js_parts, "};")
-          fs.writefile(hash_precache_js, arr.concat(js_parts, ""))
-          fs.touch(hash_static_ok)
-        end)
-
-      target(
-        { hash_ok },
-        arr.flatten({ hash_static_ok, wasm_staging_files }),
-        function ()
-          local static_manifest = fs.exists(hash_static_manifest) and dofile(hash_static_manifest) or {}
-          local manifest = {}
-          if fs.exists(final_dir()) then
-            local preserve = tbl.get(opts, { "config", "env", "server", "preserve_public" }) or {}
-            local function prune_preserved(path)
-              local rel = str.stripprefix(path, final_dir() .. "/")
-              for i = 1, #preserve do
-                if str.match(rel, "^" .. preserve[i]) then
-                  return true
-                end
-              end
-            end
-            arr.ieach(fun.take(fs.rm, 1), fs.files(final_dir(), true, prune_preserved))
-            fs.rmdirs(final_dir())
-          end
-          for rel, hashed_rel in pairs(static_manifest) do
-            manifest[rel] = hashed_rel
-          end
-          local files_to_hash = {}
-          for rel in pairs(static_manifest) do
-            local fp = staging_dir(rel)
-            if fs.exists(fp) then
-              files_to_hash[rel] = fp
-            end
-          end
-          for _, fp in ipairs(wasm_staging_files) do
-            local rel = str.stripprefix(fp, staging_dir() .. "/")
-            files_to_hash[rel] = fp
-          end
-          local subst_manifest = {}
-          for rel, fp in pairs(files_to_hash) do
-            if not manifest[rel] then
-              local hash = common.compute_file_hash(fp)
-              local hashed_rel = common.hash_filename(rel, hash)
+            local hashed_rel = common.hash_filename(rel, hash)
+            if manifest[rel] ~= hashed_rel then
               manifest[rel] = hashed_rel
+              if not unhashed_public_files[rel] then
+                subst_manifest[rel] = hashed_rel
+              end
+              arr.push(changed, rel)
             end
           end
-          for rel, hashed_rel in pairs(manifest) do
-            if not unhashed_public_files[rel] then
-              subst_manifest[rel] = hashed_rel
+          if #changed == 0 then break end
+          if i == 10 then
+            err.error("hash manifest failed to converge after 10 iterations, " ..
+              "break the cycle by declaring one of these in client.unhashed", arr.concat(changed, " "))
+          end
+        end
+        if fs.exists(final_dir()) then
+          local preserve = tbl.get(opts, { "config", "env", "server", "preserve_public" }) or {}
+          local function prune_preserved(path)
+            local rel = str.stripprefix(path, final_dir() .. "/")
+            for i = 1, #preserve do
+              if str.match(rel, "^" .. preserve[i]) then
+                return true
+              end
             end
           end
-          for rel, fp in pairs(files_to_hash) do
-            local hashed_rel = manifest[rel]
-            local dest = final_dir(hashed_rel)
-            fs.mkdirp(fs.dirname(dest))
+          arr.ieach(fun.take(fs.rm, 1), fs.files(final_dir(), true, prune_preserved))
+          fs.rmdirs(final_dir())
+        end
+        for rel, fp in pairs(files_to_hash) do
+          local hashed_rel = manifest[rel]
+          local dest = final_dir(hashed_rel)
+          fs.mkdirp(fs.dirname(dest))
+          if text_cache[rel] then
+            fs.writefile(dest, common.substitute_refs(
+              common.resolve_tokens(text_cache[rel], subst_manifest, true, dest), subst_manifest))
+          else
             fs.writefile(dest, fs.readfile(fp))
           end
-          for rel in pairs(files_to_hash) do
-            local hashed_rel = manifest[rel]
-            local dest = final_dir(hashed_rel)
-            if common.is_text_file(dest) then
-              local content = common.resolve_tokens(fs.readfile(dest), subst_manifest, true, dest)
-              fs.writefile(dest, common.substitute_refs(content, subst_manifest))
-            end
-          end
-          local manifest_content = "return {\n"
-          for orig, h in pairs(manifest) do
-            manifest_content = manifest_content .. str.format("  [%q] = %q,\n", orig, h)
-          end
-          manifest_content = manifest_content .. "}\n"
-          fs.writefile(hash_manifest, manifest_content)
-          fs.touch(hash_ok)
-        end)
+          err.assert(common.hash_filename(rel, common.compute_file_hash(dest)) == hashed_rel,
+            "shipped content does not match its hashed name", rel, hashed_rel)
+        end
+        local manifest_content = "return {\n"
+        for orig, h in pairs(manifest) do
+          manifest_content = manifest_content .. str.format("  [%q] = %q,\n", orig, h)
+        end
+        manifest_content = manifest_content .. "}\n"
+        fs.writefile(hash_manifest, manifest_content)
+        fs.touch(hash_ok)
+      end)
 
   end
 
