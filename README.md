@@ -15,6 +15,53 @@ build, test, install, and release pipeline for libraries, executables, and web a
 luarocks install santoku-make
 ```
 
+## Running toku in a container
+
+A web project needs a large toolchain: Emscripten, OpenResty, node, tailwindcss,
+esbuild, a C compiler and luarocks. If you would rather not install all of that,
+the two images here run `toku` against the codebase in your current directory,
+so you edit locally and everything executes in the container.
+
+Build the image once:
+
+```sh
+docker build -t toku-web -f toku-web.dockerfile .
+docker build -t toku-lib -f toku-lib.dockerfile .
+```
+
+Then use the wrapper in place of `toku`:
+
+```sh
+./toku-web.sh -- build --test
+./toku-web.sh -- test
+./toku-lib.sh -- test
+```
+
+Everything after `--` is passed to `toku`. Anything before it goes to the
+container runtime, which is how you publish a port:
+
+```sh
+./toku-web.sh -p 8080:8080 -p 8443:8443 -- start --test
+```
+
+Both wrappers mount the current directory at `/app` and delete the container on
+exit, so the build tree lands in your working tree as usual.
+
+Flags, all optional and all before `--`:
+
+| Flag | Meaning |
+| --- | --- |
+| `-c docker` / `-c podman` | force a runtime; otherwise docker is preferred, then podman |
+| `-i <image>` | override the image name |
+| `-n` | print the command that would run and exit, without running it |
+
+`toku-lib` is much smaller: no Emscripten, OpenResty, node or python. Use it for
+library projects, and `toku-web` for anything with a `client/`.
+
+Podman gets `--userns=keep-id` automatically so files stay owned by you. Docker
+has no equivalent default, so files written into your tree will be owned by
+root; pass `-u "$(id -u):$(id -g)"` before `--` if that matters to you.
+
 ## Example
 
 ```lua
