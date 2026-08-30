@@ -1452,6 +1452,7 @@ rocks_provided = { lua = "5.1" }
 
   return {
     config = opts.config,
+    submake = submake,
     test = function (opts)
       opts = opts or {}
       build(tbl.assign({ "test" }, opts), opts.verbosity)
