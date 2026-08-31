@@ -28,6 +28,12 @@ INST_LUA = $(patsubst %.wasm.lua,%.lua,$(addprefix $(INST_LUADIR)/, $(LIB_LUA)))
 INST_SO = $(addprefix $(INST_LIBDIR)/, $(LIB_SO))
 INST_H = $(addprefix $(INST_PREFIX)/include/, $(LIB_H))
 
+ifndef _WASM
+LIB_LINK = $(LIB_O:.o=.link)
+INST_O = $(addprefix $(INST_LIBDIR)/, $(LIB_O))
+INST_LINK = $(addprefix $(INST_LIBDIR)/, $(LIB_LINK))
+endif
+
 LIBFLAG = -shared
 
 ifdef _WASM
@@ -157,7 +163,7 @@ LIB_LDFLAGS += <% return arr.concat(tbl.get(test or {}, {"native", "ldflags"}) o
 <% pop() %>
 endif
 
-all: $(LIB_O) $(LIB_SO)
+all: $(LIB_O) $(LIB_SO) $(LIB_LINK)
 
 <% return inject_flags(rules, rules) %>
 <% push(environment == "build") %>
@@ -181,7 +187,13 @@ all: $(LIB_O) $(LIB_SO)
 %.$(LIB_EXTENSION): %.o
 	$(CC) $(LIBFLAG) $< -o $@ $(LDFLAGS) $(LIB_LDFLAGS) $(WASM_LDFLAGS_FINAL)
 
-install: $(INST_LUA) $(INST_SO) $(INST_H)
+%.link: %.o
+	@rm -f $@
+	@printf '%s\n' $(notdir $<) > $@
+	@printf '%s\n' $(notdir $(filter %.a, $(LDFLAGS) $(LIB_LDFLAGS))) >> $@
+	@printf '%s\n' $(filter -l%, $(LDFLAGS) $(LIB_LDFLAGS)) >> $@
+
+install: $(INST_LUA) $(INST_SO) $(INST_O) $(INST_LINK) $(INST_H)
 
 $(INST_LUADIR)/%.lua: ./%.wasm.lua
 	@mkdir -p $(dir $@)
@@ -194,6 +206,15 @@ $(INST_LUADIR)/%.lua: ./%.lua
 $(INST_LIBDIR)/%.$(LIB_EXTENSION): ./%.$(LIB_EXTENSION)
 	@mkdir -p $(dir $@)
 	@cp $< $@
+
+$(INST_LIBDIR)/%.o: ./%.o
+	@mkdir -p $(dir $@)
+	@cp $< $@
+
+$(INST_LIBDIR)/%.link: ./%.link
+	@mkdir -p $(dir $@)
+	@cp $< $@
+	@$(if $(filter %.a, $(LDFLAGS) $(LIB_LDFLAGS)),cp $(filter %.a, $(LDFLAGS) $(LIB_LDFLAGS)) $(dir $@),true)
 
 $(INST_PREFIX)/include/%.h: ./%.h
 	@mkdir -p $(dir $@)

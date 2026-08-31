@@ -5,6 +5,7 @@ local str = require("santoku.string")
 local tbl = require("santoku.table")
 local arr = require("santoku.array")
 local err = require("santoku.error")
+local sys = require("santoku.system")
 
 local function watch_snapshot (paths)
   local posix = require("santoku.make.posix")
@@ -108,6 +109,34 @@ local function get_lua_cpath(prefix)
   return get_require_paths(prefix,
     "lib/lua/%s/?.so",
     "lib/lua/%s/loadall.so")
+end
+
+local function luarocks_var (name)
+  local val
+  local ok = pcall(function ()
+    for line in sys.sh({ "luarocks", "config", "variables." .. name }) do
+      local v = str.match(line, "^%s*(.-)%s*$")
+      if v ~= "" then
+        val = v
+      end
+    end
+  end)
+  return ok and val or nil
+end
+
+local function get_bundle_flags ()
+  local flags = {}
+  local incdir = luarocks_var("LUA_INCDIR")
+  local libdir = luarocks_var("LUA_LIBDIR")
+  local lualib = luarocks_var("LUALIB")
+  if incdir then
+    arr.push(flags, "-I" .. incdir)
+  end
+  if libdir then
+    arr.push(flags, "-L" .. libdir, "-Wl,-rpath," .. libdir)
+  end
+  arr.push(flags, "-l" .. (lualib and str.match(lualib, "^lib(.-)%.[^.]+$") or "lua"), "-lm")
+  return flags
 end
 
 local function with_build_deps(build_deps_dir, fn)
@@ -371,6 +400,7 @@ return {
   get_require_paths = get_require_paths,
   get_lua_path = get_lua_path,
   get_lua_cpath = get_lua_cpath,
+  get_bundle_flags = get_bundle_flags,
   get_config_files = get_config_files,
   get_files = get_files,
   local_dep_paths = local_dep_paths,

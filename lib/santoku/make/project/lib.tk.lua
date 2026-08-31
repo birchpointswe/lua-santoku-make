@@ -353,7 +353,7 @@ local function init (opts)
 
   local build_env = {
     environment = opts.environment or "build",
-    lua_modules = opts.wasm and build_dir(base_lua_modules) or nil,
+    lua_modules = build_dir(base_lua_modules),
     build_dir = build_dir(),
     target = "build",
   }
@@ -975,10 +975,13 @@ rocks_provided = { lua = "5.1" }
           cc = cc or "emcc"
           if #bundle_flags == 0 then
             local lua_dir = build_dir("lua-5.1.5")
-            bundle_flags = wasm.get_bundle_flags(lua_dir, "build", {}, {})
+            bundle_flags = wasm.get_bundle_flags(lua_dir, "install", {}, {})
           end
         else
           cc = cc or env.var("CC", "cc")
+          if #bundle_flags == 0 then
+            bundle_flags = common.get_bundle_flags()
+          end
         end
         for fp in fs.files(bin_dir) do
           if str.match(fp, "%.lua$") then
@@ -991,12 +994,17 @@ rocks_provided = { lua = "5.1" }
               cpath = get_lua_cpath(build_dir()),
               flags = bundle_flags,
               outprefix = basename,
+              static = not install_opts.wasm,
             })
             if install_opts.wasm then
-              local js_file = fs.join(bundle_dir, basename .. ".js")
+              local js_file = fs.join(bundle_dir, basename)
+              local wasm_file = fs.join(bundle_dir, basename .. ".wasm")
               local dest_js = fs.join(bin_prefix, basename .. ".js")
               local dest_wrapper = fs.join(bin_prefix, basename)
               fs.writefile(dest_js, fs.readfile(js_file))
+              if fs.exists(wasm_file) then
+                fs.writefile(fs.join(bin_prefix, basename .. ".wasm"), fs.readfile(wasm_file))
+              end
               wasm.create_node_wrapper(dest_wrapper, dest_js)
             else
               local exe_file = fs.join(bundle_dir, basename)

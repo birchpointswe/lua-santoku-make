@@ -271,7 +271,9 @@ nginx = { ssl_self_signed = true, hsts = false, ssl_port = env.var("SSL_PORT", "
 - `nginx` configures the generated OpenResty config: ports, workers, TLS, and the
   Lua `modules` wired in (request handling lives in those modules, not in the
   descriptor).
-- `client.pwa` drives manifest/icon generation and asset minification transforms.
+- `client.pwa` is free-form data that santoku-make does not interpret: nothing
+  in the engine reads it. It is a convenient place to keep the values your own
+  `configure` hook and templates pass to the `santoku.web.pwa` helpers.
 - `client.public` declares the public filenames the `configure` hook produces
   (fonts, compiled CSS, icons); they join the hashed-asset manifest exactly like
   walked static files.

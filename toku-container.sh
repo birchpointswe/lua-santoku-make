@@ -42,8 +42,13 @@ if [ "$cmd" = "podman" ]; then
   userns="--userns=keep-id"
 fi
 
+tty_opt="-i"
+if [ -t 0 ] && [ -t 1 ]; then
+  tty_opt="-ti"
+fi
+
 if [ -n "$dry" ]; then
-  echo "$cmd run $userns$docker_opts -ti -v $(pwd):/app -w /app --rm $image $*"
+  echo "$cmd run $userns$docker_opts $tty_opt -v $(pwd):/app -w /app --rm $image $*"
   exit 0
 fi
 
@@ -54,4 +59,4 @@ if ! $cmd image exists "$image" 2>/dev/null && ! $cmd images -q "$image" | grep 
   exit 1
 fi
 
-$cmd run $userns $docker_opts -ti -v "$(pwd)":/app -w /app --rm "$image" "$@"
+$cmd run $userns $docker_opts $tty_opt -v "$(pwd)":/app -w /app --rm "$image" "$@"

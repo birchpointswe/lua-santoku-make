@@ -92,15 +92,17 @@ end
 
 local function get_bundle_flags(lua_dir, context, extra_cflags, extra_ldflags)
   local extras = arr.flatten({ extra_cflags or {}, extra_ldflags or {} })
+  local node_cli = context == "test" or context == "install"
   return arr.flatten({
     context == "test"
       and { "-sASSERTIONS" }
       or { "-Oz", "-sASSERTIONS=0", "--closure", "0", "-sMALLOC=emmalloc",
-           "-sTEXTDECODER=2", "-sNO_EXIT_RUNTIME", "-sEVAL_CTORS" },
+           "-sTEXTDECODER=2", "-sEVAL_CTORS" },
+    not node_cli and { "-sNO_EXIT_RUNTIME" } or {},
     "-sALLOW_MEMORY_GROWTH",
     "-I" .. fs.join(lua_dir, "include"),
     "-L" .. fs.join(lua_dir, "lib"),
-    context == "test" and { "-sSINGLE_FILE", "-lnodefs.js", "-lnoderawfs.js" } or {},
+    node_cli and { "-sSINGLE_FILE", "-lnodefs.js", "-lnoderawfs.js" } or {},
     "-llua", "-lm",
     context == "web" and get_web_flags(extras) or {},
     extras,
