@@ -6,6 +6,9 @@ local tbl = require("santoku.table")
 local arr = require("santoku.array")
 local err = require("santoku.error")
 local sys = require("santoku.system")
+local senv = require("santoku.env")
+
+local embedded_source = senv.searchpath("santoku.make.common", package.path)
 
 local function watch_snapshot (paths)
   local posix = require("santoku.make.posix")
@@ -189,7 +192,8 @@ local function add_file_target(target_fn, dest, src, env, config, config_file, e
 end
 
 local function add_templated_target_base64(target_fn, dest, data, env, config_file, extra_srcs, build_deps_dir, build_deps_ok)
-  target_fn({ dest }, arr.flatten({ get_config_files(config_file), extra_srcs or {}, build_deps_ok or {} }), function ()
+  target_fn({ dest }, arr.flatten({ get_config_files(config_file), extra_srcs or {}, build_deps_ok or {},
+    embedded_source and { embedded_source } or {} }), function ()
     fs.mkdirp(fs.dirname(dest))
     local deps = {}
     env.readfile = function (fp) deps[fp] = true; return fs.readfile(fp) end

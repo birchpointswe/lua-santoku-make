@@ -62,6 +62,89 @@ Podman gets `--userns=keep-id` automatically so files stay owned by you. Docker
 has no equivalent default, so files written into your tree will be owned by
 root; pass `-u "$(id -u):$(id -g)"` before `--` if that matters to you.
 
+## Deployment images
+
+`toku-web` and `toku-lib` are build images; nothing in the toolchain is needed
+at runtime. Two runtime bases strip it out. Build them from this repository's
+root, since `toku-web-deployment` copies a file from the build context:
+
+```sh
+docker build -t toku-web-deployment -f toku-web-deployment.dockerfile .
+docker build -t toku-lib-deployment -f toku-lib-deployment.dockerfile .
+```
+
+### toku-web-deployment
+
+What the image guarantees:
+
+- `debian:bookworm-slim` with `openresty` installed from the upstream repo and
+  `ca-certificates` kept. `gnupg` and `wget` are purged after repo setup.
+- A working `apt`: the openresty apt source and its key stay configured, but
+  `/var/lib/apt/lists` is removed, so a downstream layer must run
+  `apt-get update` before any `apt-get install` (and should remove the lists
+  again afterwards).
+- A non-root system user `worker`, uid 10001, gid 0, no home, `nologin`. No
+  `USER` directive is set: the nginx master starts as whatever the runtime
+  assigns and the server config's `user` directive (or the orchestrator's
+  arbitrary-uid convention) drops the workers. If your nginx config names a
+  different user, add it downstream.
+- `toku-deploy-setup <build-tree> [dist-dir]` on the PATH. It deletes
+  `*.o`/`*.a`/`*.link` install intermediates, applies the arbitrary-uid
+  permission convention (`chgrp -R 0`, `chmod -R g-w,o-w`, group-writable
+  `temp`), marks `run.sh` executable, symlinks `logs/{access,error}.log` to
+  stdout and stderr, and runs `ldconfig`. `dist-dir` defaults to
+  `<build-tree>/main/dist`.
+- `ENV OPENRESTY_DIR=/usr/local/openresty`, `WORKDIR /app`, and a default
+  `CMD` of `sh -c "umask 002; exec ./run.sh --fg"`.
+
+What a downstream image must add: the built tree, a `toku-deploy-setup` call,
+and a `WORKDIR` pointing at the dist directory. Everything else (SSL cert and
+key paths, ports, domain) is app configuration:
+
+```dockerfile
+FROM toku-web AS builder
+WORKDIR /app
+COPY . .
+RUN toku build --env prod
+
+FROM toku-web-deployment
+COPY --from=builder /app/build/prod /app/build/prod
+RUN toku-deploy-setup /app/build/prod
+WORKDIR /app/build/prod/main/dist
+ENV SSL_CERT=/home/app/cert.pem
+ENV SSL_KEY=/home/app/privkey.pem
+```
+
+Extending with native dependencies:
+
+```dockerfile
+FROM toku-web-deployment
+RUN apt-get update \
+    && apt-get -y install --no-install-recommends libsqlite3-0 \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+### toku-lib-deployment
+
+Library projects have no long-running runtime; the deployable artifact is a
+bundled executable from `toku install --bundled`, whose dynamic dependencies
+reduce to system libraries plus `liblua5.1`. The image is
+`debian:bookworm-slim` plus `liblua5.1-0` and `ca-certificates`, the same
+`worker` user, `WORKDIR /app`, and a working `apt` under the same
+update-first rule:
+
+```dockerfile
+FROM toku-lib AS builder
+WORKDIR /app
+COPY . .
+RUN toku install --bundled --prefix /usr/local
+
+FROM toku-lib-deployment
+COPY --from=builder /usr/local/bin/mytool /usr/local/bin/mytool
+USER worker
+ENTRYPOINT ["mytool"]
+```
+
 ## Example
 
 ```lua
