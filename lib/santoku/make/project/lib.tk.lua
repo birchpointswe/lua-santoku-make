@@ -361,16 +361,23 @@ local function init (opts)
   tbl.merge(test_env, opts.config.env, base_env)
   tbl.merge(build_env, opts.config.env, base_env)
 
-  if opts.wasm then
+  local build_lua_ok
+
+  do
     local wasm_configs = {
       { test_dir, test_all, test_env },
       { build_dir, build_all, build_env }
     }
-    for _, config in ipairs(wasm_configs) do
-      local dir_fn, all, env = arr.spread(config)
+    for i, config in ipairs(wasm_configs) do
+      local dir_fn, all, cfg_env = arr.spread(config)
       local lua_dir, lua_ok = wasm.setup_lua(target, dir_fn())
-      env.client_lua_dir = lua_dir
-      tbl.insert(all, 1, lua_ok)
+      cfg_env.client_lua_dir = lua_dir
+      if i == 2 then
+        build_lua_ok = lua_ok
+      end
+      if opts.wasm then
+        tbl.insert(all, 1, lua_ok)
+      end
     end
   end
 
@@ -974,6 +981,7 @@ rocks_provided = { lua = "5.1" }
         if install_opts.wasm then
           cc = cc or "emcc"
           if #bundle_flags == 0 then
+            build({ build_lua_ok }, install_opts.verbosity)
             local lua_dir = build_dir("lua-5.1.5")
             bundle_flags = wasm.get_bundle_flags(lua_dir, "install", {}, {})
           end
@@ -995,6 +1003,7 @@ rocks_provided = { lua = "5.1" }
               flags = bundle_flags,
               outprefix = basename,
               static = not install_opts.wasm,
+              wasm = install_opts.wasm,
             })
             if install_opts.wasm then
               local js_file = fs.join(bundle_dir, basename)
