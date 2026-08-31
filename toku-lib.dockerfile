@@ -12,7 +12,7 @@ run apt-get update && apt-get -y install --no-install-recommends \
     && rm -rf /usr/share/locale/*
 
 run luarocks install santoku-make 5.0.5-1 \
-    && luarocks install santoku-cli 2.4.4-1 \
+    && luarocks install santoku-cli 2.4.5-1 \
     && luarocks install luacheck \
     && rm -rf /root/.cache
 
