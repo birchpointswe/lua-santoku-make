@@ -52,10 +52,16 @@ test("lib.mk writes the sidecar in link order", function ()
   plain("%.link: %.o")
   local obj = str.find(mk, "$(notdir $<) > $@", 1, true)
   local arc = str.find(mk, "$(notdir $(filter %.a, $(LDFLAGS) $(LIB_LDFLAGS)))", 1, true)
-  local lib = str.find(mk, "$(filter -l%, $(LDFLAGS) $(LIB_LDFLAGS))", 1, true)
-  assert(obj and arc and lib, "sidecar must record object, archives and -l flags")
+  local lib = str.find(mk, "$(filter-out %.a, $(LDFLAGS) $(LIB_LDFLAGS))", 1, true)
+  assert(obj and arc and lib, "sidecar must record object, archives and residual flags")
   assert(obj < arc, "the module object must be linked before its archives")
-  assert(arc < lib, "archives must be linked before -l flags")
+  assert(arc < lib, "archives must be linked before residual flags")
+end)
+
+test("lib.mk records non-library link flags", function ()
+  assert(not str.find(mk, "$(filter -l%, $(LDFLAGS) $(LIB_LDFLAGS))", 1, true),
+    "sidecars must not narrow to -l flags: that drops -fopenmp, -pthread and " ..
+    "-Wl options, which breaks bundling any project depending on santoku-matrix")
 end)
 
 test("lib.mk installs objects, sidecars and vendored archives", function ()

@@ -191,7 +191,7 @@ all: $(LIB_O) $(LIB_SO) $(LIB_LINK)
 	@rm -f $@
 	@printf '%s\n' $(notdir $<) > $@
 	@printf '%s\n' $(notdir $(filter %.a, $(LDFLAGS) $(LIB_LDFLAGS))) >> $@
-	@printf '%s\n' $(filter -l%, $(LDFLAGS) $(LIB_LDFLAGS)) >> $@
+	@printf '%s\n' $(filter-out %.a, $(LDFLAGS) $(LIB_LDFLAGS)) >> $@
 
 install: $(INST_LUA) $(INST_SO) $(INST_O) $(INST_LINK) $(INST_H)
 

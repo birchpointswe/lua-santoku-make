@@ -41,11 +41,15 @@ run wget https://www.sqlite.org/2024/sqlite-autoconf-3470200.tar.gz \
     && cd / && rm -rf sqlite-autoconf-3470200* \
     && strip /usr/local/lib/libsqlite3.so* 2>/dev/null
 
-run luarocks install santoku-make 5.0.6-1 \
-    && luarocks install santoku-cli 2.4.5-1 \
-    && luarocks install lua-cjson \
-    && luarocks install luacheck \
-    && rm -rf /root/.cache
+env XDG_DATA_HOME=/opt
+env PATH=/opt/toku/rocks/bin:/opt/toku/luarocks/bin:/opt/toku/lua/bin:$PATH
+
+run luarocks install santoku-cli 2.7.0-1 \
+    && toku setup \
+    && toku luarocks install lua-cjson \
+    && toku luarocks install luacheck \
+    && rm -rf /opt/toku/src /root/.cache \
+    && chmod -R a+rX /opt/toku
 
 run npm -g install tailwindcss @tailwindcss/cli esbuild \
     && npm cache clean --force \

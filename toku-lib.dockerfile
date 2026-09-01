@@ -11,9 +11,13 @@ run apt-get update && apt-get -y install --no-install-recommends \
     && rm -rf /usr/share/doc /usr/share/man /usr/share/info \
     && rm -rf /usr/share/locale/*
 
-run luarocks install santoku-make 5.0.6-1 \
-    && luarocks install santoku-cli 2.4.5-1 \
-    && luarocks install luacheck \
-    && rm -rf /root/.cache
+env XDG_DATA_HOME=/opt
+env PATH=/opt/toku/rocks/bin:/opt/toku/luarocks/bin:/opt/toku/lua/bin:$PATH
+
+run luarocks install santoku-cli 2.7.0-1 \
+    && toku setup \
+    && toku luarocks install luacheck \
+    && rm -rf /opt/toku/src /root/.cache \
+    && chmod -R a+rX /opt/toku
 
 entrypoint [ "toku" ]
