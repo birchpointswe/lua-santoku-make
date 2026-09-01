@@ -790,6 +790,9 @@ rocks_provided = { lua = "5.1" }
       arr.flatten({
         arr.map(arr.flatten({base_client_bins, base_client_libs, base_client_deps}), cdir_stripped),
         arr.map(arr.map(arr.flatten({base_root_libs, base_root_res}), remove_tk), cdir),
+        env.environment == "test"
+          and arr.map(arr.map(arr.copy({}, base_client_test_specs), remove_tk), cdir_stripped)
+          or {},
         { cdir(base_client_lua_modules_deps_ok) },
         has_local_deps_client and { cdir("local-deps.ok") } or {},
         common.get_config_files(opts.config_file),
@@ -1179,6 +1182,8 @@ rocks_provided = { lua = "5.1" }
   local run_root = opts.test_root or (not opts.test_client and not opts.test_server and not single_target)
   local run_server = opts.test_server or (not opts.test_root and not opts.test_client and not single_target)
 
+  local force_client = opts.test_client or single_target == "client"
+
   if single_target == "root" then
     run_root, run_server = true, false
   elseif single_target == "client" then
@@ -1195,6 +1200,16 @@ rocks_provided = { lua = "5.1" }
       arr.spread(arr.map(arr.map(arr.copy({}, base_client_test_specs), remove_tk), test_client_dir_stripped))),
     function (_, _, iterating)
       local config_file = fs.absolute(opts.config_file)
+      if force_client then
+        if #base_client_test_specs == 0 then
+          err.error("no client specs found under client/test/spec")
+        end
+        local stamp = test_client_dir(base_client_lua_modules_ok)
+        if fs.exists(stamp) then
+          fs.rm(stamp)
+        end
+        build({ stamp }, opts.verbosity)
+      end
       if run_root and #base_root_test_specs > 0 then
         local root_config = {
           type = "lib",
