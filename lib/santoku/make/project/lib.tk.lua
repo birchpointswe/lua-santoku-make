@@ -109,6 +109,37 @@ local function create (opts)
   io.stdout:write("  toku install     # Install locally\n")
 end
 
+local prunable_ext = {
+  lua = true, c = true, cpp = true, h = true, hpp = true,
+}
+
+local derived_ext = { "o", "so", "link", "d" }
+
+local function prune_stale (dir_fn, expected)
+  local keep = {}
+  for i = 1, #expected do
+    keep[expected[i]] = true
+  end
+  for _, sub in ipairs({ "lib", "bin" }) do
+    local root = dir_fn(sub)
+    if fs.exists(root) then
+      for fp in fs.files(root, true) do
+        local ext = str.match(fp, "%.([^%.]+)$")
+        if ext and prunable_ext[ext] and not keep[fp] then
+          fs.rm(fp)
+          local base = str.match(fp, "^(.*)%.[^%.]+$")
+          for i = 1, #derived_ext do
+            local art = base .. "." .. derived_ext[i]
+            if fs.exists(art) then
+              fs.rm(art)
+            end
+          end
+        end
+      end
+    end
+  end
+end
+
 local function init (opts)
 
   local submake = make(opts)
@@ -920,6 +951,9 @@ rocks_provided = { lua = "5.1" }
       end
     end
   end
+
+  prune_stale(build_dir, build_all)
+  prune_stale(test_dir, test_all)
 
   local configure = tbl.get(opts, {"config", "env", "configure"})
   if configure then
