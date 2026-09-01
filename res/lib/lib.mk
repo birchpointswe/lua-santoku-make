@@ -187,7 +187,7 @@ all: $(LIB_O) $(LIB_SO) $(LIB_LINK)
 %.$(LIB_EXTENSION): %.o
 	$(CC) $(LIBFLAG) $< -o $@ $(LDFLAGS) $(LIB_LDFLAGS) $(WASM_LDFLAGS_FINAL)
 
-%.link: %.o
+%.link: %.o Makefile
 	@rm -f $@
 	@printf '%s\n' $(notdir $<) > $@
 	@printf '%s\n' $(notdir $(filter %.a, $(LDFLAGS) $(LIB_LDFLAGS))) >> $@
