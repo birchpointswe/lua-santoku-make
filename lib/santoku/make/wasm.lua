@@ -111,8 +111,8 @@ end
 
 local function create_node_wrapper(dest, js_file)
   local wrapper = string.format([[#!/bin/sh
-exec node "%s" "$@"
-]], js_file)
+exec node "$(dirname "$0")/%s" "$@"
+]], fs.basename(js_file))
   fs.writefile(dest, wrapper)
   sys.execute({ "chmod", "+x", dest })
 end

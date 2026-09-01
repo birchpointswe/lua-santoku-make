@@ -6,6 +6,7 @@ dist="${2:-$tree/main/dist}"
 
 find "$tree" -type f \( -name "*.o" -o -name "*.a" -o -name "*.link" \) -delete
 chgrp -R 0 "$tree"
+chmod -R a+rX "$tree"
 chmod -R g-w,o-w "$tree"
 chmod +x "$dist/run.sh"
 mkdir -p "$dist/logs" "$dist/temp"

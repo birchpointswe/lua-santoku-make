@@ -21,7 +21,8 @@ local str = require("santoku.string")
 local boilerplate_tar_b64 = <%
   local fs = require("santoku.fs")
   local tmp = fs.tmpname()
-  sys.execute({ "tar", "-C", "submodules/tokuboilerplate-lib", "--exclude", ".git", "--exclude", "build", "-czf", tmp, "." })
+  sys.execute({ "tar", "-C", "submodules/tokuboilerplate-lib", "--exclude", ".git", "--exclude", "build",
+    "--mode", "a+rX,u+w,go-w", "-czf", tmp, "." })
   local content = fs.readfile(tmp)
   fs.rm(tmp)
   return str.quote(str.to_base64(content))

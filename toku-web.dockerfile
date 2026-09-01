@@ -43,6 +43,7 @@ run wget https://www.sqlite.org/2024/sqlite-autoconf-3470200.tar.gz \
 
 env XDG_DATA_HOME=/opt
 env PATH=/opt/toku/rocks/bin:/opt/toku/luarocks/bin:/opt/toku/lua/bin:$PATH
+env TOKU_FG=1
 
 run luarocks install santoku-cli 2.7.0-1 \
     && toku setup \

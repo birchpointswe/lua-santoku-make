@@ -44,6 +44,12 @@ container runtime, which is how you publish a port:
 ./toku-web.sh -p 8080:8080 -p 8443:8443 -- start --test
 ```
 
+`toku-web` sets `TOKU_FG=1`, which keeps `toku start` in the foreground.
+Backgrounding OpenResty and exiting would let toku, as PID 1 under `--rm`, stop
+the container along with the server and the port mapping, and nothing would
+report an error while the published port never answers. Set `TOKU_FG` or pass
+`--fg` in a container you build yourself.
+
 Both wrappers mount the current directory at `/app` and delete the container on
 exit, so the build tree lands in your working tree as usual.
 
@@ -98,21 +104,35 @@ What the image guarantees:
   `CMD` of `sh -c "umask 002; exec ./run.sh --fg"`.
 
 What a downstream image must add: the built tree, a `toku-deploy-setup` call,
-and a `WORKDIR` pointing at the dist directory. Everything else (SSL cert and
-key paths, ports, domain) is app configuration:
+and a `WORKDIR` pointing at the dist directory.
+
+App configuration such as SSL cert and key paths, ports and domain belongs in
+the **builder** stage. The configure hook reads those while rendering
+`nginx.conf`, and the generated `run.sh` only exports the values baked in at
+render time before exec'ing openresty against a static config. Nothing
+re-renders when the container starts, so the same variables set in the runtime
+stage have no effect. The names come from your `variable_prefix`, so a project
+named `my-app` reads `MY_APP_SSL_CERT`, not `SSL_CERT`.
+
+`--env prod` also requires a `make.prod.lua`; no scaffold ships one. The
+smallest that works returns a table merged over `make.lua`:
+
+```lua
+return { env = { server = { host = "example.com" } } }
+```
 
 ```dockerfile
 FROM toku-web AS builder
 WORKDIR /app
 COPY . .
-RUN toku build --env prod
+RUN MY_APP_SSL_CERT=/home/app/cert.pem \
+    MY_APP_SSL_KEY=/home/app/privkey.pem \
+    toku build --env prod
 
 FROM toku-web-deployment
 COPY --from=builder /app/build/prod /app/build/prod
 RUN toku-deploy-setup /app/build/prod
 WORKDIR /app/build/prod/main/dist
-ENV SSL_CERT=/home/app/cert.pem
-ENV SSL_KEY=/home/app/privkey.pem
 ```
 
 Extending with native dependencies:
