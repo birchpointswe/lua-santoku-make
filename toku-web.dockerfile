@@ -1,7 +1,7 @@
 from debian:bookworm-slim
 
 env MAKEFLAGS="-j4"
-env PATH=$PATH:/emsdk/upstream/emscripten:/emsdk/node/22.16.0_64bit/bin/
+env PATH=$PATH:/emsdk/upstream/emscripten
 env OPENRESTY_DIR=/usr/local/openresty
 
 run apt-get update && apt-get -y install --no-install-recommends \
@@ -11,6 +11,8 @@ run apt-get update && apt-get -y install --no-install-recommends \
 
 run git clone --depth 1 https://github.com/emscripten-core/emsdk.git \
     && cd emsdk && ./emsdk install latest && ./emsdk activate latest \
+    && ln -sf /emsdk/node/*/bin/node /usr/local/bin/node \
+    && ln -sf /emsdk/node/*/bin/npm /usr/local/bin/npm \
     && rm -rf /emsdk/downloads /emsdk/.git \
     && find /emsdk -name "*.a" -delete \
     && find /emsdk -name "*.pyc" -delete \
@@ -45,7 +47,7 @@ env XDG_DATA_HOME=/opt
 env PATH=/opt/toku/rocks/bin:/opt/toku/luarocks/bin:/opt/toku/lua/bin:$PATH
 env TOKU_FG=1
 
-run luarocks install santoku-cli 2.7.0-1 \
+run luarocks install santoku-cli 2.8.0-1 \
     && toku setup \
     && toku luarocks install lua-cjson \
     && toku luarocks install luacheck \

@@ -14,7 +14,7 @@ run apt-get update && apt-get -y install --no-install-recommends \
 env XDG_DATA_HOME=/opt
 env PATH=/opt/toku/rocks/bin:/opt/toku/luarocks/bin:/opt/toku/lua/bin:$PATH
 
-run luarocks install santoku-cli 2.7.0-1 \
+run luarocks install santoku-cli 2.8.0-1 \
     && toku setup \
     && toku luarocks install luacheck \
     && rm -rf /opt/toku/src /root/.cache \
