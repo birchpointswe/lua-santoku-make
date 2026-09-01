@@ -115,13 +115,6 @@ local prunable_ext = {
 
 local derived_ext = { "o", "so", "link", "d" }
 
-local function clear_stale_lock (dir_fn)
-  local lock = dir_fn("lua_modules", "lockfile.lfs")
-  if fs.exists(lock) then
-    fs.rm(lock)
-  end
-end
-
 local function prune_stale (dir_fn, expected)
   local keep = {}
   for i = 1, #expected do
@@ -973,8 +966,8 @@ rocks_provided = { lua = "5.1" }
     end
   end
 
-  clear_stale_lock(build_dir)
-  clear_stale_lock(test_dir)
+  common.clear_stale_lock(build_dir("lua_modules"), test_dir("lua_modules"),
+    fs.join(build_deps_dir, "lua_modules"))
 
   prune_stale(build_dir, build_all)
   prune_stale(test_dir, test_all)

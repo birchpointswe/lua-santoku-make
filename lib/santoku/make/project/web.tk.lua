@@ -1445,6 +1445,13 @@ rocks_provided = { lua = "5.1" }
     end
   end
 
+  common.clear_stale_lock(
+    dist_dir(base_server_lua_modules),
+    test_dist_dir(base_server_lua_modules),
+    work_dir("main", base_server_lua_modules),
+    work_dir("test", base_server_lua_modules),
+    fs.join(build_deps_dir, base_server_lua_modules))
+
   local configure = tbl.get(opts, {"config", "env", "configure"})
   if configure then
     configure(submake, { root = root_env, client = client_env, server = server_env })

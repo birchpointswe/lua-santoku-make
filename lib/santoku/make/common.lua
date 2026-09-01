@@ -294,6 +294,23 @@ local function local_dep_srcs(paths)
   return srcs
 end
 
+local function clear_stale_lock (...)
+  for i = 1, select("#", ...) do
+    local root = select(i, ...)
+    if root and fs.isdir(root) then
+      local stale = { "lockfile.lfs" }
+      for name in fs.dir(root) do
+        if str.match(name, "^%.lock%.tmp%.") then
+          arr.push(stale, name)
+        end
+      end
+      for j = 1, #stale do
+        os.remove(fs.join(root, stale[j]))
+      end
+    end
+  end
+end
+
 local function install_local_deps(paths, lcfg)
   for i = 1, #paths do
     local p = paths[i]
@@ -410,6 +427,7 @@ return {
   local_dep_paths = local_dep_paths,
   local_dep_srcs = local_dep_srcs,
   install_local_deps = install_local_deps,
+  clear_stale_lock = clear_stale_lock,
   compute_file_hash = compute_file_hash,
   compute_string_hash = compute_string_hash,
   hash_filename = hash_filename,
