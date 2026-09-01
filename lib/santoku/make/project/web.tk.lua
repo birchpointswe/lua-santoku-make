@@ -1134,6 +1134,55 @@ rocks_provided = { lua = "5.1" }
       arr.spread(arr.map(arr.map(arr.flatten({base_client_pages, base_client_wasm}),
         test_dist_dir_staging), remove_tk))), true)
 
+  local function run_and_wait (o)
+    if o.fg then
+      return sys.execp("sh", { "run.sh", "--fg" })
+    end
+    local error_log = fs.join("logs", "error.log")
+    local seen = fs.exists(error_log) and #fs.readfile(error_log) or 0
+    sys.execute({ "sh", "-c", "sh run.sh &" })
+    local timeout = tonumber(o.start_timeout
+      or tbl.get(opts, {"config", "env", "nginx", "start_timeout"})) or 60
+    for _ = 1, math.ceil(timeout / 0.25) do
+      sys.sleep(0.25)
+      if fs.exists("server.pid") and str.match(fs.readfile("server.pid"), "(%d+)") then
+        return
+      end
+      if fs.exists(error_log) then
+        local emerg = str.match(str.sub(fs.readfile(error_log), seen + 1), "%[emerg%][^\n]*")
+        if emerg then
+          err.error("server failed to start", emerg)
+        end
+      end
+    end
+    err.error("server failed to start: no pid file created after " .. timeout .. "s",
+      "raise it with nginx.start_timeout in your descriptor, or check "
+      .. fs.absolute(error_log) .. " for a bind or config error")
+  end
+
+  local function stop_and_wait ()
+    if not fs.exists("server.pid") then
+      return
+    end
+    local pid = str.match(fs.readfile("server.pid"), "(%d+)")
+    if not pid then
+      fs.rm("server.pid")
+      return
+    end
+    err.pcall(sys.execute, { "kill", "-15", pid })
+    for _ = 1, 80 do
+      sys.sleep(0.25)
+      if not (err.pcall(sys.execute, { "kill", "-0", pid })) then
+        if fs.exists("server.pid") then
+          fs.rm("server.pid")
+        end
+        return
+      end
+    end
+    err.error("server did not exit within 20s of SIGTERM", pid,
+      "kill it manually, otherwise the next start will fail to bind")
+  end
+
   target(
     { "start" },
     { "build" },
@@ -1141,11 +1190,7 @@ rocks_provided = { lua = "5.1" }
       opts = opts or {}
       fs.mkdirp(dist_dir())
       return fs.pushd(dist_dir(), function ()
-        if opts.fg then
-          sys.execp("sh", { "run.sh", "--fg" })
-        else
-          sys.execute({ "sh", "-c", "sh run.sh &" })
-        end
+        return run_and_wait(opts)
       end)
     end)
 
@@ -1156,11 +1201,7 @@ rocks_provided = { lua = "5.1" }
       opts = opts or {}
       fs.mkdirp(test_dist_dir())
       return fs.pushd(test_dist_dir(), function ()
-        if opts.fg then
-          sys.execp("sh", { "run.sh", "--fg" })
-        else
-          sys.execute({ "sh", "-c", "sh run.sh &" })
-        end
+        return run_and_wait(opts)
       end)
     end)
 
@@ -1417,13 +1458,7 @@ rocks_provided = { lua = "5.1" }
 
   target({ "stop" }, {}, function ()
     fs.mkdirp(dist_dir())
-    return fs.pushd(dist_dir(), function ()
-      if fs.exists("server.pid") then
-        err.pcall(function ()
-          sys.execute({ "kill", "-15", str.match(fs.readfile("server.pid"), "(%d+)") })
-        end)
-      end
-    end)
+    return fs.pushd(dist_dir(), stop_and_wait)
   end)
 
   target({ "test-stop" }, {}, function (_, _)
@@ -1436,11 +1471,7 @@ rocks_provided = { lua = "5.1" }
         sys.sleep(0.25)
         fs.rm("logs/tail.pid")
       end
-      if fs.exists("server.pid") then
-        err.pcall(function ()
-          sys.execute({ "kill", "-15", str.match(fs.readfile("server.pid"), "(%d+)") })
-        end)
-      end
+      return stop_and_wait()
     end)
   end)
 
