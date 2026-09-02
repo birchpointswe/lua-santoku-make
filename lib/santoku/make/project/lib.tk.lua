@@ -796,6 +796,16 @@ rocks_provided = { lua = "5.1" }
         if fs.exists(release_tarball) then
           fs.rm(release_tarball)
         end
+        local gnu_tar = false
+        for line in sys.sh({ "sh", "-c", "tar --version 2>/dev/null | head -n 1" }) do
+          if line and str.find(line, "GNU tar", 1, true) then
+            gnu_tar = true
+          end
+        end
+        if not gnu_tar then
+          err.error("toku pack needs GNU tar; the tar on PATH does not support "
+            .. "--transform (busybox tar on Alpine and similar). Install it: apk add tar")
+        end
         sys.execute(arr.flatten({
           "tar", "--dereference", "--transform", str.format("s#^#%s/#", release_tarball_dir),
           "-czvf", release_tarball, release_tarball_contents }))
@@ -847,8 +857,8 @@ rocks_provided = { lua = "5.1" }
             err.error("release failed" ..
               (we_tagged and "; the local tag was removed so you can retry" or ""), ...)
           end)(err.pcall(function ()
-            sys.execute({ "git", "push", "--tags" })
             sys.execute({ "git", "push" })
+            sys.execute({ "git", "push", "origin", "refs/tags/" .. version })
             sys.execute({ "gh", "release", "create", "--generate-notes",
               version, release_tarball, base_rockspec })
             sys.execute({ "luarocks", "upload", "--skip-pack", "--api-key", api_key, base_rockspec })
