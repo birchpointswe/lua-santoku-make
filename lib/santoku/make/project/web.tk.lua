@@ -97,6 +97,21 @@ local function create (opts)
   io.stdout:write("  toku start --test  # Start development server\n")
 end
 
+local function get_single_target (single)
+  if not single then
+    return nil, nil
+  end
+  if str.match(single, "^client/") then
+    return "client", str.gsub(single, "^client/", "")
+  elseif str.match(single, "^server/") then
+    return "server", str.gsub(single, "^server/", "")
+  elseif str.match(single, "^test/") then
+    return "root", single
+  else
+    return nil, single
+  end
+end
+
 local function init (opts)
 
   local submake = make(opts)
@@ -106,7 +121,8 @@ local function init (opts)
   err.assert(vdt.istable(opts))
   err.assert(vdt.istable(opts.config))
 
-  opts.single = opts.single and str.gsub(opts.single, "^[^/]+/", "") or nil
+  local single_target, single_path = get_single_target(opts.single)
+  opts.single = single_path
   opts.skip_check = opts.skip_check or nil
   opts.openresty_dir = opts.openresty_dir or opts.config.openresty_dir or env.var("OPENRESTY_DIR")
 
@@ -286,12 +302,24 @@ local function init (opts)
     return fs.join(opts.openresty_dir, "lualib", ...)
   end
 
+  local warned_interpreter = false
+
   local function openresty_interpreter ()
     if not opts.openresty_dir then
       return nil
     end
     local fp = fs.join(opts.openresty_dir, "luajit", "bin", "luajit")
-    return fs.exists(fp) and fp or nil
+    if fs.exists(fp) then
+      return fp
+    end
+    if not warned_interpreter then
+      warned_interpreter = true
+      str.printf("[make]\twarning: no luajit at %s, so server specs will run on the "
+        .. "system lua rather than OpenResty's interpreter, exercising a different "
+        .. "runtime than production. Some OpenResty packages, Alpine's among them, "
+        .. "bundle no luajit.\n", fp)
+    end
+    return nil
   end
 
   local function extend_path (base, extra)
@@ -762,7 +790,7 @@ rocks_provided = { lua = "5.1" }
             require("santoku.make.project").init({
               config_file = config_file,
               config = config,
-              single = opts.single and remove_tk(opts.single) or nil,
+              single = single_target == "client" and opts.single and remove_tk(opts.single) or nil,
               match = opts.match,
               skip_check = opts.skip_check,
               wasm = true,
@@ -821,7 +849,7 @@ rocks_provided = { lua = "5.1" }
             require("santoku.make.project").init({
               config_file = config_file,
               config = config,
-              single = opts.single and remove_tk(opts.single) or nil,
+              single = single_target == "client" and opts.single and remove_tk(opts.single) or nil,
               match = opts.match,
               skip_check = opts.skip_check,
               stop = opts.stop,
@@ -966,7 +994,7 @@ rocks_provided = { lua = "5.1" }
           config_file = config_file,
           luarocks_config = fs.absolute(base_server_luarocks_cfg),
           config = config,
-          single = opts.single and remove_tk(opts.single) or nil,
+          single = single_target == "server" and opts.single and remove_tk(opts.single) or nil,
           match = opts.match,
           skip_check = opts.skip_check,
           skip_tests = true,
@@ -999,7 +1027,7 @@ rocks_provided = { lua = "5.1" }
           config_file = config_file,
           luarocks_config = fs.absolute(base_server_luarocks_cfg),
           config = config,
-          single = opts.single and remove_tk(opts.single) or nil,
+          single = single_target == "server" and opts.single and remove_tk(opts.single) or nil,
           match = opts.match,
           skip_check = opts.skip_check,
           skip_tests = true,
@@ -1221,21 +1249,6 @@ rocks_provided = { lua = "5.1" }
         return run_and_wait(opts)
       end)
     end)
-
-  local function get_single_target(single)
-    if not single then return nil, nil end
-    if str.match(single, "^client/test/") or str.match(single, "^client/") then
-      return "client", str.gsub(single, "^client/test/spec/", "test/spec/")
-    elseif str.match(single, "^server/test/") or str.match(single, "^server/") then
-      return "server", str.gsub(single, "^server/test/spec/", "test/spec/")
-    elseif str.match(single, "^test/") then
-      return "root", single
-    else
-      return nil, single
-    end
-  end
-
-  local single_target, single_path = get_single_target(opts.single)
 
   local run_root = opts.test_root or (not opts.test_client and not opts.test_server and not single_target)
   local run_server = opts.test_server or (not opts.test_root and not opts.test_client and not single_target)
