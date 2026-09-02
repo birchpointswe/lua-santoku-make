@@ -806,18 +806,53 @@ rocks_provided = { lua = "5.1" }
       target({ "release" }, { "pack" }, function ()
         fs.mkdirp(build_dir())
         return fs.pushd(build_dir(), function ()
-          (function (ok, ...)
-            if not ok then
-              err.error("Commit your changes first", ...)
+          local dirty
+          for line in sys.sh({ "git", "status", "--porcelain" }) do
+            if line and line ~= "" then
+              dirty = line
+              break
             end
-          end)(err.pcall(sys.execute, { "git", "diff", "--quiet" }))
+          end
+          if dirty then
+            err.error("commit your changes first; the tree has uncommitted or "
+              .. "untracked files, and releasing would tag a commit that does not "
+              .. "contain them", dirty)
+          end
           local api_key = opts.luarocks_api_key or env.var("LUAROCKS_API_KEY")
-          sys.execute({ "git", "tag", opts.config.env.version })
-          sys.execute({ "git", "push", "--tags" })
-          sys.execute({ "git", "push" })
-          sys.execute({ "gh", "release", "create", "--generate-notes",
-            opts.config.env.version, release_tarball, base_rockspec })
-          sys.execute({ "luarocks", "upload", "--skip-pack", "--api-key", api_key, base_rockspec })
+          local version = opts.config.env.version
+          local head, tagged
+          for line in sys.sh({ "git", "rev-parse", "HEAD" }) do
+            head = head or str.match(line or "", "^(%x+)")
+          end
+          for line in sys.sh({ "git", "rev-list", "-n", "1", version, "--" }) do
+            tagged = tagged or str.match(line or "", "^(%x+)")
+          end
+          if tagged and tagged ~= head then
+            err.error("tag " .. version .. " already exists and points at a different "
+              .. "commit; bump the version, or delete the tag with: git tag -d " .. version,
+              tagged, head)
+          end
+          local we_tagged = false
+          if not tagged then
+            sys.execute({ "git", "tag", version })
+            we_tagged = true
+          end
+          ;(function (ok, ...)
+            if ok then
+              return
+            end
+            if we_tagged then
+              err.pcall(sys.execute, { "git", "tag", "-d", version })
+            end
+            err.error("release failed" ..
+              (we_tagged and "; the local tag was removed so you can retry" or ""), ...)
+          end)(err.pcall(function ()
+            sys.execute({ "git", "push", "--tags" })
+            sys.execute({ "git", "push" })
+            sys.execute({ "gh", "release", "create", "--generate-notes",
+              version, release_tarball, base_rockspec })
+            sys.execute({ "luarocks", "upload", "--skip-pack", "--api-key", api_key, base_rockspec })
+          end))
         end)
       end)
     end
