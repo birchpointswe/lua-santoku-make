@@ -830,12 +830,19 @@ rocks_provided = { lua = "5.1" }
           end
           local api_key = opts.luarocks_api_key or env.var("LUAROCKS_API_KEY")
           local version = opts.config.env.version
-          local head, tagged
+          local head, tagged, tag_exists
           for line in sys.sh({ "git", "rev-parse", "HEAD" }) do
             head = head or str.match(line or "", "^(%x+)")
           end
-          for line in sys.sh({ "git", "rev-list", "-n", "1", version, "--" }) do
-            tagged = tagged or str.match(line or "", "^(%x+)")
+          for line in sys.sh({ "git", "tag", "--list", version }) do
+            if line and line ~= "" then
+              tag_exists = true
+            end
+          end
+          if tag_exists then
+            for line in sys.sh({ "git", "rev-list", "-n", "1", version }) do
+              tagged = tagged or str.match(line or "", "^(%x+)")
+            end
           end
           if tagged and tagged ~= head then
             err.error("tag " .. version .. " already exists and points at a different "
