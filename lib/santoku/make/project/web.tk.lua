@@ -1134,6 +1134,22 @@ rocks_provided = { lua = "5.1" }
       arr.spread(arr.map(arr.map(arr.flatten({base_client_pages, base_client_wasm}),
         test_dist_dir_staging), remove_tk))), true)
 
+  local function report_listening (conf)
+    if not fs.exists(conf) then
+      return
+    end
+    local seen = {}
+    for line in fs.lines(conf) do
+      local spec = str.match(line, "^%s*listen%s+([^;]+);")
+      local port = spec and str.match(spec, "(%d+)")
+      if port and not seen[port] then
+        seen[port] = true
+        str.printf("[make]\tlistening on %s://localhost:%s\n",
+          str.find(spec, "ssl", 1, true) and "https" or "http", port)
+      end
+    end
+  end
+
   local function run_and_wait (o)
     if o.fg then
       return sys.execp("sh", { "run.sh", "--fg" })
@@ -1146,6 +1162,7 @@ rocks_provided = { lua = "5.1" }
     for _ = 1, math.ceil(timeout / 0.25) do
       sys.sleep(0.25)
       if fs.exists("server.pid") and str.match(fs.readfile("server.pid"), "(%d+)") then
+        report_listening("nginx.conf")
         return
       end
       if fs.exists(error_log) then

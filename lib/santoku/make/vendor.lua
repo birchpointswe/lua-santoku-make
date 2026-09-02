@@ -13,6 +13,21 @@ local function sha256 (fp)
   return first and (str.match(first, "^(%x+)")) or nil
 end
 
+local function have (cmd)
+  return (err.pcall(sys.execute,
+    { "sh", "-c", "command -v " .. cmd .. " >/dev/null 2>&1" }))
+end
+
+local function download_args (part, url)
+  if have("curl") then
+    return { "curl", "-fsSL", "-o", part, "--", url }
+  elseif have("wget") then
+    return { "wget", "-q", "-O", part, "--", url }
+  else
+    err.error("no downloader found: install curl or wget")
+  end
+end
+
 local function download (url, dest)
   local part = dest .. ".part"
   fs.mkdirp(fs.dirname(dest))
@@ -28,7 +43,7 @@ local function download (url, dest)
     end
     fs.mv(part, dest)
     return true
-  end)(err.pcall(sys.execute, { "wget", "-q", "-O", part, "--", url }))
+  end)(err.pcall(sys.execute, download_args(part, url)))
 end
 
 local function fetch (spec, dest)
