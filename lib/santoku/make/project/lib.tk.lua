@@ -884,7 +884,7 @@ rocks_provided = { lua = "5.1" }
   target({ "test" }, { "test-deps" }, function ()
     fs.mkdirp(test_dir())
     return fs.pushd(test_dir(), function ()
-      sys.execute({ "sh", "run.sh" })
+      sys.execute({ "sh", "run.sh", env = opts.test_env_vars })
     end)
   end)
 

@@ -837,6 +837,8 @@ rocks_provided = { lua = "5.1" }
             public_files_static_for_precache = public_files_static_for_precache,
             registered_public_files = registered_public_files,
             hashed = hashed,
+            local_deps = env.environment == "test" and has_local_deps_client
+              and local_deps_client or nil,
           }, opts.config.env.client or {}, env),
         }
         fs.mkdirp(cdir())
@@ -1382,6 +1384,11 @@ rocks_provided = { lua = "5.1" }
               lua_path = test_server_env.lua_path,
               lua_cpath = test_server_env.lua_cpath,
               dir = test_server_dir(),
+              test_env_vars = {
+                PORT = tbl.get(opts, {"config", "env", "nginx", "port"}),
+                SSL_PORT = tbl.get(opts, {"config", "env", "nginx", "ssl_port"}),
+                SSL_REDIRECT_PORT = tbl.get(opts, {"config", "env", "nginx", "ssl_redirect_port"}),
+              },
             })
             lib.test({ skip_check = true })
             lib.check()
