@@ -4,3 +4,6 @@
 [submodule "submodules/tokuboilerplate-lib"]
 	path = submodules/tokuboilerplate-lib
 	url = git@github.com:birchpointswe/tokuboilerplate-lib.git
+[submodule "submodules/tokuboilerplate-api"]
+	path = submodules/tokuboilerplate-api
+	url = git@github.com:birchpointswe/tokuboilerplate-api.git
