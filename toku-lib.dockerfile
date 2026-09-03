@@ -18,8 +18,8 @@ run ARCH_DIR=$(if [ "$(dpkg --print-architecture)" = "arm64" ]; then echo "aarch
 env XDG_DATA_HOME=/opt
 env PATH=/opt/toku/rocks/bin:/opt/toku/luarocks/bin:/opt/toku/lua/bin:$PATH
 
-run luarocks install santoku-make 5.0.12-1 \
-    && luarocks install santoku-cli 2.9.0-1 \
+run luarocks install santoku-make 5.0.21-1 \
+    && luarocks install santoku-cli 2.11.0-1 \
     && toku setup \
     && toku luarocks install luacheck \
     && rm -rf /opt/toku/src /root/.cache \
