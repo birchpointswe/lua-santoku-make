@@ -321,9 +321,9 @@ return base
 `toku <cmd> --env prod` selects `make.prod.lua` and builds under `build/prod/`.
 A `make.common.lua` next to the selected descriptor is tracked as a config
 dependency alongside it, so edits to it invalidate rendered targets.
-an application (dev/prod/release) and a service (prod/beta, plus a submodule lib)
-are real multi-profile examples; a service also shows a `Dockerfile` invoking
-`toku build --env prod`.
+A typical split is `dev`, `prod` and `release` for an application, or `prod` and
+`beta` for a service that also vendors a shared library as a submodule. A
+`Dockerfile` can invoke `toku build --env prod` the same way.
 
 ## The lifecycle
 
