@@ -28,7 +28,7 @@ run wget -O - https://openresty.org/package/pubkey.gpg | apt-key add - \
        fi \
     && apt-get update && apt-get -y install --no-install-recommends \
        gcc g++ make perl pkg-config swig \
-       luarocks npm build-essential \
+       npm build-essential \
        python3 python3-dev python3-pip python3-venv libpython3-dev \
        libmariadb-dev-compat libxml2-dev libopenblas-dev liblapacke-dev \
        librsvg2-bin imagemagick inotify-tools procps vim xxd \
@@ -47,9 +47,8 @@ env XDG_DATA_HOME=/opt
 env PATH=/opt/toku/rocks/bin:/opt/toku/luarocks/bin:/opt/toku/lua/bin:$PATH
 env TOKU_FG=1
 
-run luarocks install santoku-make 5.0.21-1 \
-    && luarocks install santoku-cli 2.11.0-1 \
-    && toku setup \
+run curl -fsSL -o /tmp/setup-toku.sh https://santoku.dev/setup-toku.sh \
+    && sh /tmp/setup-toku.sh \
     && toku luarocks install lua-cjson \
     && toku luarocks install luacheck \
     && rm -rf /opt/toku/src /root/.cache \
