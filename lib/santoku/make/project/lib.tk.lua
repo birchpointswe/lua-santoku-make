@@ -868,6 +868,11 @@ rocks_provided = { lua = "5.1" }
             sys.execute({ "git", "push", "origin", "refs/tags/" .. version })
             sys.execute({ "gh", "release", "create", "--generate-notes",
               version, release_tarball, base_rockspec })
+            if not (pcall(require, "ssl.https")) then
+              err.error("refusing to upload: luasec (ssl.https) is not loadable, so "
+                .. "luarocks would fall back to PLAIN HTTP and send the api key in "
+                .. "cleartext. Fix luasec in the toolchain tree first")
+            end
             sys.execute({ "luarocks", "upload", "--skip-pack", "--api-key", api_key, base_rockspec })
           end))
         end)
