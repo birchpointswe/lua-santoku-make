@@ -1216,10 +1216,10 @@ rocks_provided = { lua = "5.1" }
       fs.rm("server.pid")
       return
     end
-    err.pcall(sys.execute, { "kill", "-15", pid })
+    err.pcall(sys.execute, { "sh", "-c", "kill -15 " .. pid .. " 2>/dev/null" })
     for _ = 1, 80 do
       sys.sleep(0.25)
-      if not (err.pcall(sys.execute, { "kill", "-0", pid })) then
+      if not (err.pcall(sys.execute, { "sh", "-c", "kill -0 " .. pid .. " 2>/dev/null" })) then
         if fs.exists("server.pid") then
           fs.rm("server.pid")
         end
@@ -1339,7 +1339,7 @@ rocks_provided = { lua = "5.1" }
             "or check %s for a bind or config error.",
             start_timeout, test_dist_dir("logs", "error.log")))
         end
-        local alive = err.pcall(sys.execute, { "kill", "-0", pid })
+        local alive = err.pcall(sys.execute, { "sh", "-c", "kill -0 " .. pid .. " 2>/dev/null" })
         if not alive then
           err.error("fatal", "Server failed to start: process died immediately (check nginx error log)")
         end
@@ -1349,7 +1349,7 @@ rocks_provided = { lua = "5.1" }
           if fs.exists(tail_pid_file) then
             local existing_pid = str.match(fs.readfile(tail_pid_file), "(%d+)")
             if existing_pid then
-              tail_running = err.pcall(sys.execute, { "kill", "-0", existing_pid })
+              tail_running = err.pcall(sys.execute, { "sh", "-c", "kill -0 " .. existing_pid .. " 2>/dev/null" })
             end
           end
           if not tail_running then
@@ -1503,7 +1503,8 @@ rocks_provided = { lua = "5.1" }
     return fs.pushd(test_dist_dir(), function ()
       if fs.exists("logs/tail.pid") then
         err.pcall(function ()
-          sys.execute({ "kill", "-15", str.match(fs.readfile("logs/tail.pid"), "(%d+)") })
+          sys.execute({ "sh", "-c",
+            "kill -15 " .. str.match(fs.readfile("logs/tail.pid"), "(%d+)") .. " 2>/dev/null" })
         end)
         sys.sleep(0.25)
         fs.rm("logs/tail.pid")
