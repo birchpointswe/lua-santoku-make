@@ -341,7 +341,7 @@ local function compute_file_hash(filepath)
 end
 
 local function compute_string_hash(content)
-  local tmp = os.tmpname()
+  local tmp = fs.tmpname()
   local f = io.open(tmp, "wb")
   f:write(content)
   f:close()

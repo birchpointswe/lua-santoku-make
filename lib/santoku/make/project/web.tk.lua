@@ -230,6 +230,7 @@ local function init (opts)
   end
 
   local stable_public_files = tbl.get(opts, {"config", "env", "client", "stable"}) or {}
+  local generated_client_files = tbl.get(opts, {"config", "env", "client", "generated"}) or {}
   local check_links_cfg = tbl.get(opts, {"config", "env", "client", "check_links"})
   local sitemap_site = tbl.get(opts, {"config", "env", "client", "sitemap"})
 
@@ -672,6 +673,8 @@ rocks_provided = { lua = "5.1" }
     fs.mkdirp(staging_dir())
     fs.mkdirp(cdir())
 
+    local generated_deps = arr.map(arr.copy({}, generated_client_files), cdir)
+
     for _, fp in ipairs(base_client_assets) do
       add_copied_target(staging_dir_stripped(remove_tk(fp)), fp,
         { cdir(base_client_lua_modules_deps_ok) })
@@ -680,8 +683,9 @@ rocks_provided = { lua = "5.1" }
     for _, fp in ipairs(base_client_static) do
       add_copied_target(cdir_stripped(fp), fp)
       add_file_target(cdir(remove_tk(fp)), cdir_stripped(fp), env,
-        arr.push({ cdir(base_client_lua_modules_deps_ok) },
-          arr.spread(arr.map(arr.map(arr.flatten({base_client_res, base_client_res_templated}), remove_tk), cdir_stripped))))
+        arr.push(arr.push({ cdir(base_client_lua_modules_deps_ok) },
+          arr.spread(arr.map(arr.map(arr.flatten({base_client_res, base_client_res_templated}), remove_tk), cdir_stripped))),
+          arr.spread(generated_deps)))
       add_copied_target(staging_dir_stripped(remove_tk(fp)),
         cdir(remove_tk(fp)))
     end
@@ -825,6 +829,7 @@ rocks_provided = { lua = "5.1" }
       arr.flatten({
         arr.map(arr.flatten({base_client_bins, base_client_libs, base_client_deps}), cdir_stripped),
         arr.map(arr.map(arr.flatten({base_root_libs, base_root_res}), remove_tk), cdir),
+        generated_deps,
         env.environment == "test"
           and arr.map(arr.map(arr.copy({}, base_client_test_specs), remove_tk), cdir_stripped)
           or {},
