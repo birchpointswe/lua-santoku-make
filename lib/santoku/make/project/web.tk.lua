@@ -14,6 +14,7 @@ local fs = require("santoku.fs")
 local common = require("santoku.make.common")
 local wasm = require("santoku.make.wasm")
 local clean = require("santoku.make.clean")
+local site = require("santoku.make.site")
 local arr = require("santoku.array")
 local str = require("santoku.string")
 local tmpl = require("santoku.template")
@@ -227,6 +228,10 @@ local function init (opts)
   for _, fp in ipairs(tbl.get(opts, {"config", "env", "client", "unhashed"}) or {}) do
     unhashed_public_files[fp] = true
   end
+
+  local stable_public_files = tbl.get(opts, {"config", "env", "client", "stable"}) or {}
+  local check_links_cfg = tbl.get(opts, {"config", "env", "client", "check_links"})
+  local sitemap_site = tbl.get(opts, {"config", "env", "client", "sitemap"})
 
   local function make_hashed (get_manifest_path)
     return function (filename)
@@ -649,6 +654,8 @@ rocks_provided = { lua = "5.1" }
     add_file_target(test_client_dir_stripped(remove_tk(fp)), fp, test_client_env)
   end
 
+  local checks_oks = {}
+
   local env_configs = {
     { dist_dir_staging, dist_dir_staging_stripped,
       client_dir, client_dir_stripped, client_env,
@@ -962,6 +969,15 @@ rocks_provided = { lua = "5.1" }
           err.assert(common.hash_filename(rel, common.compute_file_hash(dest)) == hashed_rel,
             "shipped content does not match its hashed name", rel, hashed_rel)
         end
+        for _, rel in ipairs(stable_public_files) do
+          local hashed_rel = manifest[rel]
+          if not hashed_rel then
+            err.error("client.stable names a file with no hash manifest entry", rel)
+          end
+          local dest = final_dir(rel)
+          fs.mkdirp(fs.dirname(dest))
+          fs.writefile(dest, fs.readfile(final_dir(hashed_rel)))
+        end
         local manifest_content = "return {\n"
         for orig, h in pairs(manifest) do
           manifest_content = manifest_content .. str.format("  [%q] = %q,\n", orig, h)
@@ -970,6 +986,32 @@ rocks_provided = { lua = "5.1" }
         fs.writefile(hash_manifest, manifest_content)
         fs.touch(hash_ok)
       end)
+
+    if check_links_cfg or sitemap_site then
+      local checks_ok = is_main and dist_dir("checks.ok") or test_dist_dir("checks.ok")
+      checks_oks[is_main and "main" or "test"] = checks_ok
+      target(
+        { checks_ok },
+        arr.flatten({ { hash_ok }, common.get_config_files(opts.config_file) }),
+        function ()
+          local manifest = dofile(hash_manifest)
+          local stable = arr.copy({}, stable_public_files)
+          if sitemap_site then
+            fs.writefile(final_dir("sitemap.xml"), site.sitemap(sitemap_site, manifest))
+            arr.push(stable, "sitemap.xml")
+          end
+          if check_links_cfg then
+            site.check_links({
+              public_dir = final_dir(),
+              manifest = manifest,
+              stable = stable,
+              allow = type(check_links_cfg) == "table" and check_links_cfg.allow or nil,
+            })
+          end
+          fs.mkdirp(fs.dirname(checks_ok))
+          fs.touch(checks_ok)
+        end)
+    end
 
   end
 
@@ -1146,6 +1188,13 @@ rocks_provided = { lua = "5.1" }
     arr.push(build_deps_list, dist_dir(base_server_nginx_fg_cfg))
     arr.push(test_build_deps_list, test_dist_dir(base_server_nginx_cfg))
     arr.push(test_build_deps_list, test_dist_dir(base_server_nginx_fg_cfg))
+  end
+
+  if checks_oks.main then
+    arr.push(build_deps_list, checks_oks.main)
+  end
+  if checks_oks.test then
+    arr.push(test_build_deps_list, checks_oks.test)
   end
 
   target(
