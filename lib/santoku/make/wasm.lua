@@ -110,7 +110,7 @@ local function get_bundle_flags(lua_dir, context, extra_cflags, extra_ldflags)
 end
 
 local function create_node_wrapper(dest, js_file)
-  local wrapper = string.format([[#!/bin/sh
+  local wrapper = str.format([[#!/bin/sh
 exec node "$(dirname "$0")/%s" "$@"
 ]], fs.basename(js_file))
   fs.writefile(dest, wrapper)

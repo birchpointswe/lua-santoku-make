@@ -17,8 +17,9 @@ local relative = fs.relative
 
 local arr = require("santoku.array")
 
-local huge = math.huge
-local max = math.max
+local num = require("santoku.num")
+local huge = num.huge
+local max = num.max
 
 local posix = require("santoku.make.posix")
 local modtime = posix.time

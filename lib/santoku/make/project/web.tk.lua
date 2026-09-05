@@ -8,6 +8,7 @@ local env = require("santoku.env")
 local make = require("santoku.make")
 local sys = require("santoku.system")
 local tbl = require("santoku.table")
+local num = require("santoku.num")
 local vdt = require("santoku.validate")
 local err = require("santoku.error")
 local fs = require("santoku.fs")
@@ -89,13 +90,13 @@ local function create (opts)
     return
   end
 
-  io.stdout:write("Created web project: " .. name .. "\n")
-  io.stdout:write("\nNext steps:\n")
+  fs.stdout:write("Created web project: " .. name .. "\n")
+  fs.stdout:write("\nNext steps:\n")
   if dir ~= "." then
-    io.stdout:write("  cd " .. dir .. "\n")
+    fs.stdout:write("  cd " .. dir .. "\n")
   end
-  io.stdout:write("  toku build --test  # Build for testing\n")
-  io.stdout:write("  toku start --test  # Start development server\n")
+  fs.stdout:write("  toku build --test  # Build for testing\n")
+  fs.stdout:write("  toku start --test  # Start development server\n")
 end
 
 local function get_single_target (single)
@@ -1243,7 +1244,7 @@ rocks_provided = { lua = "5.1" }
     sys.execute({ "sh", "-c", "sh run.sh &" })
     local timeout = tonumber(o.start_timeout
       or tbl.get(opts, {"config", "env", "nginx", "start_timeout"})) or 60
-    for _ = 1, math.ceil(timeout / 0.25) do
+    for _ = 1, num.ceil(timeout / 0.25) do
       sys.sleep(0.25)
       if fs.exists("server.pid") and str.match(fs.readfile("server.pid"), "(%d+)") then
         report_listening("nginx.conf")
@@ -1371,7 +1372,7 @@ rocks_provided = { lua = "5.1" }
         local start_timeout = tonumber(opts.start_timeout
           or tbl.get(opts, {"config", "env", "nginx", "start_timeout"})) or 60
         local pid
-        for _ = 1, math.ceil(start_timeout / 0.25) do
+        for _ = 1, num.ceil(start_timeout / 0.25) do
           sys.sleep(0.25)
           if fs.exists(pid_file) then
             pid = str.match(fs.readfile(pid_file), "(%d+)")

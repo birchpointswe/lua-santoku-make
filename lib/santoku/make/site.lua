@@ -1,4 +1,5 @@
 local fs = require("santoku.fs")
+local arr = require("santoku.array")
 local str = require("santoku.string")
 local err = require("santoku.error")
 
@@ -75,7 +76,7 @@ local function sitemap (site, manifest)
   for url in pairs(page_set) do
     urls[#urls + 1] = url
   end
-  table.sort(urls)
+  arr.sort(urls)
   local out = {
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
     "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
@@ -84,7 +85,7 @@ local function sitemap (site, manifest)
     out[#out + 1] = "<url><loc>" .. site .. urls[i] .. "</loc></url>\n"
   end
   out[#out + 1] = "</urlset>\n"
-  return table.concat(out)
+  return arr.concat(out)
 end
 
 return {

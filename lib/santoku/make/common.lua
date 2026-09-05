@@ -305,7 +305,7 @@ local function clear_stale_lock (...)
         end
       end
       for j = 1, #stale do
-        os.remove(fs.join(root, stale[j]))
+        fs.rm(fs.join(root, stale[j]), true)
       end
     end
   end
@@ -333,20 +333,18 @@ local function install_local_deps(paths, lcfg)
 end
 
 local function compute_file_hash(filepath)
-  local handle = io.popen("sha256sum " .. str.quote(filepath))
-  local output = handle:read("*a")
-  handle:close()
-  local hash = str.match(output, "^(%x+)")
+  local hash
+  for line in sys.sh({ "sha256sum", "--", filepath }) do
+    hash = hash or str.match(line, "^(%x+)")
+  end
   return str.sub(hash, 1, 12)
 end
 
 local function compute_string_hash(content)
   local tmp = fs.tmpname()
-  local f = io.open(tmp, "wb")
-  f:write(content)
-  f:close()
+  fs.writefile(tmp, content, "wb")
   local h = compute_file_hash(tmp)
-  os.remove(tmp)
+  fs.rm(tmp)
   return h
 end
 

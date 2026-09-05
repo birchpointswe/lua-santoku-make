@@ -100,13 +100,13 @@ local function create (opts)
     return
   end
 
-  io.stdout:write("Created library project: " .. name .. "\n")
-  io.stdout:write("\nNext steps:\n")
+  fs.stdout:write("Created library project: " .. name .. "\n")
+  fs.stdout:write("\nNext steps:\n")
   if dir ~= "." then
-    io.stdout:write("  cd " .. dir .. "\n")
+    fs.stdout:write("  cd " .. dir .. "\n")
   end
-  io.stdout:write("  toku test        # Run tests\n")
-  io.stdout:write("  toku install     # Install locally\n")
+  fs.stdout:write("  toku test        # Run tests\n")
+  fs.stdout:write("  toku install     # Install locally\n")
 end
 
 local prunable_ext = {

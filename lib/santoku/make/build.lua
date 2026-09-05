@@ -1,4 +1,5 @@
 local fs = require("santoku.fs")
+local arr = require("santoku.array")
 local sys = require("santoku.system")
 
 local M = {}
@@ -10,8 +11,8 @@ local function esbuild (input, ext)
   for chunk in sys.sh({ "esbuild", "--minify", tmp }) do
     parts[#parts + 1] = chunk
   end
-  os.remove(tmp)
-  return table.concat(parts, "\n")
+  fs.rm(tmp)
+  return arr.concat(parts, "\n")
 end
 
 M.minify_js = function (input)

@@ -77,13 +77,13 @@ local function create (opts)
     return
   end
 
-  io.stdout:write("Created API project: " .. name .. "\n")
-  io.stdout:write("\nNext steps:\n")
+  fs.stdout:write("Created API project: " .. name .. "\n")
+  fs.stdout:write("\nNext steps:\n")
   if dir ~= "." then
-    io.stdout:write("  cd " .. dir .. "\n")
+    fs.stdout:write("  cd " .. dir .. "\n")
   end
-  io.stdout:write("  toku build --test  # Build for testing\n")
-  io.stdout:write("  toku start --test  # Start development server\n")
+  fs.stdout:write("  toku build --test  # Build for testing\n")
+  fs.stdout:write("  toku start --test  # Start development server\n")
 end
 
 return {

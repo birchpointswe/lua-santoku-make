@@ -15,9 +15,12 @@ local api = require("santoku.make.project.api")
 
 local sys = require("santoku.system")
 
-local sformat = string.format
-local sgsub = string.gsub
-local ssub = string.sub
+local str = require("santoku.string")
+local arr = require("santoku.array")
+
+local sformat = str.format
+local sgsub = str.gsub
+local ssub = str.sub
 
 local creates = {
   lib = lib.create,
@@ -37,7 +40,7 @@ local function snapshot (kind, opts)
   for fp in fs.files(dir, true) do
     all[#all + 1] = ssub(fp, #dir + 2)
   end
-  table.sort(all)
+  arr.sort(all)
   local files = {}
   for i = 1, #all do
     files[i] = { path = all[i], code = fs.readfile(fs.join(dir, all[i])) }
