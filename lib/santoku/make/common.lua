@@ -8,7 +8,7 @@ local err = require("santoku.error")
 local sys = require("santoku.system")
 local senv = require("santoku.env")
 
-local embedded_source = senv.searchpath("santoku.make.common", package.path)
+local embedded_source = senv.searchpath("santoku.make.common")
 
 local function watch_snapshot (paths)
   local posix = require("santoku.make.posix")
@@ -146,17 +146,10 @@ local function with_build_deps(build_deps_dir, fn)
   if not build_deps_dir then
     return fn()
   end
-  local old_path = package.path
-  local old_cpath = package.cpath
-  local deps_path = get_lua_path(build_deps_dir)
-  local deps_cpath = get_lua_cpath(build_deps_dir)
-  package.path = deps_path .. ";" .. old_path
-  package.cpath = deps_cpath .. ";" .. old_cpath
-  return (function (...)
-    package.path = old_path
-    package.cpath = old_cpath
-    return ...
-  end)(fn())
+  return senv.with_paths(
+    get_lua_path(build_deps_dir) .. ";" .. senv.path(),
+    get_lua_cpath(build_deps_dir) .. ";" .. senv.cpath(),
+    fn)
 end
 
 local function get_config_files(config_file)
