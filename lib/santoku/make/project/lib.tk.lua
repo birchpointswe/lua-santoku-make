@@ -120,7 +120,7 @@ local function prune_stale (dir_fn, expected)
   for i = 1, #expected do
     keep[expected[i]] = true
   end
-  for _, sub in ipairs({ "lib", "bin" }) do
+  for _, sub in ipairs({ "lib", "bin", "test" }) do
     local root = dir_fn(sub)
     if fs.exists(root) then
       for fp in fs.files(root, true) do
