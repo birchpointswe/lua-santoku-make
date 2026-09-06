@@ -236,7 +236,6 @@ local function init (opts)
   local base_rockspec = str.interp("%s#(name)-%s#(version).rockspec", opts.config.env)
   local base_makefile = "Makefile"
   local base_license = "LICENSE"
-  local base_readme = "README.md"
   local base_lib_makefile = "lib/Makefile"
   local base_bin_makefile = "bin/Makefile"
   local base_luarocks_cfg = "luarocks.lua"
@@ -496,11 +495,6 @@ local function init (opts)
   if fs.exists(base_license) then
     add_copied_target(build_dir(base_license), base_license)
     arr.push(build_all, build_dir(base_license))
-  end
-
-  if fs.exists(base_readme) then
-    add_copied_target(test_dir(base_readme), base_readme)
-    arr.push(test_all, test_dir(base_readme))
   end
 
   for _, fp in ipairs(base_res) do
