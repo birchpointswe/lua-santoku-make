@@ -867,7 +867,7 @@ rocks_provided = { lua = "5.1" }
                 .. "luarocks would fall back to PLAIN HTTP and send the api key in "
                 .. "cleartext. Fix luasec in the toolchain tree first")
             end
-            sys.execute({ "luarocks", "upload", "--skip-pack", "--api-key", api_key, base_rockspec })
+            sys.execute({ "luarocks", "upload", "--api-key", api_key, base_rockspec })
           end))
         end)
       end)
