@@ -207,13 +207,15 @@ local function init (opts)
   local function add_file_target(dest, src, env, extra_srcs)
     return common.add_file_target(target, dest, src, env, opts.config, opts.config_file, extra_srcs,
       has_build_deps and build_deps_dir or nil,
-      has_build_deps and build_deps_ok or nil)
+      has_build_deps and build_deps_ok or nil,
+      opts.config_stamp)
   end
 
   local function add_templated_target_base64(dest, data, env, extra_srcs)
     return common.add_templated_target_base64(target, dest, data, env, opts.config_file, extra_srcs,
       has_build_deps and build_deps_dir or nil,
-      has_build_deps and build_deps_ok or nil)
+      has_build_deps and build_deps_ok or nil,
+      opts.config_stamp)
   end
 
   local function get_lua_path(prefix)
@@ -634,7 +636,7 @@ local function init (opts)
   if has_build_deps then
     target(
       { build_deps_ok },
-      common.get_config_files(opts.config_file),
+      common.get_config_files(opts.config_file, opts.config_stamp),
       function ()
         fs.mkdirp(build_deps_dir)
         local config_file = fs.absolute(opts.config_file)

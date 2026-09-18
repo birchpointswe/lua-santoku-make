@@ -8,6 +8,8 @@ local validate = require("santoku.validate")
 local hasindex = validate.hasindex
 local istable = validate.istable
 
+local common = require("santoku.make.common")
+
 local unified = require("santoku.make.project.unified")
 local lib = require("santoku.make.project.lib")
 local web = require("santoku.make.project.web")
@@ -61,7 +63,8 @@ local function init (opts)
   assert(hasindex(opts))
   opts.env = opts.env or "default"
   opts.dir = opts.dir or fs.absolute("build")
-  if not istable(opts.config) and not opts.config_file then
+  local from_descriptor = not istable(opts.config) and not opts.config_file
+  if from_descriptor then
     opts.config = opts.config or ((opts.env ~= "default")
       and sformat("make.%s.lua", opts.env)
       or "make.lua")
@@ -69,6 +72,11 @@ local function init (opts)
     opts.config = runfile(opts.config, setmetatable({}, run_env))
   end
   assert(istable(opts.config), "config is not a table")
+  if from_descriptor then
+    opts.config_stamp = common.write_config_stamp(
+      fs.join(opts.dir, opts.env .. (opts.wasm and "-wasm" or ""), "config.stamp"),
+      opts.config)
+  end
   return unified.init(opts)
 end
 

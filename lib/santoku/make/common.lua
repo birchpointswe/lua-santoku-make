@@ -152,11 +152,65 @@ local function with_build_deps(build_deps_dir, fn)
     fn)
 end
 
-local function get_config_files(config_file)
-  if not config_file then
-    return {}
+local function encode_config (v, out, seen)
+  local t = type(v)
+  if t == "string" then
+    arr.push(out, "s", str.format("%d", #v), ":", v)
+  elseif t == "number" then
+    arr.push(out, "n", str.format("%.17g", v))
+  elseif t == "boolean" then
+    arr.push(out, v and "b1" or "b0")
+  elseif t == "table" then
+    if seen[v] then
+      arr.push(out, "^")
+      return
+    end
+    seen[v] = true
+    local entries = {}
+    for k, val in pairs(v) do
+      local e = {}
+      encode_config(k, e, seen)
+      arr.push(e, "=")
+      encode_config(val, e, seen)
+      arr.push(entries, arr.concat(e))
+    end
+    arr.sort(entries)
+    arr.push(out, "{")
+    for i = 1, #entries do
+      arr.push(out, entries[i], ";")
+    end
+    arr.push(out, "}")
+    seen[v] = nil
+  else
+    arr.push(out, "<", t, ">")
   end
-  local files = { config_file }
+end
+
+local function config_key (config)
+  local out = {}
+  encode_config(config, out, {})
+  return arr.concat(out)
+end
+
+local function write_config_stamp (fp, config)
+  local key = config_key(config)
+  if fs.exists(fp) and fs.readfile(fp) == key then
+    return fp
+  end
+  fs.mkdirp(fs.dirname(fp))
+  fs.writefile(fp, key)
+  return fp
+end
+
+local function get_config_files(config_file, config_stamp)
+  local files = {}
+  if config_stamp then
+    arr.push(files, config_stamp)
+  end
+  if not config_file then
+    return files
+  end
+  arr.push(files, config_file)
   local dir = fs.dirname(config_file)
   local common_cfg = dir == "." and "make.common.lua" or fs.join(dir, "make.common.lua")
   if fs.exists(common_cfg) then
@@ -165,13 +219,13 @@ local function get_config_files(config_file)
   return files
 end
 
-local function add_file_target(target_fn, dest, src, env, config, config_file, extra_srcs, build_deps_dir, build_deps_ok)
+local function add_file_target(target_fn, dest, src, env, config, config_file, extra_srcs, build_deps_dir, build_deps_ok, config_stamp)
   local action = get_action(src, config)
   if action == "copy" then
     return add_copied_target(target_fn, dest, src, extra_srcs)
   elseif action == "template" then
     dest = str.gsub(dest, "%.tk", "")
-    target_fn({ dest }, arr.flatten({ src, get_config_files(config_file), extra_srcs or {}, build_deps_ok or {} }), function ()
+    target_fn({ dest }, arr.flatten({ src, get_config_files(config_file, config_stamp), extra_srcs or {}, build_deps_ok or {} }), function ()
       fs.mkdirp(fs.dirname(dest))
       local deps = {}
       env.readfile = function (fp) deps[fp] = true; return fs.readfile(fp) end
@@ -184,8 +238,8 @@ local function add_file_target(target_fn, dest, src, env, config, config_file, e
   end
 end
 
-local function add_templated_target_base64(target_fn, dest, data, env, config_file, extra_srcs, build_deps_dir, build_deps_ok)
-  target_fn({ dest }, arr.flatten({ get_config_files(config_file), extra_srcs or {}, build_deps_ok or {},
+local function add_templated_target_base64(target_fn, dest, data, env, config_file, extra_srcs, build_deps_dir, build_deps_ok, config_stamp)
+  target_fn({ dest }, arr.flatten({ get_config_files(config_file, config_stamp), extra_srcs or {}, build_deps_ok or {},
     embedded_source and { embedded_source } or {} }), function ()
     fs.mkdirp(fs.dirname(dest))
     local deps = {}
@@ -414,6 +468,8 @@ return {
   get_lua_cpath = get_lua_cpath,
   get_bundle_flags = get_bundle_flags,
   get_config_files = get_config_files,
+  config_key = config_key,
+  write_config_stamp = write_config_stamp,
   get_files = get_files,
   local_dep_paths = local_dep_paths,
   local_dep_srcs = local_dep_srcs,

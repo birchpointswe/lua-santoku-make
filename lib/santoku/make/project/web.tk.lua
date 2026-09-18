@@ -281,13 +281,15 @@ local function init (opts)
   local function add_file_target(dest, src, env, extra_srcs)
     return common.add_file_target(target, dest, src, env, opts.config, opts.config_file, extra_srcs,
       has_build_deps and build_deps_dir or nil,
-      has_build_deps and build_deps_ok or nil)
+      has_build_deps and build_deps_ok or nil,
+      opts.config_stamp)
   end
 
   local function add_templated_target_base64(dest, data, env, extra_srcs)
     return common.add_templated_target_base64(target, dest, data, env, opts.config_file, extra_srcs,
       has_build_deps and build_deps_dir or nil,
-      has_build_deps and build_deps_ok or nil)
+      has_build_deps and build_deps_ok or nil,
+      opts.config_stamp)
   end
 
   local function get_lua_path(prefix)
@@ -542,7 +544,7 @@ local function init (opts)
   if has_build_deps then
     target(
       { build_deps_ok },
-      common.get_config_files(opts.config_file),
+      common.get_config_files(opts.config_file, opts.config_stamp),
       function ()
         fs.mkdirp(build_deps_dir)
         local config_file = fs.absolute(opts.config_file)
@@ -774,7 +776,7 @@ rocks_provided = { lua = "5.1" }
 
     target(
       { cdir(base_client_lua_modules_deps_ok) },
-      arr.push(arr.push(arr.push(common.get_config_files(opts.config_file),
+      arr.push(arr.push(arr.push(common.get_config_files(opts.config_file, opts.config_stamp),
         arr.spread(arr.map(arr.flatten({arr.map(arr.copy({}, base_client_res), remove_tk), arr.map(arr.copy({}, base_client_res_templated), remove_tk)}), cdir_stripped))),
         arr.spread(arr.map(arr.flatten({base_client_bins, base_client_libs, base_client_deps}), cdir_stripped))),
         arr.spread(arr.map(arr.map(arr.copy({}, base_root_res), remove_tk), cdir))),
@@ -836,7 +838,7 @@ rocks_provided = { lua = "5.1" }
           or {},
         { cdir(base_client_lua_modules_deps_ok) },
         has_local_deps_client and { cdir("local-deps.ok") } or {},
-        common.get_config_files(opts.config_file),
+        common.get_config_files(opts.config_file, opts.config_stamp),
         has_build_deps and { build_deps_ok } or {} }),
       function ()
         local nested_env = env.environment == "test" and "test" or "build"
@@ -998,7 +1000,7 @@ rocks_provided = { lua = "5.1" }
       checks_oks[is_main and "main" or "test"] = checks_ok
       target(
         { checks_ok },
-        arr.flatten({ { hash_ok }, common.get_config_files(opts.config_file) }),
+        arr.flatten({ { hash_ok }, common.get_config_files(opts.config_file, opts.config_stamp) }),
         function ()
           local manifest = dofile(hash_manifest)
           local stable = arr.copy({}, stable_public_files)
@@ -1132,7 +1134,9 @@ rocks_provided = { lua = "5.1" }
       end
     end
 
-    local nginx_deps = { server_dir(base_server_lua_modules_ok), dist_dir("hash.ok"), base_server_nginx_user }
+    local nginx_deps = arr.flatten({
+      { server_dir(base_server_lua_modules_ok), dist_dir("hash.ok"), base_server_nginx_user },
+      common.get_config_files(opts.config_file, opts.config_stamp) })
     if has_build_deps then
       arr.push(nginx_deps, build_deps_ok)
     end
@@ -1154,7 +1158,9 @@ rocks_provided = { lua = "5.1" }
     add_copied_target(dist_dir(base_server_nginx_cfg), server_dir(base_server_nginx_cfg))
     add_copied_target(dist_dir(base_server_nginx_fg_cfg), server_dir(base_server_nginx_fg_cfg))
 
-    local test_nginx_deps = { test_server_dir(base_server_lua_modules_ok), test_dist_dir("hash.ok"), base_server_nginx_user }
+    local test_nginx_deps = arr.flatten({
+      { test_server_dir(base_server_lua_modules_ok), test_dist_dir("hash.ok"), base_server_nginx_user },
+      common.get_config_files(opts.config_file, opts.config_stamp) })
     if has_build_deps then
       arr.push(test_nginx_deps, build_deps_ok)
     end
