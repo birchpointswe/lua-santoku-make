@@ -2,6 +2,7 @@ local test = require("santoku.test")
 local validate = require("santoku.validate")
 local eq = validate.isequal
 local fs = require("santoku.fs")
+local str = require("santoku.string")
 local sys = require("santoku.system")
 local posix = require("santoku.make.posix")
 local project = require("santoku.make.project")
@@ -29,13 +30,37 @@ return {
 }
 ]]
 
+local mutating_descriptor = [[
+local env = require("santoku.env")
+return {
+  type = "web",
+  env = {
+    name = "envshape",
+    version = "0.0.1-1",
+    client = {},
+    server = {},
+    nginx = {
+      domain = "localhost",
+      port = "8080",
+      workers = env.var("WORKERS", "auto"),
+      extra = "one",
+    },
+    configure = function (submake, envs)
+      local nginx = envs.root.nginx
+      nginx.rounds = (nginx.rounds or 0) + 1
+      envs.root.server.rounds = nginx.rounds
+    end,
+  },
+}
+]]
+
 local template = "<% return nginx.workers %>|<% return nginx.extra %>\n"
 
-local function write_project (dir)
+local function write_project (dir, desc)
   sys.execute({ "rm", "-rf", dir })
   fs.mkdirp(dir)
   local files = {
-    ["make.lua"] = descriptor,
+    ["make.lua"] = desc or descriptor,
     ["make.common.lua"] = "return { extra = \"one\" }\n",
     ["client/static/index.tk.html"] = template,
   }
@@ -54,14 +79,29 @@ local function stamp_file (dir)
   return fs.join(dir, "build", "default", "config.stamp")
 end
 
-local function build (dir, verbosity)
+local function build (dir)
   return fs.pushd(dir, function ()
     local p = project.init({
       dir = fs.absolute("build"),
       openresty_dir = "/nonexistent",
     })
-    p.submake.build({ fs.absolute(out_file(".")) }, verbosity or 0)
+    p.submake.build({ fs.absolute(out_file(".")) }, 0)
   end)
+end
+
+local function marks (dir)
+  return str.format("%d:%d", posix.time(stamp_file(dir)), posix.time(out_file(dir)))
+end
+
+local function settle (dir, limit)
+  for i = 1, limit do
+    local before = marks(dir)
+    sys.sleep(1.1)
+    build(dir)
+    if marks(dir) == before then
+      return i
+    end
+  end
 end
 
 test("the resolved environment invalidates descriptor-dependent targets", function ()
@@ -78,14 +118,11 @@ test("the resolved environment invalidates descriptor-dependent targets", functi
   build(dir)
   assert(eq("4|one", fs.readfile(out_file(dir))))
 
-  sys.sleep(1.1)
   local stamp_at = posix.time(stamp_file(dir))
-  local out_at = posix.time(out_file(dir))
-  build(dir)
+  assert(settle(dir, 5), "identical builds must reach a fixed point")
   assert(eq(stamp_at, posix.time(stamp_file(dir))),
-    "an unchanged environment must leave the stamp untouched")
-  assert(eq(out_at, posix.time(out_file(dir))),
-    "an unchanged environment must not re-render")
+    "an unchanged environment must never rewrite the stamp")
+  assert(eq("4|one", fs.readfile(out_file(dir))))
 
   sys.sleep(1.1)
   sys.setenv("WORKERS", "2")
@@ -96,6 +133,31 @@ test("the resolved environment invalidates descriptor-dependent targets", functi
   fs.writefile(fs.join(dir, "make.common.lua"), "return { extra = \"two\" }\n")
   build(dir)
   assert(eq("2|two", fs.readfile(out_file(dir))))
+
+  assert(settle(dir, 5), "identical builds must reach a fixed point after a config edit")
+
+  sys.execute({ "rm", "-rf", dir })
+
+end)
+
+test("a configure hook that mutates the config cannot destabilise the stamp", function ()
+
+  local dir = fs.join(root, "mutating")
+  write_project(dir, mutating_descriptor)
+
+  sys.setenv("WORKERS", "auto")
+  build(dir)
+  assert(eq("auto|one", fs.readfile(out_file(dir))))
+
+  local stamp_at = posix.time(stamp_file(dir))
+  assert(settle(dir, 5), "a mutating configure hook must still reach a fixed point")
+  assert(eq(stamp_at, posix.time(stamp_file(dir))),
+    "configure mutations must not reach the stamp")
+
+  sys.sleep(1.1)
+  sys.setenv("WORKERS", "4")
+  build(dir)
+  assert(eq("4|one", fs.readfile(out_file(dir))))
 
   sys.execute({ "rm", "-rf", dir })
 
