@@ -9,159 +9,13 @@ Lua: declare targets, their dependencies, and the function that produces them, t
 On top of that sits the project model that turns a `make.lua` descriptor into a full
 build, test, install, and release pipeline for libraries, executables, and web apps.
 
-## Running toku in a container
-
-A web project needs a large toolchain: Emscripten, OpenResty, node, tailwindcss,
-esbuild, a C compiler and luarocks. If you would rather not install all of that,
-the two images here run `toku` against the codebase in your current directory,
-so you edit locally and everything executes in the container.
-
-Build the image once:
-
-```sh
-docker build -t toku-web -f toku-web.dockerfile .
-docker build -t toku-lib -f toku-lib.dockerfile .
-```
-
-Then use the wrapper in place of `toku`:
-
-```sh
-./toku-web.sh -- build --test
-./toku-web.sh -- test
-./toku-lib.sh -- test
-```
-
-Everything after `--` is passed to `toku`. Anything before it goes to the
-container runtime, which is how you publish a port:
-
-```sh
-./toku-web.sh -p 8080:8080 -p 8443:8443 -- start --test
-```
-
-`toku-web` sets `TOKU_FG=1`, which keeps `toku start` in the foreground.
-Backgrounding OpenResty and exiting would let toku, as PID 1 under `--rm`, stop
-the container along with the server and the port mapping, and nothing would
-report an error while the published port never answers. Set `TOKU_FG` or pass
-`--fg` in a container you build yourself.
-
-Both wrappers mount the current directory at `/app` and delete the container on
-exit, so the build tree lands in your working tree as usual.
-
-Flags, all optional and all before `--`:
-
-| Flag | Meaning |
-| --- | --- |
-| `-c docker` / `-c podman` | force a runtime; otherwise docker is preferred, then podman |
-| `-i <image>` | override the image name |
-| `-n` | print the command that would run and exit, without running it |
-
-`toku-lib` is much smaller: no Emscripten, OpenResty, node or python. Use it for
-library projects, and `toku-web` for anything with a `client/`.
-
-Podman gets `--userns=keep-id` automatically so files stay owned by you. Docker
-has no equivalent default, so files written into your tree will be owned by
-root; pass `-u "$(id -u):$(id -g)"` before `--` if that matters to you.
-
-## Deployment images
-
-`toku-web` and `toku-lib` are build images; nothing in the toolchain is needed
-at runtime. Two runtime bases strip it out. Build them from this repository's
-root, since `toku-web-deployment` copies a file from the build context:
-
-```sh
-docker build -t toku-web-deployment -f toku-web-deployment.dockerfile .
-docker build -t toku-lib-deployment -f toku-lib-deployment.dockerfile .
-```
-
-### toku-web-deployment
-
-What the image guarantees:
-
-- `debian:bookworm-slim` with `openresty` installed from the upstream repo and
-  `ca-certificates` kept. `gnupg` and `wget` are purged after repo setup.
-- A working `apt`: the openresty apt source and its key stay configured, but
-  `/var/lib/apt/lists` is removed, so a downstream layer must run
-  `apt-get update` before any `apt-get install` (and should remove the lists
-  again afterwards).
-- A non-root system user `worker`, uid 10001, gid 0, no home, `nologin`. No
-  `USER` directive is set: the nginx master starts as whatever the runtime
-  assigns and the server config's `user` directive (or the orchestrator's
-  arbitrary-uid convention) drops the workers. If your nginx config names a
-  different user, add it downstream.
-- `toku-deploy-setup <build-tree> [dist-dir]` on the PATH. It deletes
-  `*.o`/`*.a`/`*.link` install intermediates, applies the arbitrary-uid
-  permission convention (`chgrp -R 0`, `chmod -R g-w,o-w`, group-writable
-  `temp`), marks `run.sh` executable, symlinks `logs/{access,error}.log` to
-  stdout and stderr, and runs `ldconfig`. `dist-dir` defaults to
-  `<build-tree>/main/dist`.
-- `ENV OPENRESTY_DIR=/usr/local/openresty`, `WORKDIR /app`, and a default
-  `CMD` of `sh -c "umask 002; exec ./run.sh --fg"`.
-
-What a downstream image must add: the built tree, a `toku-deploy-setup` call,
-and a `WORKDIR` pointing at the dist directory.
-
-App configuration such as SSL cert and key paths, ports and domain belongs in
-the **builder** stage. The configure hook reads those while rendering
-`nginx.conf`, and the generated `run.sh` only exports the values baked in at
-render time before exec'ing openresty against a static config. Nothing
-re-renders when the container starts, so the same variables set in the runtime
-stage have no effect. The names come from your `variable_prefix`, so a project
-named `my-app` reads `MY_APP_SSL_CERT`, not `SSL_CERT`.
-
-`--env prod` also requires a `make.prod.lua`; no scaffold ships one. The
-smallest that works returns a table merged over `make.lua`:
-
-```lua
-return { env = { server = { host = "example.com" } } }
-```
-
-```dockerfile
-FROM toku-web AS builder
-WORKDIR /app
-COPY . .
-RUN MY_APP_SSL_CERT=/home/app/cert.pem \
-    MY_APP_SSL_KEY=/home/app/privkey.pem \
-    toku build --env prod
-
-FROM toku-web-deployment
-COPY --from=builder /app/build/prod /app/build/prod
-RUN toku-deploy-setup /app/build/prod
-WORKDIR /app/build/prod/main/dist
-```
-
-Extending with native dependencies:
-
-```dockerfile
-FROM toku-web-deployment
-RUN apt-get update \
-    && apt-get -y install --no-install-recommends libsqlite3-0 \
-    && rm -rf /var/lib/apt/lists/*
-```
-
-### toku-lib-deployment
-
-Library projects have no long-running runtime; the deployable artifact is a
-bundled executable from `toku install --bundled`, whose dynamic dependencies
-reduce to system libraries plus `liblua5.1`. The image is
-`debian:bookworm-slim` plus `liblua5.1-0` and `ca-certificates`, the same
-`worker` user, `WORKDIR /app`, and a working `apt` under the same
-update-first rule:
-
-```dockerfile
-FROM toku-lib AS builder
-WORKDIR /app
-COPY . .
-RUN toku install --bundled --prefix /usr/local
-
-FROM toku-lib-deployment
-COPY --from=builder /usr/local/bin/mytool /usr/local/bin/mytool
-USER worker
-ENTRYPOINT ["mytool"]
-```
-
 ## Documentation
 
 Runnable examples and the full API: [santoku.dev](https://santoku.dev/#santoku-make).
+
+The container images in this repository, for building and for deployment, are
+documented at [start-lib](https://santoku.dev/start-lib) and
+[start-web](https://santoku.dev/start-web).
 
 For agents and LLM tooling: [llms.txt](https://santoku.dev/llms.txt) for the index,
 [llms-full.txt](https://santoku.dev/llms-full.txt) for every documented example.
@@ -169,4 +23,3 @@ For agents and LLM tooling: [llms.txt](https://santoku.dev/llms.txt) for the ind
 ## License
 
 MIT, see [LICENSE](LICENSE).
-
