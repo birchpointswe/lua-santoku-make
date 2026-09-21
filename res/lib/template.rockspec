@@ -68,6 +68,7 @@ build = {
   makefile = "Makefile",
   variables = {
     LIB_EXTENSION = "$(LIB_EXTENSION)",
+    TK_ROCKS_DIR = "$(PREFIX)/../..",
   },
   build_variables = {
     CC = "$(CC)",

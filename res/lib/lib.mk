@@ -23,6 +23,7 @@ LIB_O = $(patsubst %.wasm.o,%.o,$(LIB_C:.c=.o) $(LIB_CXX:.cpp=.o))
 LIB_D = $(LIB_O:.o=.d)
 LIB_SO = $(LIB_O:.o=.$(LIB_EXTENSION))
 LIB_H = $(shell find * -name '*.h')
+LIB_ARCHIVES = $(filter %.a, $(LDFLAGS) $(LIB_LDFLAGS))
 
 INST_LUA = $(patsubst %.wasm.lua,%.lua,$(addprefix $(INST_LUADIR)/, $(LIB_LUA)))
 INST_SO = $(addprefix $(INST_LIBDIR)/, $(LIB_SO))
@@ -80,7 +81,7 @@ inject_flags = function (env, wasm_env)
                 arr.concat(wasm_flags.cxxflags, " "), "\n\n")
             end
             if #wasm_flags.ldflags > 0 then
-              arr.push(out, base, ".$(LIB_EXTENSION): ", base, ".o\n", "\t$(CC) $(LIBFLAG) $< -o $@ $(LDFLAGS) $(LIB_LDFLAGS) ",
+              arr.push(out, base, ".$(LIB_EXTENSION): ", base, ".o $(LIB_ARCHIVES)\n", "\t$(CC) $(LIBFLAG) $< -o $@ $(LDFLAGS) $(LIB_LDFLAGS) ",
                 arr.concat(wasm_flags.ldflags, " "), " $(WASM_LDFLAGS_FINAL)\n\n")
             end
             if has_native then
@@ -102,7 +103,7 @@ inject_flags = function (env, wasm_env)
                 arr.concat(flags.cxxflags, " "), "\n\n")
             end
             if #flags.ldflags > 0 then
-              arr.push(out, base, ".$(LIB_EXTENSION): ", base, ".o\n", "\t$(CC) $(LIBFLAG) $< -o $@ $(LDFLAGS) $(LIB_LDFLAGS) ",
+              arr.push(out, base, ".$(LIB_EXTENSION): ", base, ".o $(LIB_ARCHIVES)\n", "\t$(CC) $(LIBFLAG) $< -o $@ $(LDFLAGS) $(LIB_LDFLAGS) ",
                 arr.concat(flags.ldflags, " "), "\n\n")
             end
             arr.push(out, "endif\n")
@@ -116,6 +117,8 @@ inject_flags = function (env, wasm_env)
   end
 end
 %>
+
+TK_ROCK_INCDIR = $(or $(lastword $(sort $(wildcard $(TK_ROCKS_DIR)/$(1)/*/include))),$(error no headers found for rock '$(1)' under '$(TK_ROCKS_DIR)' - declare it as a dependency and install it into this tree))
 
 LIB_CFLAGS := -I. $(addprefix -I, $(LUA_INCDIR)) <% return arr.concat(cflags or {}, " ") %> $(<% return var("CFLAGS") %>) $(LIB_CFLAGS)
 LIB_CXXFLAGS := -I. $(addprefix -I, $(LUA_INCDIR)) <% return arr.concat(cxxflags or {}, " ") %> $(<% return var("CXXFLAGS") %>) $(LIB_CXXFLAGS)
@@ -184,7 +187,7 @@ all: $(LIB_O) $(LIB_SO) $(LIB_LINK)
 %.o: %.cpp
 	$(CXX) -c $< -o $@ $(CXXFLAGS) $(LIB_CXXFLAGS)
 
-%.$(LIB_EXTENSION): %.o
+%.$(LIB_EXTENSION): %.o $(LIB_ARCHIVES)
 	$(CC) $(LIBFLAG) $< -o $@ $(LDFLAGS) $(LIB_LDFLAGS) $(WASM_LDFLAGS_FINAL)
 
 %.link: %.o Makefile
