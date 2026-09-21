@@ -11,8 +11,13 @@ local str = require("santoku.string")
 
 local boilerplate_tar_b64 = <%
   local fs = require("santoku.fs")
+  local bpdir = "submodules/tokuboilerplate-api"
+  depend(bpdir, function (fp)
+    local base = fs.basename(fp)
+    return base == ".git" or base == "build"
+  end)
   local tmp = fs.tmpname()
-  sys.execute({ "tar", "-C", "submodules/tokuboilerplate-api", "--exclude", ".git", "--exclude", "build",
+  sys.execute({ "tar", "-C", bpdir, "--exclude", ".git", "--exclude", "build",
     "--mode", "a+rX,u+w,go-w", "-czf", tmp, "." })
   local content = fs.readfile(tmp)
   fs.rm(tmp)
