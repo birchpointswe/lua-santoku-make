@@ -219,6 +219,24 @@ local function get_config_files(config_file, config_stamp)
   return files
 end
 
+local function track_deps (env, deps)
+  env.readfile = function (fp)
+    deps[fp] = true
+    return fs.readfile(fp)
+  end
+  env.depend = function (fp, prune)
+    deps[fp] = true
+    if fs.isdir(fp) then
+      for p, m in fs.walk(fp, prune) do
+        if not (prune and prune(p, m)) then
+          deps[p] = true
+        end
+      end
+    end
+    return fp
+  end
+end
+
 local function add_file_target(target_fn, dest, src, env, config, config_file, extra_srcs, build_deps_dir, build_deps_ok, config_stamp)
   local action = get_action(src, config)
   if action == "copy" then
@@ -228,7 +246,7 @@ local function add_file_target(target_fn, dest, src, env, config, config_file, e
     target_fn({ dest }, arr.flatten({ src, get_config_files(config_file, config_stamp), extra_srcs or {}, build_deps_ok or {} }), function ()
       fs.mkdirp(fs.dirname(dest))
       local deps = {}
-      env.readfile = function (fp) deps[fp] = true; return fs.readfile(fp) end
+      track_deps(env, deps)
       local t = with_build_deps(build_deps_dir, function ()
         return tmpl.renderfile(src, env, _G)
       end)
@@ -243,7 +261,7 @@ local function add_templated_target_base64(target_fn, dest, data, env, config_fi
     embedded_source and { embedded_source } or {} }), function ()
     fs.mkdirp(fs.dirname(dest))
     local deps = {}
-    env.readfile = function (fp) deps[fp] = true; return fs.readfile(fp) end
+    track_deps(env, deps)
     local t = with_build_deps(build_deps_dir, function ()
       return tmpl.render(str.from_base64(data), env, _G)
     end)
