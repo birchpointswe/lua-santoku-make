@@ -479,6 +479,7 @@ return {
   add_copied_target = add_copied_target,
   add_file_target = add_file_target,
   add_templated_target_base64 = add_templated_target_base64,
+  track_deps = track_deps,
   with_build_deps = with_build_deps,
   get_lua_version = get_lua_version,
   get_require_paths = get_require_paths,

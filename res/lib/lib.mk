@@ -21,6 +21,7 @@ endif
 
 LIB_O = $(patsubst %.wasm.o,%.o,$(LIB_C:.c=.o) $(LIB_CXX:.cpp=.o))
 LIB_D = $(LIB_O:.o=.d)
+DEPFLAGS = -MMD -MP
 LIB_SO = $(LIB_O:.o=.$(LIB_EXTENSION))
 LIB_H = $(shell find * -name '*.h')
 LIB_ARCHIVES = $(filter %.a, $(LDFLAGS) $(LIB_LDFLAGS))
@@ -73,11 +74,11 @@ inject_flags = function (env, wasm_env)
           if has_wasm then
             arr.push(out, "ifdef _WASM\n")
             if #wasm_flags.cflags > 0 then
-              arr.push(out, base, ".o: ", fp, "\n", "\t$(CC) -c $< -o $@ $(CFLAGS) $(LIB_CFLAGS) ",
+              arr.push(out, base, ".o: ", fp, "\n", "\t$(CC) -c $< -o $@ $(DEPFLAGS) $(CFLAGS) $(LIB_CFLAGS) ",
                 arr.concat(wasm_flags.cflags, " "), "\n\n")
             end
             if #wasm_flags.cxxflags > 0 then
-              arr.push(out, base, ".o: ", fp, "\n", "\t$(CXX) -c $< -o $@ $(CXXFLAGS) $(LIB_CXXFLAGS) ",
+              arr.push(out, base, ".o: ", fp, "\n", "\t$(CXX) -c $< -o $@ $(DEPFLAGS) $(CXXFLAGS) $(LIB_CXXFLAGS) ",
                 arr.concat(wasm_flags.cxxflags, " "), "\n\n")
             end
             if #wasm_flags.ldflags > 0 then
@@ -95,11 +96,11 @@ inject_flags = function (env, wasm_env)
               arr.push(out, "ifndef _WASM\n")
             end
             if #flags.cflags > 0 then
-              arr.push(out, base, ".o: ", fp, "\n", "\t$(CC) -c $< -o $@ $(CFLAGS) $(LIB_CFLAGS) ",
+              arr.push(out, base, ".o: ", fp, "\n", "\t$(CC) -c $< -o $@ $(DEPFLAGS) $(CFLAGS) $(LIB_CFLAGS) ",
                 arr.concat(flags.cflags, " "), "\n\n")
             end
             if #flags.cxxflags > 0 then
-              arr.push(out, base, ".o: ", fp, "\n", "\t$(CXX) -c $< -o $@ $(CXXFLAGS) $(LIB_CXXFLAGS) ",
+              arr.push(out, base, ".o: ", fp, "\n", "\t$(CXX) -c $< -o $@ $(DEPFLAGS) $(CXXFLAGS) $(LIB_CXXFLAGS) ",
                 arr.concat(flags.cxxflags, " "), "\n\n")
             end
             if #flags.ldflags > 0 then
@@ -176,16 +177,16 @@ all: $(LIB_O) $(LIB_SO) $(LIB_LINK)
 <% pop() %>
 
 %.o: %.wasm.c
-	$(CC) -c $< -o $@ $(CFLAGS) $(LIB_CFLAGS)
+	$(CC) -c $< -o $@ $(DEPFLAGS) $(CFLAGS) $(LIB_CFLAGS)
 
 %.o: %.wasm.cpp
-	$(CXX) -c $< -o $@ $(CXXFLAGS) $(LIB_CXXFLAGS)
+	$(CXX) -c $< -o $@ $(DEPFLAGS) $(CXXFLAGS) $(LIB_CXXFLAGS)
 
 %.o: %.c
-	$(CC) -c $< -o $@ $(CFLAGS) $(LIB_CFLAGS)
+	$(CC) -c $< -o $@ $(DEPFLAGS) $(CFLAGS) $(LIB_CFLAGS)
 
 %.o: %.cpp
-	$(CXX) -c $< -o $@ $(CXXFLAGS) $(LIB_CXXFLAGS)
+	$(CXX) -c $< -o $@ $(DEPFLAGS) $(CXXFLAGS) $(LIB_CXXFLAGS)
 
 %.$(LIB_EXTENSION): %.o $(LIB_ARCHIVES)
 	$(CC) $(LIBFLAG) $< -o $@ $(LDFLAGS) $(LIB_LDFLAGS) $(WASM_LDFLAGS_FINAL)
@@ -224,3 +225,5 @@ $(INST_PREFIX)/include/%.h: ./%.h
 	@cp $< $@
 
 .PHONY: all install
+
+-include $(LIB_D)

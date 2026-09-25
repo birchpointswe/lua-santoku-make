@@ -11,10 +11,14 @@ install: all
 	@if [ -d lib ]; then $(MAKE) --no-print-directory -C lib install; fi
 	@if [ -d bin ]; then $(MAKE) --no-print-directory -C bin install; fi
 
+RESULTS_NEEDS_MAKEFILE = grep -Eq '^results\.mk:(.*[[:space:]])?Makefile([[:space:]]|$$)' "$<" || { echo "$<: the results.mk rule must list Makefile as a prerequisite, or editing this Makefile rebuilds nothing. Write: results.mk: Makefile" >&2; exit 1; }
+
 deps/%/results.mk: deps/%/Makefile
+	@$(RESULTS_NEEDS_MAKEFILE)
 	@$(MAKE) --no-print-directory -C "$(dir $@)"
 
 test/deps/%/results.mk: test/deps/%/Makefile
+	@$(RESULTS_NEEDS_MAKEFILE)
 	@$(MAKE) --no-print-directory -C "$(dir $@)"
 
 .PHONY: all install
