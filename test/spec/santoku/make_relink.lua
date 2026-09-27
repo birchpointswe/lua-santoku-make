@@ -75,7 +75,7 @@ end
 
 local function build (dir)
   return fs.pushd(dir, function ()
-    project.init({}).exec({ "true" })
+    project.init({}).lua_env("test")
   end)
 end
 
@@ -121,6 +121,28 @@ test("an edited header recompiles the module that includes it", function ()
   build(dir)
   assert(first ~= fs.readfile(so_file(dir)),
     "a changed header must recompile the module, so its bytes must change")
+
+  sys.execute({ "rm", "-rf", dir })
+
+end)
+
+test("an object built without a .d file recompiles, so a header edit is not missed", function ()
+
+  local dir = fs.join(root, "nodep")
+  write_project(dir)
+  build(dir)
+  assert(settle(dir), "a rebuild with no input change must stop recompiling the module")
+  local first = fs.readfile(so_file(dir))
+  local d = fs.join(dir, "build", "default", "test", "lib", "relinkfixture.d")
+  assert(fs.exists(d), "the compile must write a .d file")
+  fs.rm(d)
+
+  sys.sleep(1.1)
+  fs.writefile(fs.join(dir, "lib/relinkfixture.h"), module_h("30"))
+  build(dir)
+  assert(first ~= fs.readfile(so_file(dir)),
+    "an object with no .d must recompile, so the header edit must change its bytes")
+  assert(fs.exists(d), "the recompile must write the .d file")
 
   sys.execute({ "rm", "-rf", dir })
 

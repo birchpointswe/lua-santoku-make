@@ -898,18 +898,6 @@ rocks_provided = { lua = "5.1" }
     end
   end)
 
-  target({ "exec" }, { "test-deps" }, function (_, _, args)
-    fs.mkdirp(test_dir())
-    return fs.pushd(test_dir(), function ()
-      sys.execute(arr.copy({
-        env = {
-          LUA_PATH = test_env.lua_path,
-          LUA_CPATH = test_env.lua_cpath,
-        }
-      }, args))
-    end)
-  end)
-
   target({ "iterate" }, {}, function ()
     (function (ok, ...)
       if not ok then
@@ -1030,6 +1018,29 @@ rocks_provided = { lua = "5.1" }
   prune_stale(build_dir, build_all)
   prune_stale(test_dir, test_all)
 
+  if opts.wasm then
+    local keep = {}
+    for _, fp in ipairs(get_files("test/spec")) do
+      local pre = test_dir("bundler-pre", remove_tk(fp))
+      local post = test_dir("bundler-post", spec_js(fp))
+      keep[pre] = true
+      keep[pre .. ".d"] = true
+      keep[post] = true
+      keep[post .. ".c"] = true
+      keep[post .. ".lua"] = true
+      keep[test_dir(spec_js(fp))] = true
+    end
+    for _, root in ipairs({ test_dir("bundler-pre"), test_dir("bundler-post"), test_dir("test", "spec") }) do
+      if fs.exists(root) then
+        for fp in fs.files(root, true) do
+          if not keep[fp] then
+            fs.rm(fp)
+          end
+        end
+      end
+    end
+  end
+
   local configure = tbl.get(opts, {"config", "env", "configure"})
   if configure then
     configure(submake, { root = build_env })
@@ -1149,9 +1160,17 @@ rocks_provided = { lua = "5.1" }
       opts = opts or {}
       build(tbl.assign({ "release" }, opts), opts.verbosity)
     end,
-    exec = not opts.wasm and function (opts)
-      opts = opts or {}
-      build(tbl.assign({ "exec" }), opts.verbosity, opts)
+    lua_env = not opts.wasm and function (tree)
+      if tree ~= "test" then
+        err.error("a lib project has one lua tree, test; to run against the built rock, "
+          .. "toku install it and run toku lua without --tree", tree)
+      end
+      build({ "test-deps" }, opts.verbosity)
+      return {
+        lua = test_env.lua,
+        lua_path = common.absolute_paths(test_env.lua_path),
+        lua_cpath = common.absolute_paths(test_env.lua_cpath),
+      }
     end,
     clean = function (clean_opts)
       clean_opts = clean_opts or {}

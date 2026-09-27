@@ -1631,6 +1631,24 @@ rocks_provided = { lua = "5.1" }
       opts = opts or {}
       build(tbl.assign({ "stop", "test-stop" }, opts), opts.verbosity)
     end,
+    lua_env = function (tree)
+      local ok, dir
+      if tree == "test" then
+        ok, dir = test_server_dir(base_server_lua_modules_ok), test_dist_dir()
+      elseif tree == "build" then
+        ok, dir = server_dir(base_server_lua_modules_ok), dist_dir()
+      else
+        err.error("a web project's lua trees are test and build", tree)
+      end
+      build({ ok }, opts.verbosity)
+      return {
+        lua = opts.lua or openresty_interpreter() or env.interpreter()[1],
+        lua_path = common.absolute_paths(extend_path(extend_path(
+          get_lua_path(dir), openresty_path), opts.lua_path_extra)),
+        lua_cpath = common.absolute_paths(extend_path(extend_path(
+          get_lua_cpath(dir), openresty_cpath), opts.lua_cpath_extra)),
+      }
+    end,
     clean = function (clean_opts)
       clean_opts = clean_opts or {}
       return clean.web({

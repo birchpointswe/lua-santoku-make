@@ -114,6 +114,14 @@ local function get_lua_cpath(prefix)
     "lib/lua/%s/loadall.so")
 end
 
+local function absolute_paths (paths)
+  local out = {}
+  for p in str.gmatch(paths, "[^;]+") do
+    arr.push(out, fs.absolute(p))
+  end
+  return arr.concat(out, ";")
+end
+
 local function luarocks_var (name)
   local val
   local ok = pcall(function ()
@@ -485,6 +493,7 @@ return {
   get_require_paths = get_require_paths,
   get_lua_path = get_lua_path,
   get_lua_cpath = get_lua_cpath,
+  absolute_paths = absolute_paths,
   get_bundle_flags = get_bundle_flags,
   get_config_files = get_config_files,
   config_key = config_key,

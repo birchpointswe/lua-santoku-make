@@ -224,6 +224,12 @@ $(INST_PREFIX)/include/%.h: ./%.h
 	@mkdir -p $(dir $@)
 	@cp $< $@
 
-.PHONY: all install
+LIB_O_NO_D = $(foreach o,$(LIB_O),$(if $(wildcard $(o:.o=.d)),,$(o)))
+
+$(LIB_O_NO_D): TK_FORCE_DEPS
+
+TK_FORCE_DEPS:
+
+.PHONY: all install TK_FORCE_DEPS
 
 -include $(LIB_D)
