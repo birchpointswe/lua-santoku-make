@@ -114,49 +114,12 @@ local function create (opts)
   fs.stdout:write("  toku install     # Install locally\n")
 end
 
-local prunable_ext = {
-  lua = true, c = true, cpp = true, h = true, hpp = true,
-}
-
-local derived_ext = { "o", "so", "link", "d" }
-
 local function prune_stale (dir_fn, expected)
   local keep = {}
   for i = 1, #expected do
     keep[expected[i]] = true
   end
-  for _, sub in ipairs({ "lib", "bin", "test" }) do
-    local root = dir_fn(sub)
-    if fs.exists(root) then
-      for fp in fs.files(root, true) do
-        local ext = str.match(fp, "%.([^%.]+)$")
-        if ext and prunable_ext[ext] and not keep[fp] then
-          fs.rm(fp)
-          local stem = str.match(fp, "^(.*)%.[^%.]+$")
-          for i = 1, #derived_ext do
-            local art = stem .. "." .. derived_ext[i]
-            if fs.exists(art) then
-              fs.rm(art)
-            end
-          end
-          if sub == "lib" then
-            local rel = fs.relative(stem, root)
-            if rel then
-              local installed = {
-                dir_fn("lua_modules", "share", "lua", "5.1", rel .. ".lua"),
-                dir_fn("lua_modules", "lib", "lua", "5.1", rel .. ".so"),
-              }
-              for i = 1, #installed do
-                if fs.exists(installed[i]) then
-                  fs.rm(installed[i])
-                end
-              end
-            end
-          end
-        end
-      end
-    end
-  end
+  common.prune_stale(dir_fn, keep)
 end
 
 local function init (opts)
@@ -164,7 +127,6 @@ local function init (opts)
   local submake = make(opts)
   local target = submake.target
   local build = submake.build
-  local targets = submake.targets
 
   err.assert(vdt.istable(opts))
   err.assert(vdt.istable(opts.config))
@@ -995,22 +957,6 @@ rocks_provided = { lua = "5.1" }
       sys.sleep(.25)
     end
   end)
-
-  for _, fp in ipairs(targets) do
-    local dfile = fp .. ".d"
-    if fs.exists(dfile) then
-      local all_chunks = {}
-      for line in fs.lines(dfile) do
-        local parts = str.splits(line, "%s*:%s*", false)
-        for i = 1, #parts do
-          all_chunks[#all_chunks + 1] = str.sub(parts[i])
-        end
-      end
-      if #all_chunks > 0 then
-        target({ all_chunks[1] }, arr.slice(all_chunks, 2))
-      end
-    end
-  end
 
   common.clear_stale_lock(build_dir("lua_modules"), test_dir("lua_modules"),
     fs.join(build_deps_dir, "lua_modules"))

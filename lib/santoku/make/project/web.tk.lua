@@ -1579,22 +1579,6 @@ rocks_provided = { lua = "5.1" }
     end)
   end)
 
-  for _, fp in ipairs(submake.targets) do
-    local dfile = fp .. ".d"
-    if fs.exists(dfile) then
-      local all_chunks = {}
-      for line in fs.lines(dfile) do
-        local parts = str.splits(line, "%s*:%s*", false)
-        for i = 1, #parts do
-          all_chunks[#all_chunks + 1] = str.sub(parts[i])
-        end
-      end
-      if #all_chunks > 0 then
-        target({ all_chunks[1] }, arr.slice(all_chunks, 2))
-      end
-    end
-  end
-
   common.clear_stale_lock(
     dist_dir(base_server_lua_modules),
     test_dist_dir(base_server_lua_modules),
@@ -1606,6 +1590,16 @@ rocks_provided = { lua = "5.1" }
   if configure then
     configure(submake, { root = root_env, client = client_env, server = server_env })
     configure(submake, { root = test_root_env, client = test_client_env, server = test_server_env })
+  end
+
+  local keep = tbl.assign({}, submake.targets)
+  for _, cdir in ipairs({ client_dir, test_client_dir }) do
+    for _, fp in ipairs(generated_client_files) do
+      keep[cdir(fp)] = true
+    end
+  end
+  for _, dir_fn in ipairs({ client_dir, test_client_dir, server_dir, test_server_dir }) do
+    common.prune_stale(dir_fn, keep)
   end
 
   return {

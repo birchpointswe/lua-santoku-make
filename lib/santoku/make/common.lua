@@ -478,6 +478,47 @@ local function is_text_file(filepath)
   return ext and text_extensions[str.lower(ext)]
 end
 
+local prunable_ext = {
+  lua = true, c = true, cpp = true, h = true, hpp = true,
+}
+
+local derived_ext = { "o", "so", "link", "d" }
+
+local function prune_stale (dir_fn, keep)
+  for _, sub in ipairs({ "lib", "bin", "test" }) do
+    local root = dir_fn(sub)
+    if fs.exists(root) then
+      for fp in fs.files(root, true) do
+        local ext = str.match(fp, "%.([^%.]+)$")
+        if ext and prunable_ext[ext] and not keep[fp] then
+          fs.rm(fp)
+          local stem = str.match(fp, "^(.*)%.[^%.]+$")
+          for i = 1, #derived_ext do
+            local art = stem .. "." .. derived_ext[i]
+            if fs.exists(art) then
+              fs.rm(art)
+            end
+          end
+          if sub == "lib" then
+            local rel = fs.relative(stem, root)
+            if rel then
+              local installed = {
+                dir_fn("lua_modules", "share", "lua", "5.1", rel .. ".lua"),
+                dir_fn("lua_modules", "lib", "lua", "5.1", rel .. ".so"),
+              }
+              for i = 1, #installed do
+                if fs.exists(installed[i]) then
+                  fs.rm(installed[i])
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end
+
 return {
   watch_snapshot = watch_snapshot,
   watch_changed = watch_changed,
@@ -503,6 +544,7 @@ return {
   local_dep_srcs = local_dep_srcs,
   install_local_deps = install_local_deps,
   clear_stale_lock = clear_stale_lock,
+  prune_stale = prune_stale,
   compute_file_hash = compute_file_hash,
   compute_string_hash = compute_string_hash,
   hash_filename = hash_filename,
