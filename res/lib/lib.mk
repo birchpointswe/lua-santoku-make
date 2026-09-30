@@ -26,8 +26,16 @@ LIB_SO = $(LIB_O:.o=.$(LIB_EXTENSION))
 LIB_H = $(shell find * -name '*.h')
 LIB_ARCHIVES = $(filter %.a, $(LDFLAGS) $(LIB_LDFLAGS))
 
+LIB_REQ = $(LIB_O:.o=.requires)
+
+TK_LUA_CDIR = $(if $(TK_ROCKS_DIR),$(TK_ROCKS_DIR)/../../lua/5.1)
+TK_REQ_UNIVERSE := $(basename $(LIB_SO)) $(if $(TK_LUA_CDIR),$(patsubst $(TK_LUA_CDIR)/%.$(LIB_EXTENSION),%,$(shell find $(TK_LUA_CDIR) -name '*.$(LIB_EXTENSION)' 2>/dev/null)))
+TK_REQ_HEADERS = $(foreach h,$(filter %.h,$(file < $(1))),$(lastword $(subst /include/, ,$(h))))
+TK_REQ_MODULES = $(subst /,.,$(sort $(filter-out $(2),$(filter $(TK_REQ_UNIVERSE),$(foreach h,$(call TK_REQ_HEADERS,$(1)),$(basename $(h)) $(patsubst %/,%,$(dir $(h))))))))
+
 INST_LUA = $(patsubst %.wasm.lua,%.lua,$(addprefix $(INST_LUADIR)/, $(LIB_LUA)))
 INST_SO = $(addprefix $(INST_LIBDIR)/, $(LIB_SO))
+INST_REQ = $(addprefix $(INST_LIBDIR)/, $(LIB_REQ))
 INST_H = $(addprefix $(INST_PREFIX)/include/, $(LIB_H))
 
 ifndef _WASM
@@ -167,7 +175,7 @@ LIB_LDFLAGS += <% return arr.concat(tbl.get(test or {}, {"native", "ldflags"}) o
 <% pop() %>
 endif
 
-all: $(LIB_O) $(LIB_SO) $(LIB_LINK)
+all: $(LIB_O) $(LIB_SO) $(LIB_LINK) $(LIB_REQ)
 
 <% return inject_flags(rules, rules) %>
 <% push(environment == "build") %>
@@ -197,7 +205,12 @@ all: $(LIB_O) $(LIB_SO) $(LIB_LINK)
 	@printf '%s\n' $(notdir $(filter %.a, $(LDFLAGS) $(LIB_LDFLAGS))) >> $@
 	@printf '%s\n' $(filter-out %.a, $(LDFLAGS) $(LIB_LDFLAGS)) >> $@
 
-install: $(INST_LUA) $(INST_SO) $(INST_O) $(INST_LINK) $(INST_H)
+%.requires: %.o Makefile
+	@rm -f $@
+	@touch $@
+	@$(if $(call TK_REQ_MODULES,$*.d,$*),printf '%s\n' $(call TK_REQ_MODULES,$*.d,$*) > $@,true)
+
+install: $(INST_LUA) $(INST_SO) $(INST_O) $(INST_LINK) $(INST_REQ) $(INST_H)
 
 $(INST_LUADIR)/%.lua: ./%.wasm.lua
 	@mkdir -p $(dir $@)
@@ -219,6 +232,10 @@ $(INST_LIBDIR)/%.link: ./%.link
 	@mkdir -p $(dir $@)
 	@cp $< $@
 	@$(if $(filter %.a, $(LDFLAGS) $(LIB_LDFLAGS)),cp $(filter %.a, $(LDFLAGS) $(LIB_LDFLAGS)) $(dir $@),true)
+
+$(INST_LIBDIR)/%.requires: ./%.requires
+	@mkdir -p $(dir $@)
+	@cp $< $@
 
 $(INST_PREFIX)/include/%.h: ./%.h
 	@mkdir -p $(dir $@)

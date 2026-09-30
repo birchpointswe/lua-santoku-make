@@ -482,7 +482,7 @@ local prunable_ext = {
   lua = true, c = true, cpp = true, h = true, hpp = true,
 }
 
-local derived_ext = { "o", "so", "link", "d" }
+local derived_ext = { "o", "so", "link", "d", "requires" }
 
 local function prune_stale (dir_fn, keep)
   for _, sub in ipairs({ "lib", "bin", "test" }) do
