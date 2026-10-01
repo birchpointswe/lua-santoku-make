@@ -286,20 +286,12 @@ local function texts_source (texts)
       return texts[id]
     end
     if not cache[id] then
-      local chunks, status = {}, nil
-      for ev, _, a, b in sys.pread({ "curl", "-fsSL", str.format(spdx_url, id) }) do
-        if ev == "stdout" then
-          arr.push(chunks, a)
-        elseif ev == "exit" then
-          status = a == "exited" and b or -1
-        end
-      end
-      if status ~= 0 then
-        err.error("license: fetching the " .. id .. " text failed", str.format(spdx_url, id))
-      end
       local lines = {}
-      for line in str.gmatch((str.gsub(arr.concat(chunks), "\n+$", "")) .. "\n", "([^\n]*)\n") do
+      for line in sys.sh({ "curl", "-fsSL", str.format(spdx_url, id) }) do
         arr.push(lines, line)
+      end
+      while lines[#lines] == "" do
+        lines[#lines] = nil
       end
       cache[id] = lines
     end
@@ -335,7 +327,15 @@ local function component_text (c, text_of)
     end
     arr.push(notices, line)
   end
-  local lines = text_of(c.license)
+  local lines
+  if c.text then
+    lines = {}
+    for line in str.gmatch((str.gsub(c.text, "\n+$", "")) .. "\n", "([^\n]*)\n") do
+      arr.push(lines, line)
+    end
+  else
+    lines = text_of(c.license)
+  end
   local body = {}
   local placed = false
   for i = 1, #lines do

@@ -406,6 +406,21 @@ test("a fetched license text keeps its blank lines and paragraph breaks", functi
   assert(eq(source_paras, select(2, str.gsub(managed, "\n\n", "")) - 1))
 end)
 
+test("a vendored entry's inline text is used verbatim and nothing is fetched", function ()
+  fixture()
+  local pd = {
+    name = "SHA-256", path = { "vendor.lua" }, license = "LicenseRef-PublicDomain",
+    text = "This code is released into the public domain.\n\nAcknowledgement is requested, not required.\n",
+  }
+  local opts = vopts({ pd })
+  license.apply(opts)
+  local text = read("LICENSE")
+  assert(str.find(text, "\n\nThis package vendors SHA-256 (vendor.lua), which is:\n\n"
+    .. "  This code is released into the public domain.\n\n"
+    .. "  Acknowledgement is requested, not required.\n", 1, true), text)
+  assert(eq(0, #license.check(opts)))
+end)
+
 test("render refuses a text with no copyright line to fill", function ()
   local ok = err.pcall(license.render, "AGPL-3.0-only", {
     "GNU AFFERO GENERAL PUBLIC LICENSE", "", "Copyright (C) <year>  <name of author>",
