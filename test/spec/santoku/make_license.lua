@@ -205,6 +205,25 @@ test("apply writes one section per vendored component and skips its paths", func
   assert(eq(0, #problems), arr.concat(problems, "\n"))
 end)
 
+test("a component name that ends at, or straddles, the 80-column wrap still matches its section", function ()
+  fixture()
+  local at = "Unicode Character Database 16.0.0 tables with padding words"
+  local across = at .. " extra"
+  assert(eq(80, #("This package vendors " .. at)))
+  local vendored = {
+    { name = at, path = { "vendor.lua" }, copyright = "2001 Someone", license = "MIT" },
+    { name = across, path = { "vendored.c" }, copyright = "1999 Someone", license = "MIT" },
+  }
+  license.apply(vopts(vendored))
+  local text = read("LICENSE")
+  assert(str.find(text, "This package vendors " .. at .. "\n(vendor.lua), which is:", 1, true), text)
+  assert(str.find(text, "This package vendors " .. at .. "\nextra (vendored.c), which is:", 1, true), text)
+  local problems = license.check(vopts(vendored))
+  assert(eq(0, #problems), arr.concat(problems, "\n"))
+  license.apply(vopts(vendored))
+  assert(eq(text, read("LICENSE")))
+end)
+
 test("apply refuses, and check reports, a LICENSE section make.lua doesn't declare", function ()
   fixture()
   local before = "Copyright 2025 Birch Point SWE\n\nOld terms.\n\n" .. third_party

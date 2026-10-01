@@ -395,21 +395,37 @@ local function notice_count (text)
   return n
 end
 
+local function flat (s)
+  return (str.gsub(s, "%s+", " "))
+end
+
+local function names_component (text, prefix, name, ending)
+  local _, e = str.find(text, prefix .. name, 1, true)
+  if not e then
+    return false
+  end
+  local rest = str.sub(text, e + 1)
+  return str.match(rest, "^" .. ending) or str.match(rest, "^ %S+" .. ending)
+end
+
 local function section_component (section, vendored)
+  local text = flat(section)
+  local best, best_len
   for i = 1, #vendored do
-    local name = vendored[i].name
-    if str.find(section, "This package vendors " .. name .. " ", 1, true)
-      or str.find(section, "This package links " .. name .. ",", 1, true)
-      or str.find(section, "This package links " .. name .. " ", 1, true) then
-      return i
+    local name = flat(vendored[i].name)
+    if (names_component(text, "This package vendors ", name, " %(")
+      or names_component(text, "This package links ", name, ","))
+      and (not best or #name > best_len) then
+      best, best_len = i, #name
     end
   end
-  return nil
+  return best
 end
 
 local function section_name (section)
-  local line = str.match(section, "This package [a-z]+ ([^\n]*)")
-  return line or str.match(section, "%S[^\n]*") or "(empty)"
+  local text = flat(section)
+  local label = str.match(text, "This package [a-z]+ ([^(,]*)")
+  return label and (str.gsub(label, " $", "")) or str.match(section, "%S[^\n]*") or "(empty)"
 end
 
 local function license_problems (text, vendored)
