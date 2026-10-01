@@ -7,6 +7,7 @@ local sys = require("santoku.system")
 local err = require("santoku.error")
 local str = require("santoku.string")
 local utc = require("santoku.utc")
+local env = require("santoku.env")
 local license = require("santoku.make.license")
 local project = require("santoku.make.project")
 
@@ -313,6 +314,96 @@ test("a vendored section reflows real-length license text under its indent", fun
   assert_paragraphs(str.sub(text, s), "  ")
   assert(str.find(text, "\n  Copyright (C) 2007-2023 Lua.org, PUC-Rio.\n", 1, true), text)
   assert(eq(0, #license.check(opts)))
+end)
+
+local spdx_mit_full = arr.concat({
+  "MIT License", "", "Copyright (c) <year> <copyright holders>", "",
+  "Permission is hereby granted, free of charge, to any person obtaining a copy of this software and",
+  "associated documentation files (the \"Software\"), to deal in the Software without restriction, including",
+  "without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell",
+  "copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the",
+  "following conditions:", "",
+  "The above copyright notice and this permission notice shall be included in all copies or substantial",
+  "portions of the Software.", "",
+  "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT",
+  "LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO",
+  "EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER",
+  "IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE",
+  "USE OR OTHER DEALINGS IN THE SOFTWARE.",
+}, "\n") .. "\n"
+
+local fetched_license = arr.concat({
+  "MIT License",
+  "",
+  "Copyright (c) 2023 Birch Point SWE",
+  "",
+  "Permission is hereby granted, free of charge, to any person obtaining a copy of",
+  "this software and associated documentation files (the \"Software\"), to deal in",
+  "the Software without restriction, including without limitation the rights to",
+  "use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of",
+  "the Software, and to permit persons to whom the Software is furnished to do so,",
+  "subject to the following conditions:",
+  "",
+  "The above copyright notice and this permission notice shall be included in all",
+  "copies or substantial portions of the Software.",
+  "",
+  "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR",
+  "IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS",
+  "FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR",
+  "COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER",
+  "IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN",
+  "CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
+  "",
+  str.rep("-", 80),
+  "",
+  "This package vendors LPeg 1.1.0 (vendor.lua), which is:",
+  "",
+  "  MIT License",
+  "",
+  "  Copyright (C) 2007-2023 Lua.org, PUC-Rio.",
+  "",
+  "  Permission is hereby granted, free of charge, to any person obtaining a copy",
+  "  of this software and associated documentation files (the \"Software\"), to deal",
+  "  in the Software without restriction, including without limitation the rights",
+  "  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell",
+  "  copies of the Software, and to permit persons to whom the Software is",
+  "  furnished to do so, subject to the following conditions:",
+  "",
+  "  The above copyright notice and this permission notice shall be included in all",
+  "  copies or substantial portions of the Software.",
+  "",
+  "  THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR",
+  "  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,",
+  "  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE",
+  "  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER",
+  "  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,",
+  "  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE",
+  "  SOFTWARE.",
+  "",
+  "Modified for santoku.",
+}, "\n") .. "\n"
+
+test("a fetched license text keeps its blank lines and paragraph breaks", function ()
+  fixture()
+  local bin = fs.absolute("test/res/license-bin")
+  sys.execute({ "rm", "-rf", bin })
+  fs.mkdirp(bin)
+  fs.writefile(fs.join(bin, "MIT.txt"), spdx_mit_full)
+  fs.writefile(fs.join(bin, "curl"), "#!/bin/sh\ncat '" .. fs.join(bin, "MIT.txt") .. "'\n")
+  sys.execute({ "chmod", "+x", fs.join(bin, "curl") })
+  local opts = vopts({ lpeg })
+  opts.texts = nil
+  local path = env.var("PATH")
+  sys.setenv("PATH", bin .. ":" .. path)
+  local ok, _, e = err.pcall(license.apply, opts)
+  sys.setenv("PATH", path)
+  sys.execute({ "rm", "-rf", bin })
+  assert(ok, tostring(e))
+  local text = read("LICENSE")
+  assert(eq(fetched_license, text))
+  local source_paras = select(2, str.gsub(spdx_mit_full, "\n\n", ""))
+  local managed = str.sub(text, 1, str.find(text, str.rep("-", 80), 1, true) - 1)
+  assert(eq(source_paras, select(2, str.gsub(managed, "\n\n", "")) - 1))
 end)
 
 test("render refuses a text with no copyright line to fill", function ()
