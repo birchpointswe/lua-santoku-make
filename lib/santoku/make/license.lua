@@ -452,6 +452,31 @@ local function license_problems (text, vendored)
   return problems, sections[1]
 end
 
+local function label_problems (vendored)
+  local problems = {}
+  for i = 1, #vendored do
+    local out = { separator, "" }
+    wrap(component_label(vendored[i]), out)
+    local k = section_component(arr.concat(out, "\n") .. "\n", vendored)
+    if k ~= i then
+      arr.push(problems, "vendored " .. vendored[i].name .. ": the LICENSE label apply writes for it would match "
+        .. (k and ("vendored " .. vendored[k].name) or "no entry"))
+    end
+  end
+  return problems
+end
+
+local vendor_dirs = { vendor = true, vendored = true, third_party = true, ["third-party"] = true }
+
+local function under_vendor (fp)
+  for seg in str.gmatch(fp, "([^/]+)/") do
+    if vendor_dirs[seg] then
+      return true
+    end
+  end
+  return false
+end
+
 local function validate_vendored (vendored)
   for i = 1, #vendored do
     local c = vendored[i]
@@ -521,6 +546,17 @@ local function skip_globs (exclude, vendored)
   return out
 end
 
+local function vendor_strays (dir, files, exclude, vendored)
+  local out = {}
+  local skip = skip_globs(exclude, vendored)
+  for i = 1, #files do
+    if under_vendor(files[i]) and not matches_any(files[i], skip) and fs.isfile(fs.join(dir, files[i])) then
+      arr.push(out, files[i] .. ": under a vendor directory, but no vendored entry or license_exclude covers it")
+    end
+  end
+  return out
+end
+
 local function walk (dir, id, holder, year, files, globs, write)
   local report = { ok = {}, missing = {}, stale = {}, foreign = {}, skipped = {} }
   local lines = header_lines(id, year, holder)
@@ -561,6 +597,16 @@ local function apply (opts)
   local report = { warnings = warnings(id, holder) }
   if not holder then
     return report
+  end
+  local bad = label_problems(vendored)
+  if id then
+    local strays = vendor_strays(dir, opts.files or tracked(dir), opts.exclude, vendored)
+    for i = 1, #strays do
+      arr.push(bad, strays[i])
+    end
+  end
+  if #bad > 0 then
+    err.error("license: " .. arr.concat(bad, "; "))
   end
   local year = opts.year or first_year(dir)
   local text_of = texts_source(opts.texts)
@@ -620,6 +666,14 @@ local function check (opts)
         arr.push(problems, "vendored " .. vendored[i].name .. ": " .. paths[j] .. " matches no tracked file")
       end
     end
+  end
+  local labels = label_problems(vendored)
+  for i = 1, #labels do
+    arr.push(problems, labels[i])
+  end
+  local strays = vendor_strays(dir, files, opts.exclude, vendored)
+  for i = 1, #strays do
+    arr.push(problems, strays[i])
   end
   if id then
     local report = walk(dir, id, holder, year, files, skip_globs(opts.exclude, vendored), false)

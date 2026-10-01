@@ -263,6 +263,49 @@ test("check reports a declared path that matches nothing and a missing section",
   assert(str.find(problems, "LICENSE has no section for vendored Ghost", 1, true), problems)
 end)
 
+local function failure (fn, ...)
+  local res = { err.pcall(fn, ...) }
+  local msg = {}
+  for i = 2, #res do
+    arr.push(msg, tostring(res[i]))
+  end
+  return res[1], arr.concat(msg, " ")
+end
+
+test("check and apply catch a label that wouldn't match its own entry, with no fetch", function ()
+  fixture()
+  local spaced = { name = "Spaced", version = "1.0 beta", path = { "vendor.lua" }, copyright = "2001 X", license = "NoSuchId" }
+  local problems = arr.concat(license.check(vopts({ spaced })), "\n")
+  assert(str.find(problems, "vendored Spaced: the LICENSE label apply writes for it would match no entry", 1, true),
+    problems)
+  local ok, e = failure(license.apply, vopts({ spaced }))
+  assert(eq(false, ok))
+  assert(str.find(tostring(e), "would match no entry", 1, true), tostring(e))
+  assert(eq(false, fs.exists(fs.join(dir, "LICENSE"))))
+end)
+
+test("check flags a tracked file under a vendor directory that nothing declares", function ()
+  fixture()
+  fs.mkdirp(fs.join(dir, "res/vendor/tw"))
+  fs.writefile(fs.join(dir, "res/vendor/tw/theme.css"), "a { color: red; }\n")
+  fs.writefile(fs.join(dir, "res/vendor/gone.txt"), "old notice\n")
+  git("add", "res/vendor/tw/theme.css", "res/vendor/gone.txt")
+  fs.rm(fs.join(dir, "res/vendor/gone.txt"))
+  local want = "res/vendor/tw/theme.css: under a vendor directory, but no vendored entry or license_exclude covers it"
+  local problems = arr.concat(license.check(vopts({ lpeg })), "\n")
+  assert(str.find(problems, want, 1, true), problems)
+  assert(eq(nil, str.find(problems, "gone.txt", 1, true)), problems)
+  local ok, e = failure(license.apply, vopts({ lpeg }))
+  assert(eq(false, ok))
+  assert(str.find(tostring(e), want, 1, true), tostring(e))
+  assert(eq("a { color: red; }\n", read("res/vendor/tw/theme.css")))
+  local tw = { name = "Tailwind", path = { "res/vendor/tw/*" }, copyright = "2001 X", license = "MIT" }
+  license.apply(vopts({ lpeg, tw }))
+  assert(eq("a { color: red; }\n", read("res/vendor/tw/theme.css")))
+  local after = license.check(vopts({ lpeg, tw }))
+  assert(eq(0, #after), arr.concat(after, "\n"))
+end)
+
 test("apply refuses, and check reports, a second notice above any line of dashes", function ()
   fixture()
   local before = "Copyright 2025 Birch Point SWE\n\nTerms.\n\nCopyright (C) 2007-2023 Lua.org, PUC-Rio.\n"
