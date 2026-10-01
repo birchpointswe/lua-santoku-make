@@ -15,6 +15,8 @@ local err = require("santoku.error")
 local common = require("santoku.make.common")
 local wasm = require("santoku.make.wasm")
 local clean = require("santoku.make.clean")
+local license = require("santoku.make.license")
+local utc = require("santoku.utc")
 local arr = require("santoku.array")
 local str = require("santoku.string")
 
@@ -97,12 +99,21 @@ local function create (opts)
     end
   end
 
+  local license_warnings = license.scaffold({
+    dir = dir, license = opts.license, copyright = opts.copyright,
+    year = utc.format(utc.time(), "%Y"),
+  })
+
   if opts.git ~= false then
     sys.execute({ "git", "init", dir })
   end
 
   if opts.quiet then
     return
+  end
+
+  for i = 1, #license_warnings do
+    fs.stderr:write("warning: " .. license_warnings[i] .. "; set it in make.lua\n")
   end
 
   fs.stdout:write("Created library project: " .. name .. "\n")

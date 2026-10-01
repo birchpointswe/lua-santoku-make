@@ -8,6 +8,8 @@ local vdt = require("santoku.validate")
 local err = require("santoku.error")
 local fs = require("santoku.fs")
 local str = require("santoku.string")
+local license = require("santoku.make.license")
+local utc = require("santoku.utc")
 
 local boilerplate_tar_b64 = <%
   local fs = require("santoku.fs")
@@ -74,12 +76,21 @@ local function create (opts)
     end
   end
 
+  local license_warnings = license.scaffold({
+    dir = dir, license = opts.license, copyright = opts.copyright,
+    year = utc.format(utc.time(), "%Y"),
+  })
+
   if opts.git ~= false then
     sys.execute({ "git", "init", dir })
   end
 
   if opts.quiet then
     return
+  end
+
+  for i = 1, #license_warnings do
+    fs.stderr:write("warning: " .. license_warnings[i] .. "; set it in make.lua\n")
   end
 
   fs.stdout:write("Created API project: " .. name .. "\n")
