@@ -18,6 +18,9 @@ local files = {
   ["style.css"] = "a { color: red; }\n",
   ["vendored.c"] = "/* Copyright 1999 Someone */\nint x;\n",
   ["README.md"] = "# r\n",
+  ["make.lua"] = "local env = {\n  name = \"x\",\n  version = \"0.0.1-1\",\n  license = \"MIT\",\n"
+    .. "  copyright = \"Birch Point SWE\",\n}\nreturn { env = env }\n",
+  ["vendor.lua"] = "-- Copyright 2001 Someone\nreturn 1\n",
   ["old.lua"] = "-- SPDX-License-Identifier: GPL-2.0-only\n-- SPDX-FileCopyrightText: 2020 Old\nreturn 1\n",
 }
 
@@ -77,9 +80,12 @@ end)
 test("headers insert, replace stale ones, and leave foreign and data files alone", function ()
   fixture()
   local report = license.headers(mit)
-  assert(eq("a.lua,bin/run.sh,style.css", joined(report.missing)))
+  assert(eq("a.lua,bin/run.sh,make.lua,style.css", joined(report.missing)))
   assert(eq("old.lua", joined(report.stale)))
-  assert(eq("vendored.c", joined(report.foreign)))
+  assert(eq("vendor.lua,vendored.c", joined(report.foreign)))
+  assert(eq("-- SPDX-License-Identifier: MIT\n-- SPDX-FileCopyrightText: 2023 Birch Point SWE\n"
+    .. files["make.lua"], read("make.lua")))
+  assert(eq(files["vendor.lua"], read("vendor.lua")))
   assert(eq("README.md", joined(report.skipped)))
   assert(eq("-- SPDX-License-Identifier: MIT\n-- SPDX-FileCopyrightText: 2023 Birch Point SWE\n"
     .. files["a.lua"], read("a.lua")))
@@ -98,7 +104,7 @@ test("a second headers run changes nothing", function ()
   license.headers(mit)
   local before = read("style.css") .. read("bin/run.sh") .. read("a.lua")
   local report = license.headers(mit)
-  assert(eq("a.lua,bin/run.sh,old.lua,style.css", joined(report.ok)))
+  assert(eq("a.lua,bin/run.sh,make.lua,old.lua,style.css", joined(report.ok)))
   assert(eq(before, read("style.css") .. read("bin/run.sh") .. read("a.lua")))
 end)
 
@@ -114,9 +120,10 @@ end)
 test("exclude skips matching paths", function ()
   fixture()
   local report = license.headers({
-    dir = dir, license = "MIT", copyright = "Birch Point SWE", year = "2023", exclude = { "^vendored%.c$" },
+    dir = dir, license = "MIT", copyright = "Birch Point SWE", year = "2023",
+    exclude = { "vendored.c", "vendor.lua" },
   })
-  assert(eq("README.md,vendored.c", joined(report.skipped)))
+  assert(eq("README.md,vendor.lua,vendored.c", joined(report.skipped)))
   assert(eq("", joined(report.foreign)))
 end)
 
@@ -124,7 +131,10 @@ test("check passes on a compliant tree and names each problem otherwise", functi
   fixture()
   license.headers(mit)
   fs.writefile(fs.join(dir, "LICENSE"), "MIT License\n\nCopyright (c) 2023 Birch Point SWE\n")
-  local opts = { dir = dir, license = "MIT", copyright = "Birch Point SWE", year = "2023", exclude = { "^vendored%.c$" } }
+  local opts = {
+    dir = dir, license = "MIT", copyright = "Birch Point SWE", year = "2023",
+    exclude = { "vendored.c", "vendor.lua" },
+  }
   local problems = license.check(opts)
   assert(eq(0, #problems), arr.concat(problems, "\n"))
   fs.writefile(fs.join(dir, "a.lua"), files["a.lua"])
@@ -139,6 +149,128 @@ test("check on an all-rights-reserved project wants the exact line", function ()
   assert(eq("LICENSE is missing", arr.concat(license.check(opts), "\n")))
   license.apply(opts)
   assert(eq(0, #license.check(opts)))
+end)
+
+local dashes = str.rep("-", 80)
+
+local third_party = dashes .. "\n\n"
+  .. "This package vendors LPeg 1.1.0 (vendor.lua), which is:\n\n  Copyright (C) 2007-2023 Lua.org, PUC-Rio.\n\n"
+  .. "  Permission is hereby granted.\n"
+
+local texts = {
+  MIT = { "MIT License", "", "Copyright (c) <year> <copyright holders>", "", "Permission is hereby granted." },
+  blessing = { "The author disclaims copyright to this source code." },
+}
+
+local lpeg = {
+  name = "LPeg", version = "1.1.0", path = { "vendor.lua" },
+  copyright = "(C) 2007-2023 Lua.org, PUC-Rio.", license = "MIT", note = "Modified for santoku.",
+}
+
+local function vopts (vendored)
+  return {
+    dir = dir, license = "MIT", copyright = "Birch Point SWE", texts = texts,
+    exclude = { "vendored.c" }, vendored = vendored,
+  }
+end
+
+test("glob paths follow REUSE: * stays in a directory, ** crosses them", function ()
+  assert(license.glob_match("lib/re/lp*", "lib/re/lpcap.h"))
+  assert(not license.glob_match("lib/re/lp*", "lib/re/sub/lpcap.h"))
+  assert(license.glob_match("lib/**", "lib/re/sub/lpcap.h"))
+  assert(license.glob_match("lib/**/x.h", "lib/x.h"))
+  assert(license.glob_match("lib/**/x.h", "lib/a/b/x.h"))
+  assert(not license.glob_match("lib/**/x.h", "lib/ax.h"))
+  assert(license.glob_match("a\\*b", "a*b"))
+  assert(not license.glob_match("a\\*b", "axb"))
+end)
+
+test("apply writes one section per vendored component and skips its paths", function ()
+  fixture()
+  fs.writefile(fs.join(dir, "LICENSE"), "Copyright 2025 Birch Point SWE\n\nOld terms.\n\n" .. third_party)
+  local report = license.apply(vopts({ lpeg }))
+  local want = "MIT License\n\nCopyright (c) 2023 Birch Point SWE\n\nPermission is hereby granted.\n\n"
+    .. dashes .. "\n\nThis package vendors LPeg 1.1.0 (vendor.lua), which is:\n\n"
+    .. "  MIT License\n\n  Copyright (C) 2007-2023 Lua.org, PUC-Rio.\n\n  Permission is hereby granted.\n\n"
+    .. "Modified for santoku.\n"
+  assert(eq(want, read("LICENSE")))
+  assert(eq(files["vendor.lua"], read("vendor.lua")))
+  assert(eq("", joined(report.foreign)))
+  license.apply(vopts({ lpeg }))
+  assert(eq(want, read("LICENSE")))
+  local problems = license.check(vopts({ lpeg }))
+  assert(eq(0, #problems), arr.concat(problems, "\n"))
+end)
+
+test("apply refuses, and check reports, a LICENSE section make.lua doesn't declare", function ()
+  fixture()
+  local before = "Copyright 2025 Birch Point SWE\n\nOld terms.\n\n" .. third_party
+  fs.writefile(fs.join(dir, "LICENSE"), before)
+  assert(eq(false, (err.pcall(license.apply, vopts({})))))
+  assert(eq(before, read("LICENSE")))
+  local problems = arr.concat(license.check(vopts({})), "\n")
+  assert(str.find(problems, "LICENSE has a section make.lua doesn't declare: LPeg 1.1.0", 1, true), problems)
+  assert(str.find(problems, "vendor.lua: foreign header", 1, true), problems)
+end)
+
+test("a build-time component gets a links section from its source URL", function ()
+  fixture()
+  local sqlite = {
+    name = "SQLite", version = "3.49.2", source = "https://sqlite.org/2025/sqlite-amalgamation-3490200.zip",
+    license = "blessing",
+  }
+  license.apply(vopts({ lpeg, sqlite }))
+  local text = read("LICENSE")
+  assert(str.find(text, "\n\n" .. dashes .. "\n\nThis package links SQLite 3.49.2, fetched from", 1, true), text)
+  assert(str.find(text, "sqlite-amalgamation-3490200.zip at build time, which is:\n\n"
+    .. "  The author disclaims copyright to this source code.\n", 1, true), text)
+  for line in str.gmatch(text, "[^\n]+") do
+    assert(#line <= 80, line)
+  end
+  assert(eq(0, #license.check(vopts({ lpeg, sqlite }))))
+  local problems = arr.concat(license.check(vopts({ lpeg })), "\n")
+  assert(str.find(problems, "LICENSE has a section make.lua doesn't declare: SQLite", 1, true), problems)
+end)
+
+test("check reports a declared path that matches nothing and a missing section", function ()
+  fixture()
+  license.apply(vopts({ lpeg }))
+  local ghost = { name = "Ghost", version = "1", path = { "nowhere/*" }, copyright = "2020 X", license = "MIT" }
+  local problems = arr.concat(license.check(vopts({ lpeg, ghost })), "\n")
+  assert(str.find(problems, "vendored Ghost: nowhere/* matches no tracked file", 1, true), problems)
+  assert(str.find(problems, "LICENSE has no section for vendored Ghost", 1, true), problems)
+end)
+
+test("apply refuses, and check reports, a second notice above any line of dashes", function ()
+  fixture()
+  local before = "Copyright 2025 Birch Point SWE\n\nTerms.\n\nCopyright (C) 2007-2023 Lua.org, PUC-Rio.\n"
+  fs.writefile(fs.join(dir, "LICENSE"), before)
+  local opts = { dir = dir, copyright = "Birch Point SWE" }
+  assert(eq(false, (err.pcall(license.apply, opts))))
+  assert(eq(before, read("LICENSE")))
+  local problems = arr.concat(license.check(opts), "\n")
+  assert(str.find(problems, "more than one copyright notice", 1, true), problems)
+end)
+
+test("render fills the copyright line once and wraps at 80 columns", function ()
+  local long = str.rep("word ", 30)
+  local text = license.render("MIT", {
+    "MIT License", "", "Copyright (c) <year> <copyright holders>", "", long, "",
+    "The above copyright notice and this permission notice shall be included.",
+  }, "2023", "Birch Point SWE")
+  assert(str.find(text, "\nCopyright (c) 2023 Birch Point SWE\n", 1, true), text)
+  for line in str.gmatch(text, "[^\n]+") do
+    assert(#line <= 80, line)
+  end
+  assert(eq(30, select(2, str.gsub(text, "word", "word"))))
+  assert(str.find(text, "\n\nThe above copyright", 1, true), text)
+end)
+
+test("render refuses a text with no copyright line to fill", function ()
+  local ok = err.pcall(license.render, "AGPL-3.0-only", {
+    "GNU AFFERO GENERAL PUBLIC LICENSE", "", "Copyright (C) <year>  <name of author>",
+  }, "2023", "Birch Point SWE")
+  assert(eq(false, ok))
 end)
 
 test("a scaffold with no flags drops the boilerplate's license and headers", function ()
