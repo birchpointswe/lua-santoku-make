@@ -266,6 +266,55 @@ test("render fills the copyright line once and wraps at 80 columns", function ()
   assert(str.find(text, "\n\nThe above copyright", 1, true), text)
 end)
 
+local spdx_mit = {
+  "MIT License", "", "Copyright (c) <year> <copyright holders>", "",
+  "Permission is hereby granted, free of charge, to any person obtaining a copy of this software and",
+  "associated documentation files (the \"Software\"), to deal in the Software without restriction, including",
+  "without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell",
+  "copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the",
+  "following conditions:", "",
+  "The above copyright notice and this permission notice shall be included in all copies or substantial",
+  "portions of the Software.",
+}
+
+local function assert_paragraphs (text, prefix)
+  for para in str.gmatch(text .. "\n", "(.-)\n\n") do
+    local lines = {}
+    for line in str.gmatch(para, "[^\n]+") do
+      assert(#line <= 80, line)
+      arr.push(lines, line)
+    end
+    for i = 1, #lines - 1 do
+      assert(#lines[i] >= 60, "short line inside a paragraph: " .. lines[i])
+    end
+  end
+  assert(str.find(text, "\n" .. prefix .. "Permission is hereby granted", 1, true), text)
+  assert(not str.find(text, "\n" .. prefix .. "following conditions:\n", 1, true), text)
+  assert(str.find(text, "\n" .. prefix .. "Copyright ", 1, true), text)
+end
+
+test("render joins a paragraph's long lines before wrapping, so no short line is left mid-paragraph", function ()
+  local text = license.render("MIT", spdx_mit, "2023", "Birch Point SWE")
+  assert_paragraphs(text, "")
+  assert(str.find(text, "MIT License\n\nCopyright (c) 2023 Birch Point SWE\n\n", 1, true), text)
+  local filled = str.gsub(arr.concat(spdx_mit, " "), "<year> <copyright holders>", "2023 Birch Point SWE")
+  local words = select(2, str.gsub(filled, "%S+", ""))
+  assert(eq(words, select(2, str.gsub(text, "%S+", ""))))
+end)
+
+test("a vendored section reflows real-length license text under its indent", function ()
+  fixture()
+  local opts = vopts({ lpeg })
+  opts.texts = { MIT = spdx_mit }
+  license.apply(opts)
+  local text = read("LICENSE")
+  local s = str.find(text, dashes, 1, true)
+  assert_paragraphs(str.sub(text, 1, s - 1), "")
+  assert_paragraphs(str.sub(text, s), "  ")
+  assert(str.find(text, "\n  Copyright (C) 2007-2023 Lua.org, PUC-Rio.\n", 1, true), text)
+  assert(eq(0, #license.check(opts)))
+end)
+
 test("render refuses a text with no copyright line to fill", function ()
   local ok = err.pcall(license.render, "AGPL-3.0-only", {
     "GNU AFFERO GENERAL PUBLIC LICENSE", "", "Copyright (C) <year>  <name of author>",

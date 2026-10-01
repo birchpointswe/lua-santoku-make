@@ -201,6 +201,43 @@ local function wrap (line, out)
   arr.push(out, cur)
 end
 
+local function reflow (lines, prefix, out)
+  local para = {}
+  local function flush ()
+    if #para == 0 then
+      return
+    end
+    local fits = true
+    for i = 1, #para do
+      if #prefix + #para[i] > wrap_width then
+        fits = false
+        break
+      end
+    end
+    if fits then
+      for i = 1, #para do
+        arr.push(out, prefix .. para[i])
+      end
+    else
+      local words = {}
+      for i = 1, #para do
+        arr.push(words, (str.match(para[i], "^%s*(.-)%s*$")))
+      end
+      wrap(prefix .. str.match(para[1], "^(%s*)") .. arr.concat(words, " "), out)
+    end
+    para = {}
+  end
+  for i = 1, #lines do
+    if str.match(lines[i], "^%s*$") then
+      flush()
+      arr.push(out, "")
+    else
+      arr.push(para, lines[i])
+    end
+  end
+  flush()
+end
+
 local holder_slots = { "<copyright holders>", "<owner>" }
 
 local function fill (line, year, holder)
@@ -219,7 +256,7 @@ local function fill (line, year, holder)
 end
 
 local function render (id, lines, year, holder)
-  local out = {}
+  local done = {}
   local filled = false
   for i = 1, #lines do
     local line = lines[i]
@@ -228,8 +265,10 @@ local function render (id, lines, year, holder)
       filled = true
       line = f
     end
-    wrap(line, out)
+    arr.push(done, line)
   end
+  local out = {}
+  reflow(done, "", out)
   if #out == 0 then
     err.error("license: empty license text for " .. id)
   end
@@ -312,13 +351,7 @@ local function component_text (c, text_of)
   local out = { separator, "" }
   wrap(component_label(c), out)
   arr.push(out, "")
-  for i = 1, #body do
-    if body[i] == "" then
-      arr.push(out, "")
-    else
-      wrap("  " .. body[i], out)
-    end
-  end
+  reflow(body, "  ", out)
   if c.note then
     arr.push(out, "")
     wrap(c.note, out)
