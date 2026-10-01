@@ -44,7 +44,18 @@ int luaopen_fx_a (lua_State *L)
   return 1;
 }
 ]],
-  ["test/spec/fx.lua"] = "assert(require(\"fx.a\") == \"from b\")\n",
+  ["lib/fx/c.c"] = [[
+#include <lua.h>
+#include <lauxlib.h>
+#include <fx/b.h>
+
+int luaopen_fx_c (lua_State *L)
+{
+  lua_pushstring(L, "from c");
+  return 1;
+}
+]],
+  ["test/spec/fx.lua"] = "assert(require(\"fx.a\") == \"from b\")\nassert(require(\"fx.c\") == \"from c\")\n",
 }
 
 local function write_files (dir)
@@ -60,12 +71,13 @@ local function requires (env, name)
   return fs.readfile(fs.join("build", env, "test", "lib", "fx", name .. ".requires"))
 end
 
-test("a C module's header dependencies become its .requires list", function ()
+test("a C module's .requires lists the included siblings its object uses", function ()
   write_files(root)
   fs.pushd(root, function ()
     project.init().test({ skip_check = true })
     assert(eq("fx.b\n", requires("default", "a")), "fx/a includes fx/b.h, so it requires fx.b")
     assert(eq("", requires("default", "b")), "fx/b includes no sibling header")
+    assert(eq("", requires("default", "c")), "fx/c includes fx/b.h but never uses fx.b, so it requires nothing")
   end)
 end)
 

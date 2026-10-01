@@ -4,7 +4,7 @@ local eq = validate.isequal
 local fs = require("santoku.fs")
 local str = require("santoku.string")
 local sys = require("santoku.system")
-local err = require("santoku.error")
+local arr = require("santoku.array")
 local posix = require("santoku.make.posix")
 local project = require("santoku.make.project")
 
@@ -154,8 +154,17 @@ test("a vendored results.mk rule without a Makefile prerequisite fails the build
   write_project(dir)
   fs.writefile(fs.join(dir, "deps/bar/Makefile"),
     (str.gsub(dep_makefile("1"), "^results.mk: Makefile", "results.mk:")))
-  local ok = err.pcall(build, dir)
-  assert(eq(false, ok), "the build must refuse a results.mk rule that omits Makefile")
+  local stderr, status = {}, nil
+  for ev, _, a, b in sys.pread({ fn = function () build(dir) end, stderr = true }) do
+    if ev == "stderr" then
+      arr.push(stderr, a)
+    elseif ev == "exit" then
+      status = b
+    end
+  end
+  local msg = arr.concat(stderr)
+  assert(status ~= 0, "the build must refuse a results.mk rule that omits Makefile")
+  assert(str.find(msg, "the results.mk rule must list Makefile", 1, true), msg)
   assert(eq(false, fs.exists(so_file(dir))), "the module must not be built")
 
   sys.execute({ "rm", "-rf", dir })

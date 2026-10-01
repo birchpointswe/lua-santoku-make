@@ -208,7 +208,7 @@ all: $(LIB_O) $(LIB_SO) $(LIB_LINK) $(LIB_REQ)
 %.requires: %.o Makefile
 	@rm -f $@
 	@touch $@
-	@$(if $(call TK_REQ_MODULES,$*.d,$*),printf '%s\n' $(call TK_REQ_MODULES,$*.d,$*) > $@,true)
+	@for m in $(call TK_REQ_MODULES,$*.d,$*); do if LC_ALL=C grep -qaF "$$m" $<; then printf '%s\n' "$$m" >> $@; fi; done
 
 install: $(INST_LUA) $(INST_SO) $(INST_O) $(INST_LINK) $(INST_REQ) $(INST_H)
 
