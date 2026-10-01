@@ -1,8 +1,11 @@
+-- SPDX-License-Identifier: MIT
+-- SPDX-FileCopyrightText: 2023 Birch Point SWE
 local env = {
   name = "santoku-make",
-  version = "5.5.3-1",
+  version = "5.5.4-1",
   variable_prefix = "TK_MAKE",
   license = "MIT",
+  copyright = "Birch Point SWE",
   public = true,
   dependencies = {
     "lua == 5.1",

@@ -1,4 +1,6 @@
 -- tk: lua
+-- SPDX-License-Identifier: MIT
+-- SPDX-FileCopyrightText: 2023 Birch Point SWE
 <%
   str = require("santoku.string")
   squote = str.quote

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// SPDX-FileCopyrightText: 2023 Birch Point SWE
 #include "lua.h"
 #include "lauxlib.h"
 
@@ -5,7 +7,6 @@
 #include <string.h>
 #include <time.h>
 #include <sys/stat.h>
-
 
 void tk_make_callmod (lua_State *L, int nargs, int nret, const char *smod, const char *sfn)
 {

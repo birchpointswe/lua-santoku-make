@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2023 Birch Point SWE
 from debian:bookworm-slim
 
 env MAKEFLAGS="-j4"

@@ -1,5 +1,7 @@
 #!/bin/sh
 # tk: sh
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2023 Birch Point SWE
 
 export LUA='<% return lua %>'
 export LUA_PATH='<% return lua_path %>'

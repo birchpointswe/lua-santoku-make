@@ -1,5 +1,7 @@
 #!/bin/sh
 # tk: sh
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2023 Birch Point SWE
 
 <%
   arr = require("santoku.array")

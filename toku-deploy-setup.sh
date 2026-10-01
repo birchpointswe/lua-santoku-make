@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2023 Birch Point SWE
 set -eu
 
 tree="${1:?usage: toku-deploy-setup <build-tree> [dist-dir]}"

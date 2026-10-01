@@ -1,4 +1,6 @@
 -- tk: lua
+-- SPDX-License-Identifier: MIT
+-- SPDX-FileCopyrightText: 2023 Birch Point SWE
 rocks_trees = {
   { name = "system",
     root = "<% return lua_modules %>"

@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: MIT
+-- SPDX-FileCopyrightText: 2023 Birch Point SWE
 package.path = "build/default/test/lua_modules/share/lua/5.1/?.lua"
 package.cpath = "build/default/test/lua_modules/lib/lua/5.1/?.so"
 

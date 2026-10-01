@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: MIT
+-- SPDX-FileCopyrightText: 2023 Birch Point SWE
 local test = require("santoku.test")
 local validate = require("santoku.validate")
 local eq = validate.isequal
