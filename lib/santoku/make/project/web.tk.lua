@@ -249,6 +249,10 @@ local function init (opts)
   end
 
   local stable_public_files = tbl.get(opts, {"config", "env", "client", "stable"}) or {}
+  local stable_names = {}
+  for _, fp in ipairs(stable_public_files) do
+    stable_names[fp] = true
+  end
   local generated_client_files = tbl.get(opts, {"config", "env", "client", "generated"}) or {}
   local check_links_cfg = tbl.get(opts, {"config", "env", "client", "check_links"})
   local sitemap_site = tbl.get(opts, {"config", "env", "client", "sitemap"})
@@ -950,7 +954,7 @@ rocks_provided = { lua = "5.1" }
             local hash
             if text_cache[rel] then
               hash = common.compute_string_hash(common.substitute_refs(
-                common.resolve_tokens(text_cache[rel], subst_manifest), subst_manifest))
+                common.resolve_tokens(text_cache[rel], subst_manifest), subst_manifest, stable_names))
             else
               hash = bin_cache[rel]
             end
@@ -966,7 +970,8 @@ rocks_provided = { lua = "5.1" }
           if #changed == 0 then break end
           if i == 10 then
             err.error("hash manifest failed to converge after 10 iterations, " ..
-              "break the cycle by declaring one of these in client.unhashed", arr.concat(changed, " "))
+              "break the cycle by declaring one of these in client.stable or client.unhashed",
+              arr.concat(changed, " "))
           end
         end
         if fs.exists(final_dir()) then
@@ -988,7 +993,7 @@ rocks_provided = { lua = "5.1" }
           fs.mkdirp(fs.dirname(dest))
           if text_cache[rel] then
             fs.writefile(dest, common.substitute_refs(
-              common.resolve_tokens(text_cache[rel], subst_manifest, true, dest), subst_manifest))
+              common.resolve_tokens(text_cache[rel], subst_manifest, true, dest), subst_manifest, stable_names))
           else
             fs.writefile(dest, fs.readfile(fp))
           end

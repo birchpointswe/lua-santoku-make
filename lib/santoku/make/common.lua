@@ -434,9 +434,9 @@ local function hash_filename(filepath, hash)
   return dir and dir ~= "" and dir ~= "." and fs.join(dir, hashed_name) or hashed_name
 end
 
-local function substitute_refs (content, manifest)
+local function substitute_refs (content, manifest, keep)
   for orig, h in pairs(manifest) do
-    if str.find(content, orig, 1, true) then
+    if not (keep and keep[orig]) and str.find(content, orig, 1, true) then
       content = str.gsub(content, "\"" .. str.escape(orig) .. "\"", "\"" .. h .. "\"")
       content = str.gsub(content, "'" .. str.escape(orig) .. "'", "'" .. h .. "'")
       content = str.gsub(content, "\"/" .. str.escape(orig) .. "\"", "\"/" .. h .. "\"")

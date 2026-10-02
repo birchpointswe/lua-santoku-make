@@ -173,6 +173,29 @@ test("client.stable emits a stable-named copy and sitemap lands post-hash", func
   sys.execute({ "rm", "-rf", dir })
 end)
 
+test("quoted names of stable files stay plain, so a self-quoting stable file converges", function ()
+  local dir = fs.join(root, "shape-stable-refs")
+  local robots = "User-agent: *\n# this file is \"robots.txt\"\n"
+  write_shape(dir, {
+    ["client/static/index.html"] = "<!doctype html><a href=\"/robots.txt\">robots</a>" ..
+      "<code>stable = { \"robots.txt\" }</code>",
+    ["client/static/robots.txt"] = robots,
+    ["client/static/token.tk.html"] = "<!doctype html><% return hashed(\"robots.txt\") %>",
+  })
+  build_checks(dir)
+  local public = fs.join(dir, "build", "default", "main", "dist", "public")
+  local manifest = dofile(fs.join(dir, "build", "default", "main", "dist", "hash-manifest.lua"))
+  assert(eq(robots, fs.readfile(fs.join(public, "robots.txt"))))
+  assert(eq(robots, fs.readfile(fs.join(public, manifest["robots.txt"]))))
+  local index = fs.readfile(fs.join(public, manifest["index.html"]))
+  assert(str.find(index, "href=\"/robots.txt\"", 1, true), index)
+  assert(str.find(index, "{ \"robots.txt\" }", 1, true), index)
+  local token = fs.readfile(fs.join(public, manifest["token.html"]))
+  assert(str.find(token, manifest["robots.txt"], 1, true), token)
+  assert(manifest["robots.txt"] ~= "robots.txt")
+  sys.execute({ "rm", "-rf", dir })
+end)
+
 test("check_links fails the build on a planted dead link", function ()
   local dir = fs.join(root, "shape-dead")
   write_shape(dir, {
