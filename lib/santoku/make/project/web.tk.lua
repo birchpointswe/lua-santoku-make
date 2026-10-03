@@ -1115,6 +1115,66 @@ rocks_provided = { lua = "5.1" }
       end)
     end)
 
+  local client_dependencies = tbl.get(opts, {"config", "env", "client", "dependencies"}) or {}
+
+  target({ "deps-only" }, arr.flatten({
+    { server_dir(base_server_luarocks_cfg) },
+    has_build_deps and { build_deps_ok } or {},
+  }), function ()
+    local config_file = fs.absolute(opts.config_file)
+    local server_cfg = fs.absolute(server_dir(base_server_luarocks_cfg))
+    for i = 1, #local_deps_server do
+      fs.pushd(local_deps_server[i], function ()
+        require("santoku.make.project").init({
+          skip_tests = true,
+          in_local_dep = true,
+          luarocks_config = server_cfg,
+        }).deps_only()
+      end)
+    end
+    fs.mkdirp(server_dir())
+    fs.pushd(server_dir(), function ()
+      require("santoku.make.project").init({
+        environment = "build",
+        config_file = config_file,
+        luarocks_config = server_cfg,
+        config = {
+          type = "lib",
+          env = tbl.merge({
+            name = opts.config.env.name .. "-server",
+            version = opts.config.env.version,
+            rules = opts.config.env.rules,
+          }, opts.config.env.server or {}),
+        },
+        skip_tests = true,
+        dir = server_dir(),
+      }).deps_only()
+    end)
+    if #client_dependencies > 0 then
+      fs.mkdirp(client_dir())
+      fs.pushd(client_dir(), function ()
+        common.with_build_deps(has_build_deps and build_deps_dir or nil, function ()
+          require("santoku.make.project").init({
+            config_file = config_file,
+            config = {
+              type = "lib",
+              env = tbl.merge({
+                name = opts.config.env.name .. "-client",
+                version = opts.config.env.version,
+                rules = opts.config.env.rules,
+                hashed = hashed,
+              }, opts.config.env.client or {}, client_env),
+            },
+            wasm = true,
+            skip_tests = true,
+            dir = client_dir("build"),
+            environment = "build",
+          }).deps_only()
+        end)
+      end)
+    end
+  end)
+
   local function compute_nginx_context(e, nginx_cfg, foreground)
     local modules = {}
     for _, mod in ipairs(nginx_cfg.modules or {}) do
@@ -1634,6 +1694,10 @@ rocks_provided = { lua = "5.1" }
     build = function (opts)
       opts = opts or {}
       build(tbl.assign({ opts.test and "test-build" or "build" }, opts), opts.verbosity)
+    end,
+    deps_only = function (opts)
+      opts = opts or {}
+      build(tbl.assign({ "deps-only" }, opts), opts.verbosity)
     end,
     start = function (opts)
       opts = opts or {}

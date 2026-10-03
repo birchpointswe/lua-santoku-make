@@ -652,19 +652,29 @@ local function check (opts)
       arr.push(problems, "LICENSE isn't the all-rights-reserved line for " .. year .. " " .. holder)
     end
   end
+  local all = opts.files and tracked(dir) or files
+  local function hits (glob)
+    for k = 1, #all do
+      if glob_match(glob, all[k]) then
+        return true
+      end
+    end
+    return false
+  end
   for i = 1, #vendored do
     local paths = list(vendored[i].path)
     for j = 1, #paths do
-      local hit = false
-      for k = 1, #files do
-        if glob_match(paths[j], files[k]) then
-          hit = true
-          break
-        end
-      end
-      if not hit then
+      if not hits(paths[j]) then
         arr.push(problems, "vendored " .. vendored[i].name .. ": " .. paths[j] .. " matches no tracked file")
       end
+    end
+  end
+  local ex = list(opts.exclude)
+  for i = 1, #ex do
+    if str.find(ex[i], "^^") or str.find(ex[i], "%", 1, true) then
+      arr.push(problems, "license_exclude " .. ex[i] .. ": looks like a Lua pattern; entries are globs")
+    elseif not hits(ex[i]) then
+      arr.push(problems, "license_exclude " .. ex[i] .. ": matches no tracked file")
     end
   end
   local labels = label_problems(vendored)

@@ -263,6 +263,27 @@ test("check reports a declared path that matches nothing and a missing section",
   assert(str.find(problems, "LICENSE has no section for vendored Ghost", 1, true), problems)
 end)
 
+test("check on named files still matches vendored paths against every tracked file", function ()
+  fixture()
+  license.apply(vopts({ lpeg }))
+  local opts = vopts({ lpeg })
+  opts.files = { "a.lua" }
+  local problems = license.check(opts)
+  assert(eq(0, #problems), arr.concat(problems, "\n"))
+end)
+
+test("check reports a license_exclude entry that is a Lua pattern or matches nothing", function ()
+  fixture()
+  license.apply(vopts({ lpeg }))
+  local opts = vopts({ lpeg })
+  opts.exclude = { "vendored.c", "^lib/x", "a%.lua", "nowhere/**" }
+  local problems = arr.concat(license.check(opts), "\n")
+  assert(str.find(problems, "license_exclude ^lib/x: looks like a Lua pattern; entries are globs", 1, true), problems)
+  assert(str.find(problems, "license_exclude a%.lua: looks like a Lua pattern; entries are globs", 1, true), problems)
+  assert(str.find(problems, "license_exclude nowhere/**: matches no tracked file", 1, true), problems)
+  assert(eq(nil, str.find(problems, "license_exclude vendored.c", 1, true)), problems)
+end)
+
 local function failure (fn, ...)
   local res = { err.pcall(fn, ...) }
   local msg = {}

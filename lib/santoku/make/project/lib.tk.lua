@@ -654,6 +654,55 @@ rocks_provided = { lua = "5.1" }
   target({ "build-deps" }, build_all, true)
   target({ "test-deps" }, test_all, true)
 
+  local function build_luarocks_vars ()
+    local vars = {}
+    local env_tables = {
+      tbl.get(build_env, {"luarocks", "env_vars"}) or {},
+      tbl.get(build_env, {"build", "luarocks", "env_vars"}) or {},
+      opts.wasm and tbl.get(build_env, {"build", "wasm", "luarocks", "env_vars"}) or {},
+      not opts.wasm and tbl.get(build_env, {"build", "native", "luarocks", "env_vars"}) or {}
+    }
+    for _, env_tbl in ipairs(env_tables) do
+      for k, v in pairs(env_tbl) do
+        vars[#vars + 1] = str.format("%s=%s", k, v)
+      end
+    end
+    return vars
+  end
+
+  local deps_only_dir = build_dir("deps-only")
+  local deps_only_rockspec = fs.join(deps_only_dir, base_rockspec)
+
+  add_templated_target_base64(deps_only_rockspec,
+    <% return str.quote(str.to_base64(readfile("res/lib/template.rockspec"))) %>, build_env) -- luacheck: ignore
+
+  target({ "deps-only" }, arr.flatten({
+    { deps_only_rockspec, build_dir(base_luarocks_cfg) },
+    opts.wasm and { build_lua_ok } or {},
+    has_build_deps and { build_deps_ok } or {},
+  }), function ()
+    local lcfg = opts.luarocks_config or (opts.wasm and build_dir(base_luarocks_cfg)) or nil
+    lcfg = lcfg and fs.absolute(lcfg) or nil
+    for i = 1, #local_deps do
+      fs.pushd(local_deps[i], function ()
+        require("santoku.make.project").init({
+          skip_tests = true,
+          in_local_dep = true,
+          luarocks_config = lcfg,
+        }).deps_only()
+      end)
+    end
+    return fs.pushd(deps_only_dir, function ()
+      sys.execute(arr.push({
+        "luarocks", "make", "--deps-only", base_rockspec,
+        env = {
+          LUAROCKS_CONFIG = lcfg,
+          MAKEFLAGS = "--no-print-directory"
+        },
+      }, arr.spread(build_luarocks_vars())))
+    end)
+  end)
+
   local install_release_deps = opts.skip_tests
     and { "build-deps" }
     or { "test", "check", "build-deps" }
@@ -661,18 +710,7 @@ rocks_provided = { lua = "5.1" }
   target({ "install" }, install_release_deps, function ()
     fs.mkdirp(build_dir())
     return fs.pushd(build_dir(), function ()
-      local vars = {}
-      local env_tables = {
-        tbl.get(build_env, {"luarocks", "env_vars"}) or {},
-        tbl.get(build_env, {"build", "luarocks", "env_vars"}) or {},
-        opts.wasm and tbl.get(build_env, {"build", "wasm", "luarocks", "env_vars"}) or {},
-        not opts.wasm and tbl.get(build_env, {"build", "native", "luarocks", "env_vars"}) or {}
-      }
-      for _, env_tbl in ipairs(env_tables) do
-        for k, v in pairs(env_tbl) do
-          vars[#vars + 1] = str.format("%s=%s", k, v)
-        end
-      end
+      local vars = build_luarocks_vars()
       local lcfg = opts.luarocks_config or (opts.wasm and base_luarocks_cfg) or nil
       lcfg = lcfg and fs.absolute(lcfg) or nil
       if has_local_deps then
@@ -691,18 +729,7 @@ rocks_provided = { lua = "5.1" }
   target({ "install-bundled" }, install_release_deps, function ()
     fs.mkdirp(build_dir())
     return fs.pushd(build_dir(), function ()
-      local vars = {}
-      local env_tables = {
-        tbl.get(build_env, {"luarocks", "env_vars"}) or {},
-        tbl.get(build_env, {"build", "luarocks", "env_vars"}) or {},
-        opts.wasm and tbl.get(build_env, {"build", "wasm", "luarocks", "env_vars"}) or {},
-        not opts.wasm and tbl.get(build_env, {"build", "native", "luarocks", "env_vars"}) or {}
-      }
-      for _, env_tbl in ipairs(env_tables) do
-        for k, v in pairs(env_tbl) do
-          vars[#vars + 1] = str.format("%s=%s", k, v)
-        end
-      end
+      local vars = build_luarocks_vars()
       local lcfg = fs.absolute(base_luarocks_cfg)
       if has_local_deps then
         common.install_local_deps(local_deps, lcfg)
@@ -720,18 +747,7 @@ rocks_provided = { lua = "5.1" }
   target({ "install-deps" }, install_release_deps, function ()
     fs.mkdirp(build_dir())
     return fs.pushd(build_dir(), function ()
-      local vars = {}
-      local env_tables = {
-        tbl.get(build_env, {"luarocks", "env_vars"}) or {},
-        tbl.get(build_env, {"build", "luarocks", "env_vars"}) or {},
-        opts.wasm and tbl.get(build_env, {"build", "wasm", "luarocks", "env_vars"}) or {},
-        not opts.wasm and tbl.get(build_env, {"build", "native", "luarocks", "env_vars"}) or {}
-      }
-      for _, env_tbl in ipairs(env_tables) do
-        for k, v in pairs(env_tbl) do
-          vars[#vars + 1] = str.format("%s=%s", k, v)
-        end
-      end
+      local vars = build_luarocks_vars()
       local lcfg = opts.luarocks_config or (opts.wasm and base_luarocks_cfg) or nil
       lcfg = lcfg and fs.absolute(lcfg) or nil
       if has_local_deps then
@@ -1110,6 +1126,10 @@ rocks_provided = { lua = "5.1" }
     install_deps = function (opts)
       opts = opts or {}
       build(tbl.assign({ "install-deps" }, opts), opts.verbosity)
+    end,
+    deps_only = function (opts)
+      opts = opts or {}
+      build(tbl.assign({ "deps-only" }, opts), opts.verbosity)
     end,
     pack = not opts.wasm and function (opts)
       opts = opts or {}
