@@ -19,6 +19,7 @@ local wasm = require("santoku.make.wasm")
 local clean = require("santoku.make.clean")
 local site = require("santoku.make.site")
 local license = require("santoku.make.license")
+local stale = require("santoku.make.stale")
 local utc = require("santoku.utc")
 local arr = require("santoku.array")
 local str = require("santoku.string")
@@ -1663,6 +1664,14 @@ rocks_provided = { lua = "5.1" }
     work_dir("main", base_server_lua_modules),
     work_dir("test", base_server_lua_modules),
     fs.join(build_deps_dir, base_server_lua_modules))
+
+  stale.refresh(test_dist_dir(base_server_lua_modules), test_server_dir("stale-rocks.txt"),
+    { test_server_dir(base_server_lua_modules_ok), test_server_dir("local-deps.ok") },
+    function ()
+      local skip = common.local_dep_names(local_deps_server)
+      skip[opts.config.env.name .. "-server"] = true
+      return skip
+    end)
 
   local configure = tbl.get(opts, {"config", "env", "configure"})
   if configure then

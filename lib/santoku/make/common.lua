@@ -369,6 +369,18 @@ local function local_dep_srcs(paths)
   return srcs
 end
 
+local function local_dep_names (paths)
+  local names = {}
+  for i = 1, #paths do
+    local name = fs.pushd(paths[i], function ()
+      return tbl.get(fs.runfile("make.lua"), {"env", "name"})
+    end)
+    err.assert(name, "local_deps entry has no env.name", paths[i])
+    names[name] = true
+  end
+  return names
+end
+
 local function clear_stale_lock (...)
   for i = 1, select("#", ...) do
     local root = select(i, ...)
@@ -544,6 +556,7 @@ return {
   get_files = get_files,
   local_dep_paths = local_dep_paths,
   local_dep_srcs = local_dep_srcs,
+  local_dep_names = local_dep_names,
   install_local_deps = install_local_deps,
   clear_stale_lock = clear_stale_lock,
   prune_stale = prune_stale,

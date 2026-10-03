@@ -18,6 +18,7 @@ local common = require("santoku.make.common")
 local wasm = require("santoku.make.wasm")
 local clean = require("santoku.make.clean")
 local license = require("santoku.make.license")
+local stale = require("santoku.make.stale")
 local utc = require("santoku.utc")
 local arr = require("santoku.array")
 local str = require("santoku.string")
@@ -184,8 +185,8 @@ local function init (opts)
   local local_deps_ok = test_dir("local-deps.ok")
   local local_deps_srcs = has_local_deps and common.local_dep_srcs(local_deps) or nil
 
-  local function add_file_target(dest, src, env, extra_srcs)
-    return common.add_file_target(target, dest, src, env, opts.config, opts.config_file, extra_srcs,
+  local function add_file_target(dest, src, env, extra_srcs, target_fn)
+    return common.add_file_target(target_fn or target, dest, src, env, opts.config, opts.config_file, extra_srcs,
       has_build_deps and build_deps_dir or nil,
       has_build_deps and build_deps_ok or nil,
       opts.config_stamp)
@@ -412,10 +413,42 @@ local function init (opts)
     opts.config.env.variable_prefix or
     str.upper(str.gsub(opts.config.env.name, "%W+", "_"))
 
+  local function deps_split (fp)
+    local p = remove_tk(fp)
+    local d, rest = str.match(p, "^(deps/[^/]+)/(.+)$")
+    if not d then
+      d, rest = str.match(p, "^(test/deps/[^/]+)/(.+)$")
+    end
+    return d, rest
+  end
+
+  local deps_keep = {}
+  for _, fp in ipairs(arr.flatten({ base_deps, base_test_deps })) do
+    local d, rest = deps_split(fp)
+    if d then
+      deps_keep[d] = deps_keep[d] or {}
+      deps_keep[d][str.match(rest, "^[^/]+")] = true
+      deps_keep[d][str.match(rest .. ".d", "^[^/]+")] = true
+    end
+  end
+
+  local function deps_target (fp)
+    local d, rest = deps_split(fp)
+    if rest ~= "Makefile" then
+      return target
+    end
+    return function (outs, srcs, fn)
+      return target(outs, srcs, function (...)
+        stale.prune(fs.dirname(outs[1]), deps_keep[d])
+        return fn(...)
+      end)
+    end
+  end
+
   for _, src_arr in ipairs({ base_libs, base_bins, base_deps }) do
     for _, fp in ipairs(src_arr) do
       if fs.exists(fp) then
-        add_file_target(build_dir(remove_tk(fp)), fp, build_env)
+        add_file_target(build_dir(remove_tk(fp)), fp, build_env, nil, deps_target(fp))
       end
     end
   end
@@ -423,7 +456,7 @@ local function init (opts)
   for _, src_arr in ipairs({ base_libs, base_bins, base_deps, base_test_deps }) do
     for _, fp in ipairs(src_arr) do
       if fs.exists(fp) then
-        add_file_target(test_dir(remove_tk(fp)), fp, test_env)
+        add_file_target(test_dir(remove_tk(fp)), fp, test_env, nil, deps_target(fp))
       end
     end
   end
@@ -992,6 +1025,15 @@ rocks_provided = { lua = "5.1" }
 
   prune_stale(build_dir, build_all)
   prune_stale(test_dir, test_all)
+
+  if not opts.skip_tests then
+    stale.refresh(test_dir(base_lua_modules), test_dir("stale-rocks.txt"),
+      { test_dir(base_lua_modules_ok), local_deps_ok }, function ()
+      local skip = common.local_dep_names(local_deps)
+      skip[opts.config.env.name] = true
+      return skip
+    end)
+  end
 
   if opts.wasm then
     local keep = {}
